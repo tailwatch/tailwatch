@@ -1,0 +1,33 @@
+{
+  "$schema": "https://playground.wordpress.net/blueprint-schema.json",
+  "meta": {
+    "title": "Tailwatch — local contributor environment",
+    "author": "wptailwatch",
+    "description": "Boots a throwaway WordPress with the Tailwatch plugin mounted and activated, landing on the dashboard. Used by `npm run dev:playground`."
+  },
+  "landingPage": "/wp-admin/admin.php?page=tailwatch",
+  "preferredVersions": {
+    "php": "8.2",
+    "wp": "latest"
+  },
+  "phpExtensionBundles": [
+    "kitchen-sink"
+  ],
+  "login": true,
+  "steps": [
+    {
+      "step": "defineWpConfigConsts",
+      "consts": {
+        "ALTERNATE_WP_CRON": true
+      }
+    },
+    {
+      "step": "activatePlugin",
+      "pluginPath": "tailwatch/tailwatch.php"
+    },
+    {
+      "step": "wp-cli",
+      "command": "wp cron event run --due-now"
+    }
+  ]
+}

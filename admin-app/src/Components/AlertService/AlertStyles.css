@@ -1,0 +1,286 @@
+/* Popup Styles */
+.custom-popup {
+    border-radius: 10px;
+    padding: 15px;
+    background-color: #fff;
+    width: 350px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+  
+  /* Title styles */
+  .custom-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: #333;
+    align-self: flex-start;
+    justify-self: flex-start;
+    padding: 0 !important;
+  }
+  
+  /* Message styling */
+  .alert-message {
+    width: 100%;
+    font-size: 14px;
+    color: #000000;
+    align-self: flex-start;
+    justify-self: flex-start;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  
+  /* Confirm Button (Delete, Discard) */
+  .custom-confirm-button {
+    background-color: #d33 !important; /* Red color */
+    color: #fff !important;
+    font-size: 14px;
+    padding: 5px 20px;
+    border-radius: 8px;
+    border: none;
+  }
+  
+  /* Cancel Button (Keep Editing, Cancel) */
+  .custom-cancel-button {
+    background-color: #fff !important; /* Grey color */
+    color: #000 !important;
+    font-size: 14px;
+    padding: 5px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    border: #b9b9b9 1px solid;
+  }
+  
+  /* Adjust the button container to space them out */
+  .swal2-actions {
+    width: 100%;
+    justify-content: flex-end;
+    align-items: flex-end;
+    gap: 10px;
+  }
+
+  .swal2-loading {
+    flex-direction: column;
+    align-items: center;
+  }
+
+ .swal2-html-container {
+    padding: 0 !important;
+    text-align: left !important;
+  }
+
+  .custom-close-button {
+    width: 20px !important;
+    height: 20px !important;
+  }
+  .optimize-popup {
+    background-color: #f9f9f9;
+    border-radius: 10px;
+    padding: 20px; 
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+  .manageLogin-popup {
+    background-color:white;
+    border-radius: 10px;
+    padding: 20px; 
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+  
+  /* Title styling */
+  .optimize-title {
+    font-size: 24px; 
+    font-weight: semibold;
+    margin-bottom: 5px;
+    color: #000000;
+    align-self: flex-start;
+    justify-self: flex-start;
+    padding: 0 !important;
+  }    
+  
+  /* Confirm button styling */
+  .optimize-confirm-button {
+    background-color: #00858c;
+    color: white;
+    padding: 8px 16px; 
+    border: none;
+    border-radius: 5px;
+    font-size: 16px; 
+    cursor: pointer; 
+    margin-right: 10px; 
+  }
+
+  .loading-title{
+    padding-left: 10px;
+  }
+  .loading-text{
+    padding-left: 10px;
+  }
+  /* Cancel button styling */
+  .optimize-cancel-button {    
+    font-weight: 500;
+    color: black;
+    padding: 8px 8px; 
+    border: 1px solid #4c4c4c;
+    border-radius: 5px; 
+    font-size: 16px; 
+    cursor: pointer; 
+  }  
+  .manageloginlabel{
+    color: #000;
+    font-size: 15px; 
+  }
+  
+  /* ---------- Warning modal (alertService.warning) ---------- */
+  .warning-popup {
+    border-radius: 12px;
+    padding: 24px 24px 20px 24px;
+    background-color: #ffffff;
+    width: 420px;
+    box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.18), 0 4px 12px rgba(0, 0, 0, 0.06);
+    border-top: 4px solid #f59e0b;
+    align-items: stretch;
+    justify-content: flex-start;
+  }
+
+  .warning-popup .warning-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: #111827;
+    margin: 0 0 4px 0;
+    padding: 0 40px 0 0 !important;
+    text-align: left;
+    line-height: 28px;
+    min-height: 28px;
+    display: flex;
+    align-items: center;
+  }
+
+  .warning-popup .warning-html-container {
+    padding: 0 !important;
+    margin: 0 !important;
+    text-align: left !important;
+  }
+
+  .warning-modal-body {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 0 18px 0;
+  }
+
+  .warning-modal-icon {
+    flex: 0 0 auto;
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background-color: #fef3c7;
+    color: #d97706;
+  }
+
+  .warning-modal-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .warning-modal-message {
+    flex: 1 1 auto;
+    font-size: 14px;
+    line-height: 1.55;
+    color: #374151;
+    padding-top: 6px;
+    word-break: break-word;
+  }
+
+  .warning-popup .swal2-actions {
+    width: 100%;
+    justify-content: flex-end;
+    margin: 8px 0 0 0;
+    padding: 12px 0 0 0;
+    border-top: 1px solid #f1f1f3;
+  }
+
+  .warning-confirm-button {
+    background-color: #f59e0b !important;
+    color: #ffffff !important;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 8px 22px;
+    border-radius: 8px;
+    border: none;
+    transition: background-color 0.15s ease, transform 0.05s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  }
+
+  .warning-confirm-button:hover {
+    background-color: #d97706 !important;
+  }
+
+  .warning-confirm-button:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.35);
+  }
+
+  .warning-close-button {
+    position: absolute !important;
+    top: 24px !important;
+    right: 24px !important;
+    width: 28px !important;
+    height: 28px !important;
+    line-height: 28px !important;
+    color: #9ca3af !important;
+    font-size: 22px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    transition: color 0.15s ease;
+  }
+
+  .warning-close-button:hover {
+    color: #374151 !important;
+  }
+
+  /* Mobile-friendly adjustments */
+  @media (max-width: 500px) {
+    .custom-popup {
+      width: 300px;
+    }
+
+    .custom-title {
+      font-size: 16px;
+    }
+
+    .alert-message {
+      font-size: 13px;
+    }
+
+    .swal2-actions {
+      flex-direction: column;
+    }
+
+    .custom-confirm-button,
+    .custom-cancel-button {
+      width: 100%;
+      margin-top: 10px;
+    }
+
+    .warning-popup {
+      width: calc(100vw - 32px);
+      padding: 20px;
+    }
+
+    .warning-popup .warning-title {
+      font-size: 16px;
+    }
+
+    .warning-modal-message {
+      font-size: 13px;
+    }
+
+    .warning-confirm-button {
+      width: 100%;
+    }
+  }
+  

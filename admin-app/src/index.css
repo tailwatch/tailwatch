@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@media (min-width: 1280px) {
+    .custom-card {
+      width: 400px;
+      height: 350px;
+    }
+  }

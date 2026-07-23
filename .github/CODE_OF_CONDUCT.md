@@ -1,4 +1,7 @@
-<a href="https://wptailwatch.com/?utm_source=github&utm_medium=readme&utm_campaign=free&utm_content=wptailwatch_logo"><img src=".github/assets/logo.png" alt="WP Tailwatch – Security, Backups & Monitoring" width="320"></a>
+<p align="center">
+  <a href="https://wptailwatch.com/?utm_source=github&utm_medium=readme&utm_campaign=free&utm_content=wptailwatch_logo"><img src="assets/logo.png" alt="WP Tailwatch – Security, Backups & Monitoring" width="320"></a>
+</p>
+
 # Code of Conduct
 
 **The WP Tailwatch repository and its channels are welcoming spaces for developers, security researchers, and creators to collaborate, innovate, and shape the future of WordPress security together.**
@@ -8,7 +11,7 @@ To ensure a safe and supportive environment for everyone, all participants are e
 
 ## Our Pledge
 
-We as members, contributors, and leaders pledge to make participation in our community a harassment-free experience for everyone, regardless of age, body size, visible or invisible disability, ethnicity, sex characteristics, gender identity and expression, level of experience, education, socio-economic status, nationality, personal appearance, race, caste, color, religion, or sexual identity and orientation.
+We as members, contributors, and leaders pledge to make participation in our community a harassment-free experience for everyone, regardless of age, visible or invisible disability, ethnicity, sex characteristics, gender identity and expression, level of experience, education, socio-economic status, nationality, personal appearance, race, caste, color, religion, or sexual identity and orientation.
 
 We are committed to fostering an open, inclusive, and healthy environment for everyone. This Code of Conduct outlines shared expectations across all WP Tailwatch GitHub spaces and details our guidelines for resolving violations. We invite every contributor to help us maintain a positive, welcoming, and empowering community for all.
 

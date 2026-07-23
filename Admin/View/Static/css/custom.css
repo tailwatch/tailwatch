@@ -1,0 +1,150 @@
+* {
+	padding: 0;
+	margin: 0;
+	box-sizing: border-box;
+}
+#adminmenuback,
+#adminmenuwrap,
+#wpfooter,
+#wpadminbar {
+	display: none !important;
+}
+
+html.wp-toolbar {
+	padding-top: 0;
+}
+
+#wpcontent,
+#wpfooter {
+	margin: 0 !important;
+	padding: 0 !important;
+}
+
+#wpbody {
+	padding: 0;
+}
+input#simple-search {
+	padding: .610rem;
+	padding-left: 2.25rem;
+	border-color: #d1d5db;
+	border-radius: .5rem;
+}
+body {
+	all: unset !important;
+}
+
+.content-main-container_hide {
+	display: none;
+}
+
+#wpbody-content {
+	padding-bottom: 0;
+}
+
+/* CSS For Hide Admin Notices */
+.notice,
+.update-nag,
+.error,
+.updated,
+.is-dismissible {
+	display: none !important;
+	visibility: hidden !important;
+	opacity: 0 !important;
+	height: 0 !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	overflow: hidden !important;
+}
+
+/* Hide specific unwanted external elements */
+#ehe-admin-cb,
+div[id*="ehe-admin"],
+div[id*="admin-cb"] {
+	display: none !important;
+	visibility: hidden !important;
+	opacity: 0 !important;
+	height: 0 !important;
+	width: 0 !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	overflow: hidden !important;
+	position: absolute !important;
+	left: -9999px !important;
+	top: -9999px !important;
+}
+
+/* Hide MUI components that might be injected externally */
+.MuiBox-root.css-zm0vjh {
+	display: none !important;
+	visibility: hidden !important;
+	opacity: 0 !important;
+	height: 0 !important;
+	width: 0 !important;
+	margin: 0 !important;
+	padding: 0 !important;
+}
+p#ptag {
+	font-size: 20px;
+}
+div#error {
+	display: none !important;
+}
+
+/* CSS For Logs */
+.highlight-divider {
+	border-top: 1px solid #e3e3e3;
+	height: 2px;
+	/* border-bottom: 1px solid #e3e3e3; */
+	border-style: dashed;
+	border-width: 1px;
+	border-left: none;
+	border-right: none;
+}
+
+.highlight-text {
+	font-size: 18px;
+	font-weight: 700;
+	color: #e3e3e3;
+	margin: 10px 0;
+}
+
+.check-icon {
+	width: 18px;
+	display: inline;
+}
+.wp-person a:focus .gravatar, a:focus, a:focus .media-icon img, a:focus .plugin-icon {
+	color: #fff;
+	box-shadow: 0 0 0 2px #2271b1;
+	outline: 2px solid transparent;
+}
+
+input[type=radio]:checked::before {
+	content: "";
+	border-radius: 50%;
+	height: 0rem;
+	margin: .0rem;
+	background-color: #3582c4;
+	line-height: 1.14285714;
+}
+
+/* Country flag emoji.
+   A bundled flags-only subset of Google's Noto Color Emoji (SIL Open Font
+   License 1.1, GPL-compatible) so flag emoji render on Windows too — Windows'
+   system emoji font (Segoe UI Emoji) omits country-flag glyphs. `unicode-range`
+   scopes this font to the regional-indicator codepoints only, so it can never
+   affect any other text. Rendered by the shared CountryFlag component
+   (admin-app/src/Components/CountryFlag/CountryFlag.jsx). */
+@font-face {
+	font-family: 'wptw-flags';
+	src: url('../fonts/NotoColorEmojiFlags.ttf') format('truetype');
+	font-display: swap;
+	unicode-range: U+1F1E6-1F1FF;
+}
+
+.wptw-flag {
+	font-family: 'wptw-flags', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+	font-style: normal;
+	font-weight: 400;
+	display: inline-block;
+	vertical-align: middle;
+}

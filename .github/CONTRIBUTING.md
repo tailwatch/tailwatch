@@ -1,4 +1,7 @@
-<a href="https://wptailwatch.com/?utm_source=github&utm_medium=readme&utm_campaign=free&utm_content=wptailwatch_logo"><img src=".github/assets/logo.png" alt="WP Tailwatch – Security, Backups & Monitoring" width="320"></a>
+<p align="center">
+  <a href="https://wptailwatch.com/?utm_source=github&utm_medium=readme&utm_campaign=free&utm_content=wptailwatch_logo"><img src="assets/logo.png" alt="WP Tailwatch – Security, Backups & Monitoring" width="320"></a>
+</p>
+
 # Contributing to WP Tailwatch
 Thank you for considering contributing to WP Tailwatch! We welcome bug fixes, feature enhancements, and documentation improvements.
 This repository contains the **WP Tailwatch Plugin** — including the core PHP backend running inside WordPress and the React application powering the admin dashboard (`admin-app/`).
@@ -28,7 +31,7 @@ All build scripts are managed from the root of the repository:
 - `npm run watch` — Watch source files and automatically recompile + sync bundles on every save.
 - `npm run build` — Build the production React bundle and place assets into `Admin/View/Static/`.
 
-> 💡 **Detailed Guides:** For complete architecture notes and build specs, see [`README.md`](../README.md).
+> 💡 **Detailed Guides:** For complete architecture notes and build specs, see [`README.md`](README.md).
 
 ---
 
@@ -57,12 +60,12 @@ To keep the codebase maintainable, please follow these guidelines:
 
 ## 🐛 Reporting Issues
 
-If you encounter a bug or have a feature request, please use [GitHub Issues](https://github.com/wptailwatch/tailwatch/issues).
+If you encounter a bug or have a feature request, please use [GitHub Issues](https://github.com/tailwatch/tailwatch/issues).
 
-For **security vulnerabilities**, please refer to our [`SECURITY.md`](SECURITY.md) to report them responsibly rather than opening a public issue.
+For **security vulnerabilities**, please refer to our [`SECURITY.md`](.github/SECURITY.md) to report them responsibly rather than opening a public issue.
 
 ---
 
 ## 📄 License
 
-By contributing to WP Tailwatch, you agree that your contributions will be licensed under the **GNU General Public License v2 or later (GPLv2+)**. See [`LICENSE`](../LICENSE) for details.
+By contributing to WP Tailwatch, you agree that your contributions will be licensed under the **GNU General Public License v2 or later (GPLv2+)**. See [`license.txt`](license.txt) for details.

@@ -1,0 +1,237 @@
+<?php
+
+/**
+ * Tailwatch - Interface Controller
+ *
+ * Handles the main dashboard interface and asset loading.
+ *
+ * @package    Tailwatch
+ * @subpackage Admin\View\Controller
+ * @author     WP Tailwatch
+ * @copyright  2025-2026 WP TAILWATCH LLC
+ * @license    GPL-2.0+
+ * @since      1.0.0
+ */
+
+namespace Tailwatch\Admin\View\Controller;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+use Tailwatch\Admin\App\Api\Controllers\Hooks\HookControllers;
+
+class InterfaceController {
+
+	/**
+	 * Constructor.
+	 *
+	 * Initialize hooks for admin scripts and menu.
+	 *
+	 */
+	public function __construct() {
+		$hook_controllers = new HookControllers();
+		$hook_controllers->add_action_hook( 'admin_enqueue_scripts', array( $this, 'enqueue_dashboard_script' ), 20 );
+		$hook_controllers->add_action_hook( 'admin_menu', array( $this, 'add_tailwatch_page' ) );
+
+		// Hide the WordPress admin toolbar on the Tailwatch React app screen.
+		// This filter is registered at plugins_loaded time, BEFORE init priority 0
+		// where _wp_admin_bar_init() decides whether the toolbar will render.
+		// (An earlier implementation tried to do this from admin_init, but
+		// admin_init runs AFTER init — too late to suppress the toolbar.)
+		$hook_controllers->add_filter_hook( 'show_admin_bar', array( $this, 'hide_admin_bar_on_tailwatch' ) );
+	}
+
+	/**
+	 * Suppress the WordPress admin toolbar when the user is on the Tailwatch
+	 * full-screen React app (page=tailwatch). Returns the incoming value
+	 * unchanged on every other admin page, so the toolbar still appears
+	 * normally elsewhere and the user's profile preference is respected.
+	 *
+	 * @param bool $show Whether to show the admin bar.
+	 * @return bool
+	 */
+	public function hide_admin_bar_on_tailwatch( $show ) {
+		if ( ! is_admin() ) {
+			return $show;
+		}
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only page identifier for display scoping; not an action that mutates state.
+		$page = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : '';
+		if ( 'tailwatch' === $page ) {
+			return false;
+		}
+		return $show;
+	}
+
+	/**
+	 * Add plugin admin menu pages.
+	 *
+	 * @return void
+	 */
+	public function add_tailwatch_page() {
+		add_menu_page(
+			'Tailwatch',
+			'Tailwatch',
+			'manage_options',
+			'tailwatch',
+			array( $this, 'tailwatch_option_page' ),
+			'dashicons-admin-settings',
+			99
+		);
+
+		add_submenu_page(
+			'tailwatch',
+			esc_html__( 'Dashboard', 'tailwatch' ),
+			esc_html__( 'Dashboard', 'tailwatch' ),
+			'manage_options',
+			'tailwatch',
+			array( $this, 'tailwatch_option_page' )
+		);
+	}
+
+	/**
+	 * Get all files from a directory with a specific extension.
+	 *
+	 * @param string $dir       Directory path.
+	 * @param string $extension File extension.
+	 * @return array List of file URLs.
+	 */
+	public function get_all_files( $dir, $extension ) {
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_glob -- Enumerating plugin-owned static asset dir; wildcard pattern that WP_Filesystem->dirlist() can't express in one call.
+		$files     = glob( $dir . '*.' . $extension );
+		if ( false === $files ) {
+			$files = array();
+		}
+		$file_urls = array_map(
+			function ( $file ) use ( $dir ) {
+				return WPTW_URI . str_replace( WPTW_DIR, '', $file );
+			},
+			$files
+		);
+		return $file_urls;
+	}
+
+	/**
+	 * Enqueue dashboard scripts and styles.
+	 *
+	 * @param string $hook_suffix Current admin page hook.
+	 * @return void
+	 */
+	public function enqueue_dashboard_script( $hook_suffix ) {
+		// Define directories
+		$js_directory  = WPTW_DIR . 'Admin/View/Static/js/';
+		$css_directory = WPTW_DIR . 'Admin/View/Static/css/';
+
+		$js_files  = $this->get_all_files( $js_directory, 'js' );
+		$css_files = $this->get_all_files( $css_directory, 'css' );
+
+		if ( $hook_suffix === 'toplevel_page_tailwatch' ) {
+			// Hide all WordPress admin notices and errors for clean React interface
+			$this->hide_admin_notices();
+
+			// Enqueue WordPress media uploader
+			wp_enqueue_media();
+
+			// Enqueue all JavaScript files
+			foreach ( $js_files as $index => $js_file ) {
+				wp_enqueue_script(
+					'wptw-dashboard-js-' . $index,
+					$js_file,
+					array(),
+					WPTW_VERSION,
+					true
+				);
+			}
+
+			// Localize script
+			if ( ! empty( $js_files ) ) {
+				wp_localize_script(
+					'wptw-dashboard-js-0',
+					'wptw_ajax',
+					array(
+						'ajax_url'  => admin_url( 'admin-ajax.php' ),
+						'nonce'     => wp_create_nonce( 'wp_ajax_nonce' ),
+						'admin_url' => admin_url(),
+						'base_url'  => WPTW_GET_SITE_URL,
+						'asset_url' => WPTW_URI . 'Admin/View/Static/images/',
+					)
+				);
+			}
+
+			// Enqueue all CSS files
+			foreach ( $css_files as $index => $css_file ) {
+				wp_enqueue_style( 'wptw-dashboard-css-' . $index, $css_file, array(), WPTW_VERSION );
+			}
+		}
+	}
+
+	/**
+	 * Check and render option page.
+	 *
+	 * @return void
+	 */
+	public function tailwatch_option_page() {
+		// Additional safety measure to hide notices on this specific page
+		$this->hide_admin_notices();
+		?>
+		<noscript><?php esc_html_e( 'You need to enable JavaScript to run this app.', 'tailwatch' ); ?></noscript>
+		<div id="root"></div>
+		<?php
+	}
+
+	/**
+	 * Hide WordPress admin notices on the Tailwatch admin page only.
+	 *
+	 * ## Scope
+	 *
+	 * This method is intentionally restricted to the Tailwatch top-level admin
+	 * page (`page=tailwatch`). The plugin renders a single-page React app there
+	 * and admin notices from other plugins routinely overlap the React UI in
+	 * ways that break layout. Outside of `page=tailwatch`, this method is a
+	 * no-op — notices from WordPress core, other plugins, and themes display
+	 * normally in their usual locations.
+	 *
+	 * The upstream callers (`admin_enqueue_scripts` callback and the page
+	 * renderer) already gate this method to the Tailwatch screen. The inline
+	 * guard below is defense in depth so a future caller that invokes this
+	 * method without first checking the screen cannot accidentally suppress
+	 * notices on unrelated admin pages.
+	 *
+	 * @return void
+	 */
+	private function hide_admin_notices() {
+		// Defense in depth: only operate when we are actually on the Tailwatch
+		// admin page. The check accepts either the GET parameter (works during
+		// page load before get_current_screen() is fully populated) or the
+		// current screen ID.
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only page-identifier check for display scoping; not an action that mutates state.
+		$page          = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : '';
+		$screen        = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+		$on_our_screen = ( 'tailwatch' === $page )
+			|| ( $screen && isset( $screen->id ) && 'toplevel_page_tailwatch' === $screen->id );
+		if ( ! $on_our_screen ) {
+			return;
+		}
+
+		// Remove the four notice hooks that other plugins / WP core write to.
+		// Scoped above to the Tailwatch screen; never affects other admin pages.
+		remove_all_actions( 'admin_notices' );
+		remove_all_actions( 'all_admin_notices' );
+		remove_all_actions( 'network_admin_notices' );
+		remove_all_actions( 'user_admin_notices' );
+
+		// Enqueue CSS as a belt-and-suspenders measure for any late-bound
+		// notices that might be added after we ran remove_all_actions().
+		add_action(
+			'admin_enqueue_scripts',
+			function () {
+				wp_enqueue_style(
+					'wptw-admin-notice-hide',
+					WPTW_URI . 'Admin/Assets/css/wptw-admin-notice-hide.css',
+					array(),
+					WPTW_VERSION
+				);
+			}
+		);
+	}
+}

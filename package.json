@@ -1,0 +1,29 @@
+{
+	"name": "tailwatch",
+	"version": "1.0.0",
+	"private": true,
+	"description": "Tailwatch WordPress plugin — orchestration for building the React admin dashboard (admin-app/) and syncing the compiled bundle into Admin/View/Static/.",
+	"scripts": {
+		"install:react": "npm ci --prefix admin-app",
+		"build:react": "npm run build --prefix admin-app",
+		"build:copy": "node scripts/copy-build.js",
+		"build": "npm run install:react && npm run build:react && npm run build:copy",
+		"watch": "chokidar \"admin-app/src/**/*\" -c \"npm run build:react && npm run build:copy\" --initial",
+		"start": "node scripts/dev-server.js",
+		"dev:link": "node scripts/dev-bridge.js install",
+		"dev:unlink": "node scripts/dev-bridge.js remove",
+		"dev:playground": "npx -y @wp-playground/cli@latest server --mount=.:/wordpress/wp-content/plugins/tailwatch --blueprint=.wp-playground/blueprint.json --login"
+	},
+	"devDependencies": {
+		"chokidar-cli": "^3.0.0"
+	},
+	"engines": {
+		"node": ">=20",
+		"npm": ">=10"
+	},
+	"license": "GPL-2.0-or-later",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/tailwatch/tailwatch"
+	}
+}

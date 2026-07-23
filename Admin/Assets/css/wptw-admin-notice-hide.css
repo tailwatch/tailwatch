@@ -1,0 +1,29 @@
+/* Hide all WordPress admin notices and errors in WP Tail Watch interface */
+.notice, .update-nag, .error, .updated, .is-dismissible,
+.notice-error, .notice-warning, .notice-success, .notice-info,
+.wrap .notice, .wrap .error, .wrap .updated,
+div.error, div.updated, div.notice,
+.admin-notice, .plugin-update-tr,
+.update-message, .updating-message,
+.notice-alt, .inline-notice,
+#message, .fade, .below-h2 {
+	display: none !important;
+	visibility: hidden !important;
+	opacity: 0 !important;
+	height: 0 !important;
+	margin: 0 !important;
+	padding: 0 !important;
+}
+
+/* Hide plugin/theme update notifications */
+.plugin-update-tr, .theme-update-tr,
+.update-plugins, .update-themes,
+.wp-core-ui .notice {
+	display: none !important;
+}
+
+/* Hide PHP errors and warnings */
+.php-error, .deprecated-notice,
+.error-notice, .warning-notice {
+	display: none !important;
+}

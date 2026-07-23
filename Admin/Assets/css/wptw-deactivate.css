@@ -1,0 +1,499 @@
+/**
+ * Deactivation Modal Styles
+ *
+ * Color Scheme:
+ * - Brand Orange: #F05123
+ * - White: #ffffff
+ * - Black: #0D0D0D
+ *
+ * @package Tailwatch
+ * @since 1.0.0
+ */
+
+/* Modal Overlay with Backdrop Blur */
+.wptw_modal-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background: rgba(13, 13, 13, 0.75);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	z-index: 100000;
+	animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+	from {
+		opacity: 0;
+	}
+
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes slideUp {
+	from {
+		opacity: 0;
+		transform: translateY(30px) scale(0.95);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+/* Modal Container with Glass Effect */
+.wptw_modal-container {
+	background: rgba(255, 255, 255, 0.98);
+	backdrop-filter: blur(20px);
+	-webkit-backdrop-filter: blur(20px);
+	border-radius: 20px;
+	box-shadow:
+		0 32px 64px rgba(0, 0, 0, 0.15),
+		0 8px 32px rgba(0, 0, 0, 0.1),
+		inset 0 1px 0 rgba(255, 255, 255, 0.9);
+	max-width: 70%;
+	width: 50%;
+	max-height: 90vh;
+	overflow: hidden;
+	position: relative;
+	animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+	border: 1px solid rgba(240, 81, 35, 0.2);
+}
+
+/* Modal Header with Brand Orange Gradient */
+.wptw_modal-header {
+	background: linear-gradient(135deg, #F05123 0%, #d4451d 100%);
+	color: white;
+	padding: 16px 32px;
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	position: relative;
+	overflow: hidden;
+}
+
+.wptw_modal-header::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%);
+	pointer-events: none;
+}
+
+.wptw_modal-header .wptw_icon {
+	width: 32px;
+	height: 32px;
+	background: rgba(255, 255, 255, 0.15);
+	border-radius: 12px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 18px;
+	backdrop-filter: blur(10px);
+	flex-shrink: 0;
+}
+
+.wptw_modal-header h3 {
+	font-size: 22px;
+	font-weight: 600;
+	margin: 0;
+	flex-grow: 1;
+	letter-spacing: -0.5px;
+	color: #ffffff;
+}
+
+.wptw_modal-close {
+	position: absolute;
+	top: 10px;
+	right: 24px;
+	background: transparent;
+	border: none;
+	color: white;
+	font-size: 24px;
+	cursor: pointer;
+	padding: 5px;
+	border-radius: 10px;
+	backdrop-filter: blur(10px);
+	transition: all 0.3s ease;
+	z-index: 1;
+}
+
+/* .wptw_modal-close:hover {
+	background: rgba(255, 255, 255, 0.2);
+	transform: rotate(90deg);
+} */
+
+/* Modal Body with Better Spacing */
+.wptw_modal-body {
+	padding: 32px;
+	max-height: 60vh;
+	overflow-y: auto;
+}
+
+.wptw_modal-body::-webkit-scrollbar {
+	width: 6px;
+}
+
+.wptw_modal-body::-webkit-scrollbar-track {
+	background: rgba(0, 0, 0, 0.05);
+	border-radius: 10px;
+}
+
+.wptw_modal-body::-webkit-scrollbar-thumb {
+	background: rgba(240, 81, 35, 0.3);
+	border-radius: 10px;
+}
+
+.wptw_modal-body::-webkit-scrollbar-thumb:hover {
+	background: rgba(240, 81, 35, 0.5);
+}
+
+.wptw_form-group {
+	margin-bottom: 28px;
+}
+
+.wptw_form-group:last-child {
+	margin-bottom: 0;
+}
+
+.wptw_form-group label {
+	display: block;
+	font-weight: 600;
+	margin-bottom: 12px;
+	color: #0D0D0D;
+	font-size: 15px;
+}
+
+/* Fixed Select Dropdown - Single Arrow Only */
+.wptw_form-group select {
+	width: 100%;
+	max-width: 100%;
+	padding: 10px 40px 10px 20px;
+	border: 2px solid rgba(0, 0, 0, 0.08);
+	border-radius: 12px;
+	font-size: 15px;
+	transition: all 0.3s ease;
+	background-color: rgba(255, 255, 255, 0.8);
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23F05123' d='M6 8.5L1.5 4h9L6 8.5z'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 16px center;
+	background-size: 12px;
+	font-family: inherit;
+	cursor: pointer;
+	/* Hide default browser arrow */
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	appearance: none;
+}
+
+/* Fix for IE/Edge */
+.wptw_form-group select::-ms-expand {
+	display: none;
+}
+
+.wptw_form-group textarea {
+	width: 100%;
+	max-width: 100%;
+	padding: 10px 20px;
+	border: 2px solid rgba(0, 0, 0, 0.08);
+	border-radius: 12px;
+	font-size: 15px;
+	transition: all 0.3s ease;
+	background: rgba(255, 255, 255, 0.8);
+	font-family: inherit;
+}
+
+.wptw_form-group select:focus,
+.wptw_form-group textarea:focus {
+	outline: none;
+	border-color: #F05123;
+	box-shadow: 0 0 0 4px rgba(240, 81, 35, 0.1);
+	background-color: white;
+	transform: translateY(-2px);
+}
+
+.wptw_form-group textarea {
+	resize: vertical;
+	min-height: 100px;
+	line-height: 1.6;
+}
+
+.wptw_form-group textarea::placeholder {
+	color: #999;
+}
+
+/* Enhanced Data Options */
+.wptw_data-options {
+	background: linear-gradient(135deg, rgba(240, 81, 35, 0.02) 0%, rgba(240, 81, 35, 0.05) 100%);
+	border: 2px solid rgba(240, 81, 35, 0.1);
+	border-radius: 16px;
+	padding: 24px;
+	margin-top: 12px;
+}
+
+.wptw_data-options .wptw_option {
+	display: flex;
+	align-items: flex-start;
+	gap: 16px;
+	margin-bottom: 20px;
+	padding: 16px;
+	border-radius: 12px;
+	transition: all 0.3s ease;
+	cursor: pointer;
+	border: 2px solid transparent;
+}
+
+.wptw_data-options .wptw_option:last-child {
+	margin-bottom: 0;
+}
+
+.wptw_data-options .wptw_option:hover {
+	background: rgba(240, 81, 35, 0.05);
+	transform: translateY(-2px);
+	border-color: rgba(240, 81, 35, 0.2);
+}
+
+.wptw_data-options input[type="radio"] {
+	width: 20px;
+	height: 20px;
+	margin: 0;
+	accent-color: #F05123;
+	flex-shrink: 0;
+}
+
+.wptw_data-options label {
+	margin: 0;
+	font-weight: 600;
+	cursor: pointer;
+	color: #0D0D0D;
+	font-size: 15px;
+}
+
+.wptw_data-options .wptw_option-description {
+	font-size: 13px;
+	color: #666;
+	margin-top: 4px;
+	line-height: 1.4;
+}
+
+/* Enhanced Help Section */
+.wptw_help-section {
+	background: linear-gradient(135deg, rgba(240, 81, 35, 0.08) 0%, rgba(240, 81, 35, 0.12) 100%);
+	border: 2px solid rgba(240, 81, 35, 0.15);
+	border-radius: 16px;
+	padding: 24px;
+	margin-top: 12px;
+}
+
+.wptw_help-section h4 {
+	color: #F05123;
+	margin-bottom: 16px;
+	font-size: 16px;
+	font-weight: 600;
+}
+
+.wptw_help-links {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	gap: 16px;
+}
+
+.wptw_help-links a {
+	color: #F05123;
+	text-decoration: none;
+	font-size: 14px;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 12px 16px;
+	border-radius: 10px;
+	background: rgba(255, 255, 255, 0.6);
+	transition: all 0.3s ease;
+	font-weight: 500;
+	border: 1px solid rgba(240, 81, 35, 0.1);
+}
+
+.wptw_help-links a:hover {
+	background: rgba(240, 81, 35, 0.1);
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(240, 81, 35, 0.15);
+}
+
+.wptw_help-links .wptw_icon {
+	width: 20px;
+	height: 20px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 14px;
+}
+
+/* Enhanced Modal Footer */
+.wptw_modal-footer {
+	padding: 14px 32px;
+	background: linear-gradient(135deg, rgba(0, 0, 0, 0.02) 0%, rgba(0, 0, 0, 0.05) 100%);
+	border-top: 1px solid rgba(0, 0, 0, 0.08);
+	align-items: center;
+}
+
+.wptw_button-group {
+	display: flex;
+	gap: 12px;
+	flex-direction: row;
+	justify-content: space-between;
+}
+
+.wptw_button {
+	padding: 10px 20px;
+	border: none;
+	border-radius: 12px;
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.3s ease;
+	text-decoration: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	position: relative;
+	overflow: hidden;
+	letter-spacing: -0.25px;
+}
+
+.wptw_button::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: -100%;
+	width: 100%;
+	height: 100%;
+	background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+	transition: left 0.5s ease;
+}
+
+.wptw_button:hover::before {
+	left: 100%;
+}
+
+.wptw_button-secondary {
+	background: linear-gradient(135deg, #F05123 0%, #d4451d 100%);
+	color: white;
+	box-shadow: 0 4px 12px rgba(240, 81, 35, 0.3);
+}
+
+.wptw_button-secondary:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 8px 24px rgba(240, 81, 35, 0.4);
+}
+
+.wptw_button-cancel {
+	background: rgba(13, 13, 13, 0.05);
+	color: #666;
+	border: 2px solid rgba(13, 13, 13, 0.1);
+}
+
+.wptw_button-cancel:hover {
+	background: rgba(13, 13, 13, 0.1);
+	color: #0D0D0D;
+	transform: translateY(-2px);
+}
+
+.wptw_button:disabled {
+	cursor: not-allowed;
+	opacity: 0.7;
+}
+
+/* Radio Button Checked State */
+.wptw_data-options .wptw_option input[type=radio]:checked::before {
+	content: "";
+	border-radius: 50%;
+	width: 0.8rem;
+	height: 0.8rem;
+	margin: 2.8px;
+	background-color: #F05123;
+	line-height: 1.14285714;
+}
+
+.wptw_data-options .wptw_option input[type=radio]:checked {
+	border-color: #F05123;
+}
+
+/* Responsive Design */
+@media (max-width: 600px) {
+	.wptw_modal-container {
+		width: 95%;
+		margin: 10px;
+		border-radius: 16px;
+	}
+
+	.wptw_modal-header,
+	.wptw_modal-body,
+	.wptw_modal-footer {
+		padding: 20px 24px;
+	}
+
+	.wptw_button-group {
+		flex-direction: column;
+		width: 100%;
+	}
+
+	.wptw_modal-footer {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 12px;
+	}
+
+	.wptw_help-links {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* Selection Styles */
+::selection {
+	background: rgba(240, 81, 35, 0.2);
+	color: #F05123;
+}
+
+::-moz-selection {
+	background: rgba(240, 81, 35, 0.2);
+	color: #F05123;
+}
+
+/* Focus Styles */
+.wptw_button:focus-visible {
+	outline: 2px solid #F05123;
+	outline-offset: 2px;
+}
+
+/* Loading State */
+.wptw_button.loading {
+	pointer-events: none;
+	opacity: 0.8;
+}
+
+.wptw_button.loading::after {
+	content: '';
+	width: 16px;
+	height: 16px;
+	border: 2px solid transparent;
+	border-top: 2px solid currentColor;
+	border-radius: 50%;
+	animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}

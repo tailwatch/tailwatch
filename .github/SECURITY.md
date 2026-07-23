@@ -1,4 +1,7 @@
-<a href="https://wptailwatch.com/?utm_source=github&utm_medium=readme&utm_campaign=free&utm_content=wptailwatch_logo"><img src=".github/assets/logo.png" alt="WP Tailwatch – Security, Backups & Monitoring" width="320"></a>
+<p align="center">
+  <a href="https://wptailwatch.com/?utm_source=github&utm_medium=readme&utm_campaign=free&utm_content=wptailwatch_logo"><img src="assets/logo.png" alt="WP Tailwatch – Security, Backups & Monitoring" width="320"></a>
+</p>
+
 ## Report Security Issues
 ---
 

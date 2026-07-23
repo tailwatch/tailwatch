@@ -1,0 +1,92 @@
+.tree,
+.tree .ul {
+  margin: 0 0 0 1em; 
+  padding: 0;
+  list-style: none;
+  color: rgb(197, 197, 197);
+  position: relative;
+}
+
+.tree .ul {
+  margin-left: .5em; 
+}
+
+.tree:before,
+.tree .ul:before {
+  content: "";
+  display: block;
+  width: 0;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-left: 1px solid;
+}
+
+.tree .li {
+  margin: 0;
+  padding: 0 1.2em; /* indentation + .5em */    
+  position: relative;
+}
+
+.tree .li:before {
+  content: "";
+  display: block;
+  width: 19px; /* same with indentation */
+  height: 0;
+  border-top: 1px solid;
+  margin-top: 53px; /* border top width */
+  position: absolute;
+  top: 1em; /* (line-height/2) */
+  left: 0;
+}
+
+.tree .li:last-child:before {
+  background: white; /* same with body background */
+  height: auto;
+  top: 1em; /* (line-height/2) */
+  bottom: 0;
+}
+.suboptions-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.suboptions-table tr {
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.suboptions-table td {
+  padding: 8px;
+  vertical-align: top;
+}
+
+.suboptions-table td:first-child {
+  font-weight: 600;
+  color: #333;
+}
+
+.custom-grid-checkbox {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #6b7280; /* gray-500 */
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.custom-grid-checkbox:checked {
+  background-color: #2563eb; /* blue-600 */
+  border-color: #2563eb;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='white'%3E%3Cpath fill-rule='evenodd' d='M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z' clip-rule='evenodd' /%3E%3C/svg%3E");
+  background-size: 14px;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.custom-grid-checkbox:focus {
+  outline: none;
+  ring: 2px solid #93c5fd; /* blue-300 */
+}
