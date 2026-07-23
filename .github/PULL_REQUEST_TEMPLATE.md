@@ -1,5 +1,5 @@
 ## PR Checklist
-- [ ] The commit message follows our guidelines: https://github.com/wptailwatch/tailwatch/blob/main/.github/CONTRIBUTING.md
+- [ ] The commit message follows our guidelines: https://github.com/tailwatch/tailwatch/blob/main/.github/CONTRIBUTING.md
 
 ---
 
