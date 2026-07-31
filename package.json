@@ -24,6 +24,6 @@
 	"license": "GPL-2.0-or-later",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/tailwatch/tailwatch"
+		"url": "https://github.com/wptailwatch/wptailwatch"
 	}
 }

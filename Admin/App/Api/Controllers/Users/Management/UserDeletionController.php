@@ -13,17 +13,12 @@ use Tailwatch\Admin\App\Api\Traits\ContextAuthorizationTrait;
  *
  * ## Authorization model
  *
- * These methods are reachable through two distinct entry points:
+ * These methods are reachable through the wp-admin AJAX router
+ * (AjaxRequestController) — the upstream gate verifies `wp_ajax_nonce` AND
+ * `current_user_can('manage_options')` before dispatch.
  *
- *   1. The wp-admin AJAX router (AjaxRequestController) — upstream gate
- *      verifies `wp_ajax_nonce` AND `current_user_can('manage_options')`.
- *   2. The JWT-gated mobile route (MobileAppController) — upstream gate
- *      verifies the JWT signature, expiry, license-connected state, and
- *      JTI revocation.
- *
- * Each public method calls `is_authorized_request()` (provided by
- * ContextAuthorizationTrait) as defense in depth. AJAX path re-verifies
- * `manage_options`; JWT path verifies the license is still connected.
+ * Each public method also calls `is_authorized_request()` (provided by
+ * ContextAuthorizationTrait) as defense in depth, re-verifying `manage_options`.
  */
 class UserDeletionController {
 

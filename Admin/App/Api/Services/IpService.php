@@ -5,7 +5,7 @@
  * Canonical helper for resolving the real client IP behind reverse proxies
  * (Cloudflare / NGINX / AWS ALB / etc.). Single source of truth — replaces
  * the three duplicated `get_client_ip()` implementations that previously
- * lived in MonitoringLogController, RedirectionRules, and AuthController.
+ * lived in MonitoringLogController and RedirectionRules.
  *
  * Static API by design: the helper is pure (no state, no side effects),
  * needs no constructor wiring, and the call sites are short:
@@ -22,6 +22,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use Tailwatch\Admin\App\Api\Services\IpManagement\GetIpServices;
+
 /**
  * Class IpService
  *
@@ -29,49 +31,30 @@ if ( ! defined( 'ABSPATH' ) ) {
 class IpService {
 
 	/**
-	 * Resolve the real client IP, unwrapping common reverse-proxy headers.
+	 * Resolve the client IP for logging and rule matching.
 	 *
-	 * Lookup order:
-	 *   1. `HTTP_CLIENT_IP`         — set by some proxies / WAFs.
-	 *   2. `HTTP_X_FORWARDED_FOR`   — proxy chain; take the first hop
-	 *                                 (closest to the original client).
-	 *                                 Cloudflare sets this, so its clients
-	 *                                 are covered without a CF-specific
-	 *                                 check.
-	 *   3. `REMOTE_ADDR` (fallback) — direct connection only.
+	 * Delegates to the hardened resolver GetIpServices::wptw_get_client_ip(),
+	 * which returns REMOTE_ADDR by default and only consults X-Forwarded-For
+	 * when the site has explicitly enabled the `trust_proxy_headers` setting.
+	 * In that case it walks the header right-to-left to the first public
+	 * address — the value the trusted edge proxy actually observed — so a
+	 * client-supplied X-Forwarded-For or Client-IP header is never taken at
+	 * face value.
 	 *
-	 * The final value goes through `filter_var(..., FILTER_VALIDATE_IP)`
-	 * so a forged or malformed header never lands in a log row, a rate-
-	 * limit key, or a redirection rule match.
+	 * The result is validated with FILTER_VALIDATE_IP, which guarantees a
+	 * well-formed IP. Validation confirms form, not authenticity: only the
+	 * `trust_proxy_headers` gate decides whether a forwarded header is
+	 * honoured at all.
 	 *
-	 * Returns `'0.0.0.0'` when nothing validates — covers CLI invocations,
-	 * cron without a request context, and edge cases where a downstream
-	 * header is empty or garbage. Callers should treat `'0.0.0.0'` as a
-	 * "no real client IP available" sentinel rather than a real address.
+	 * Returns `'0.0.0.0'` when no usable address is available (CLI, cron
+	 * without a request context, or malformed input). Callers should treat
+	 * `'0.0.0.0'` as a "no real client IP available" sentinel rather than a
+	 * real address.
 	 *
-	 * Why not also check Cloudflare-specific `HTTP_CF_CONNECTING_IP`?
-	 * Because Cloudflare also sets `X-Forwarded-For` with the same value,
-	 * and the second branch above picks it up. Adding a CF-specific check
-	 * would help only on sites that strip X-Forwarded-For — an unusual
-	 * configuration. If that becomes a real customer scenario, prepend
-	 * a `HTTP_CF_CONNECTING_IP` check ahead of `HTTP_CLIENT_IP` here.
-	 *
-	 * @return string Validated IP, or '0.0.0.0' when nothing usable was found.
+	 * @return string Validated client IP, or '0.0.0.0' when none is available.
 	 */
 	public static function get_client_ip() {
-		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotValidated -- Validated below via FILTER_VALIDATE_IP.
-		$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '0.0.0.0';
-
-		if ( ! empty( $_SERVER['HTTP_CLIENT_IP'] ) ) {
-			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotValidated -- Validated below.
-			$ip = sanitize_text_field( wp_unslash( $_SERVER['HTTP_CLIENT_IP'] ) );
-		} elseif ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
-			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotValidated -- Validated below.
-			$parts = explode( ',', sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) );
-			$ip    = trim( $parts[0] );
-		}
-
-		$validated = filter_var( $ip, FILTER_VALIDATE_IP );
-		return ( false !== $validated && null !== $validated ) ? $validated : '0.0.0.0';
+		$ip = GetIpServices::wptw_get_client_ip();
+		return '' === $ip ? '0.0.0.0' : $ip;
 	}
 }

@@ -10,6 +10,10 @@
 
 namespace Tailwatch\Admin\App\Api\Controllers\Backup;
 
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
 use Tailwatch\Admin\App\Api\Controllers\Database\DBOptimizer\DatabaseOptimizerController;
 use Tailwatch\Admin\App\Api\Controllers\PushNotifications\PushNotificationController;
 use Tailwatch\Admin\App\Api\Controllers\Visit\RecommendedFeaturesController;
@@ -17,9 +21,9 @@ use Tailwatch\Admin\App\Api\Controllers\Features\FeaturesController;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\CronJobManager;
 use Tailwatch\Admin\App\Api\Services\Cron\CronHealthService;
 use Tailwatch\Admin\App\Api\Controllers\Logs\LiveLogs\LiveLogsController;
-use Tailwatch\Admin\App\Api\Controllers\LimitIncrease\PerformanceOptimizerController;
 use Tailwatch\Admin\App\Api\Services\ZipUtility\ZipCreation;
 use Tailwatch\Admin\App\Api\Services\Common\FilesystemService;
+use Tailwatch\Admin\App\Api\Services\Common\SecureDirectoryService;
 use Tailwatch\Admin\App\Api\Models\DBModel;
 use Tailwatch\Admin\App\Api\Models\BackupModel;
 use Tailwatch\Admin\App\Api\Logging\Log;
@@ -29,10 +33,6 @@ use Tailwatch\Admin\App\Api\Controllers\Base\BaseController;
 use Tailwatch\Admin\App\Api\Services\ProcessManager;
 use Tailwatch\Admin\App\Api\Services\ProcessStatusService;
 use Tailwatch\Admin\App\Api\Services\ProcessGuard;
-
-if ( ! defined( 'ABSPATH' ) ) {
-	exit;
-}
 
 /**
  * Class BackupController
@@ -917,7 +917,7 @@ class BackupController extends BaseController {
 	}
 
 	/**
-	 * Acquire the single-worker lock. TTL = the scan boost's max_execution_time, so it
+	 * Acquire the single-worker lock. TTL = the PHP max_execution_time, so it
 	 * never expires mid-legitimate-tick (the tick dies by then and the shutdown hook
 	 * releases it). The finally releases on every normal/exception return; the
 	 * shutdown hook releases on a timeout/fatal that bypasses finally; the TTL is the
@@ -950,8 +950,6 @@ class BackupController extends BaseController {
 	 * finalization. Runs only while holding the single-worker lock (see the wrapper).
 	 */
 	private function wptw_run_backup_cron_worker() {
-		$performance_controller = new PerformanceOptimizerController();
-		$performance_controller->wptw_boost_for_scanning();
 
 		$feature_controller = new DBModel();
 
@@ -992,45 +990,44 @@ class BackupController extends BaseController {
 
 		$this->wptw_backup_function_started();
 
+		// Resolve dynamic core paths reliably
+		$upload_dir      = wp_upload_dir();
+		$uploads_basedir = $upload_dir['basedir'];
+		$content_basename = wp_basename( WP_CONTENT_DIR );
+
 		if ( 'files_integrity' === $existing_data['process_run'] ) {
 			$folders = $this->wptw_verify_required_folders();
 
-			// Mirror the basename derivation from wptw_verify_required_folders().
-			$candidate_basename = wp_basename( WP_CONTENT_DIR );
-			$content_basename   = is_string( $candidate_basename )
-				&& '' !== $candidate_basename
-				&& preg_match( '#^[A-Za-z0-9_-]+$#', $candidate_basename )
-					? $candidate_basename
-					: 'wp-content';
+			$backup_dir_base = trailingslashit( WPTW_BACKUP_DIR ) . 'wptw-scanner/';
 
 			$exclude_wp_content_folders = array(
-				WPTW_BACKUP_DIR . '/wptw-scanner/' . $content_basename . '/plugins',
-				WPTW_BACKUP_DIR . '/wptw-scanner/' . $content_basename . '/themes',
-				WPTW_BACKUP_DIR . '/wptw-scanner/' . $content_basename . '/uploads',
-				WPTW_BACKUP_DIR . '/wptw-scanner/' . $content_basename . '/tailwatch',
+				$backup_dir_base . $content_basename . '/plugins',
+				$backup_dir_base . $content_basename . '/themes',
+				$backup_dir_base . $content_basename . '/uploads',
+				$backup_dir_base . $content_basename . '/tailwatch',
 			);
 
 			$exclude_root_folders = array(
-				WPTW_BACKUP_DIR . '/wptw-scanner/wp-admin',
-				WPTW_BACKUP_DIR . '/wptw-scanner/wp-includes',
-				WPTW_BACKUP_DIR . '/wptw-scanner/' . $content_basename,
+				$backup_dir_base . 'wp-admin',
+				$backup_dir_base . 'wp-includes',
+				$backup_dir_base . $content_basename,
 			);
 		} else {
 			$folders = array(
-				'wp-admin'    => ABSPATH . 'wp-admin',
-				'wp-includes' => ABSPATH . WPINC,
+				'wp-admin'    => trailingslashit( ABSPATH ) . 'wp-admin',
+				'wp-includes' => trailingslashit( ABSPATH ) . WPINC,
 				'wp-content'  => WP_CONTENT_DIR,
 				'plugins'     => WP_PLUGIN_DIR,
 				'themes'      => get_theme_root(),
-				'uploads'     => wp_get_upload_dir()['basedir'],
-				'others'      => realpath( ABSPATH ),
+				'uploads'     => $uploads_basedir,
+				'others'      => ABSPATH,
 			);
 
 			$exclude_wp_content_folders = array(
 				WP_PLUGIN_DIR,
 				get_theme_root(),
-				wp_get_upload_dir()['basedir'],
-				WPTW_CONTENT_DIR_BASE,
+				$uploads_basedir,
+				defined( 'WPTW_CONTENT_DIR_BASE' ) ? WPTW_CONTENT_DIR_BASE : '',
 			);
 
 			$exclude_root_folders = $this->get_root_folders_name();
@@ -1064,10 +1061,8 @@ class BackupController extends BaseController {
 						$this->update_backup_cancel_pause( $cancel_pause );
 					}
 					$this->update_backup_scan_state( $cancel_pause['scan_state'] );
-					// return;
 				} else {
 					wp_schedule_single_event( time() + 3, 'wptw_backup_daily_scan' );
-					// return;
 				}
 				$this->wptw_backup_function_complete();
 				$this->process_manager->heart_beat( $process_id );
@@ -1419,10 +1414,6 @@ class BackupController extends BaseController {
 		if ( ! class_exists( 'PclZip' ) ) {
 			return false;
 		}
-		if ( ! defined( 'PCLZIP_TEMPORARY_DIR' ) ) {
-			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound -- Required by external PclZip library.
-			define( 'PCLZIP_TEMPORARY_DIR', trailingslashit( dirname( $destination ) ) );
-		}
 		// PclZip's add() appends; start from a clean file so a resumed/retried part is not doubled.
 		if ( file_exists( $destination ) ) {
 			wp_delete_file( $destination );
@@ -1546,8 +1537,9 @@ class BackupController extends BaseController {
 		$folder_date                         = $existing_data['folderDate'];
 
 		$backup_directory = WPTW_BACKUP_DIR . '/';
-		if ( ! file_exists( $backup_directory ) ) {
-			wp_mkdir_p( $backup_directory );
+		if ( ! is_dir( $backup_directory ) ) {
+			// Seal the backup root with deny files so archives are not reachable over the web.
+			SecureDirectoryService::ensure_private_root( $backup_directory );
 		}
 		$files_directory = $backup_directory . 'files/';
 		if ( ! file_exists( $files_directory ) ) {
@@ -1565,7 +1557,17 @@ class BackupController extends BaseController {
 		// ONE manifest build replaces the old large-file walk + part-count walk AND the
 		// per-part re-walk. First tick builds it and returns (one tick to plan).
 		if ( empty( $existing_data[ $key ]['manifest_built'] ) ) {
-			$folder_exclude = ( 'wp-content' === $key ) ? $exclude_wp_content_folders : ( ( 'others' === $key ) ? $exclude_root_folders : array() );
+			if ( 'wp-content' === $key ) {
+				$folder_exclude = $exclude_wp_content_folders;
+			} elseif ( 'others' === $key ) {
+				$folder_exclude = $exclude_root_folders;
+			} elseif ( 'uploads' === $key ) {
+				// Skip the plugin's own logs and generated data (including the
+				// GeoIP database) so backups do not carry regenerable files.
+				$folder_exclude = array( WPTW_LOGS_DIRECTORY );
+			} else {
+				$folder_exclude = array();
+			}
 			$manifest_file  = $daily_backup_directory . "{$key}_{$zip_unique_id}.manifest";
 			$large_manifest = $daily_backup_directory . "{$key}_{$zip_unique_id}.large";
 

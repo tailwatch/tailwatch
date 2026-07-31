@@ -5,7 +5,6 @@ import Header from '../../Components/Header/Header.jsx';
 import { tabs } from './TabData/TabData.jsx';
 import UserLogs from './UserLogs/UserLogs.jsx';
 import ErrorLogs from './ErrorLogs/ErrorLogs.jsx';
-import AjaxLogs from './AjaxLogs/AjaxLogs.jsx';
 import EmailLogs from './EmailLogs/EmailLogs.jsx';
 
 const Logs = () => {
@@ -23,11 +22,9 @@ const Logs = () => {
       setActiveTab('user');
     } else if (currentPath === 'error' && activeTab !== 'error') {
       setActiveTab('error');
-    } else if (currentPath === 'network-inspector' && activeTab !== 'network-inspector') {
-      setActiveTab('network-inspector');
     } else if (currentPath === 'email' && activeTab !== 'email') {
       setActiveTab('email');
-    } else if (currentPath !== 'user' && currentPath !== 'error' && currentPath !== 'network-inspector' && currentPath !== 'email') {
+    } else if (currentPath !== 'user' && currentPath !== 'error' && currentPath !== 'email') {
       setActiveTab('user');
       navigate('/dashboard/logs/user', { replace: true });
     }
@@ -45,8 +42,6 @@ const Logs = () => {
         return <UserLogs key="user" />;
       case 'error':
         return <ErrorLogs key="error" />;
-      case 'network-inspector':
-        return <AjaxLogs key="network-inspector" />;
       case 'email':
         return <EmailLogs key="email" />;
       default:

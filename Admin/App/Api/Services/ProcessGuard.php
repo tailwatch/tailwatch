@@ -1,4 +1,10 @@
 <?php
+namespace Tailwatch\Admin\App\Api\Services;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
 /**
  * Process Guard
  *
@@ -30,12 +36,6 @@
  * @package    Tailwatch
  * @subpackage Admin\App\Api\Services
  */
-
-namespace Tailwatch\Admin\App\Api\Services;
-
-if ( ! defined( 'ABSPATH' ) ) {
-	exit;
-}
 
 /**
  * Class ProcessGuard

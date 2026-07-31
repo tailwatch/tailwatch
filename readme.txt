@@ -8,28 +8,24 @@ Stable tag: 1.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Mobile-first WordPress security with backups, monitoring, SSL tracking, file integrity checks, rollback, and event-based notifications.
+WordPress security with backups, monitoring, SSL tracking, file integrity checks, and event-based push notifications.
 
 == Description ==
 
-Tailwatch is a mobile-first WordPress security and site management plugin designed to give real-time visibility and control over your website from anywhere.
+Tailwatch is a WordPress security and site management plugin that gives you real-time visibility into what is happening on your website.
 
-It combines security, monitoring, backups, updates, and recovery tools into one lightweight system, accessible through a WordPress dashboard, a central web dashboard, and a companion mobile app.
-
-Unlike traditional plugins that stay inside wp-admin, Tailwatch focuses on event-based monitoring and remote response.
+It combines security, monitoring, and backups into one lightweight system, managed from your WordPress dashboard. Optionally connect a free Tailwatch account to receive event-based push notifications so you stay informed wherever you are.
 
 = Core Features =
 
 * Activity Logs (logins, failed logins, registrations, password resets)
-* Network & HTTP Error Logs (4xx / 5xx monitoring)
+* HTTP Error Logs (4xx / 5xx monitoring)
 * Email / SMTP Logging with custom SMTP server support
 * Security Hardening Audit
 * File & Permission Protection
-* Security Keys & Salts Rotation (rotates all four AUTH/SECURE_AUTH/LOGGED_IN/NONCE keys and salts — 8 constants in total)
 * Smart SSL Monitoring & Expiry Alerts
 * File Integrity Monitoring (baseline + change detection)
 * Full Site Backups (files and database)
-* Updates & Rollback (plugin, theme & core version rollback support)
 * Search & Replace (safe database-wide updates with serialized data handling)
 * Content Restrictions (browser-level protection controls like copy/inspect restrictions)
 * Database Optimization Tools
@@ -42,36 +38,27 @@ Unlike traditional plugins that stay inside wp-admin, Tailwatch focuses on event
 * Username Hardening (audits for common high-risk usernames such as admin and administrator)
 * Process Monitoring & Recovery (detect stuck long-running tasks and re-schedule them)
 * Disk Space Monitoring
-* Mobile App Auto-Login (one-tap secure admin access from the companion app)
-* Action History Audit Trail
-* SOS Recovery Mode
-* Event-based Mobile Push Notifications
+* Event-based Push Notifications
 
-= Mobile App & Notifications =
+= Notifications =
 
-Tailwatch includes a free mobile app for Android.
-
-Once connected to a free Tailwatch account, your site can send event-based notifications for:
+Once connected to a free Tailwatch account, your site can send event-based push notifications for:
 
 * Login activity (logins, failed logins, registrations, password resets)
-* Security Keys & Salts Rotation
 * Backup completion and backup failures
 * File integrity changes (added, modified, deleted files)
 * SSL expiry alerts and certificate status changes
-* Plugin, theme & core update results
-* Updates rollback events (success/failure + version restore)
 * Security Hardening Audit results (scan completed, issues detected)
 * Security feature configuration changes
 * Search & Replace completion results
 * HTTP error spikes (4xx / 5xx monitoring)
 * Database optimization results
 * Broken link scan results
-* Cron job execution status
+* Cron job failures
 * Email delivery (success or failed)
-* Login Defender events (IPs blocked after repeated failed logins, brute-force attempts detected, lockouts expired)
-* SOS Recovery Mode activation — always delivered when a recovery link is generated, regardless of the per-event toggle, so site owners are immediately notified about a recovery session
+* Login Defender events (IPs blocked after repeated failed logins, brute-force attempts detected)
 
-Notifications are delivered using Firebase Cloud Messaging (FCM), routed through api.wptailwatch.com (the plugin does not contact Firebase directly).
+Notifications are delivered to the Tailwatch mobile app using Firebase Cloud Messaging (FCM), routed through api.wptailwatch.com (the plugin does not contact Firebase directly).
 
 = Tailwatch Pro =
 
@@ -98,17 +85,16 @@ Tailwatch Pro extends the free version with:
 Yes. Core features run locally on your WordPress site with no paid subscription required.
 
 = Do I need an account? =
-No. An account is only required for optional features like mobile notifications, dashboard sync, and SOS Recovery.
+No. An account is only required for optional features like push notifications and license/account sync.
 
 = Will it slow down my site? =
 No. Tailwatch uses lazy loading, caching, and scheduled background processing for performance efficiency.
 
 = Does Tailwatch send data externally? =
 Only when you enable optional features such as:
-– Mobile push notifications
+– Push notifications
 – License verification
 – Optional feedback submission
-– SOS Recovery Mode (transmits the recovery session metadata you mint from the dashboard)
 
 Core features remain fully local. See the "External Services" section below for the full breakdown of each transmission.
 
@@ -119,38 +105,22 @@ Yes. Every module in Tailwatch can be individually enabled or disabled.
 
 This plugin connects to several external services. Each service, the data sent, and the conditions under which the connection is made are listed below. Most connections only occur when the corresponding optional feature is enabled by the site administrator.
 
-= WordPress.org API (api.wordpress.org and downloads.wordpress.org) =
-Used to check for available updates to WordPress core, installed plugins, and installed themes, to fetch plugin/theme metadata for the rollback and version-history features, and to download the actual core/plugin/theme zip archives when you trigger a rollback or install. These endpoints are operated by the WordPress.org Foundation and are the same APIs that WordPress core itself uses for update notifications.
-
-What is sent: the requested WordPress core version string, plugin slug, or theme slug. No user PII is sent. Requests are made:
-- When you visit the Updates panel in the plugin admin (on demand);
-- On the scheduled update-check interval you configure;
-- When you open the Rollback browser for a specific plugin or theme;
-- When you confirm a rollback (downloads the chosen archive from downloads.wordpress.org).
-
-Endpoints contacted on api.wordpress.org: /core/version-check/, /core/stable-check/, /plugins/info/, /themes/info/. Endpoints contacted on downloads.wordpress.org: /release/, /plugin/, /theme/ (archive downloads).
-
-Service provider: WordPress.org Foundation
-Privacy policy: https://wordpress.org/about/privacy/
-Terms: https://wordpress.org/about/
-
 = Tailwatch API (api.wptailwatch.com) =
-Used for license verification, mobile push notification delivery, optional deactivation feedback submission, and SOS Recovery Mode session management. Only active after you connect a free Tailwatch account from the plugin's License screen.
+Used for license verification, push notification delivery, and optional deactivation feedback submission. License verification and push notification delivery are active only after you connect a free Tailwatch account from the plugin's License screen. The deactivation feedback submission is independent of any account connection and is sent only if you voluntarily submit it (see below).
 
 What is sent and when:
 - License verification: your anonymized Tailwatch user identifier and your site URL (query string), plus an `X-WPTW-Header-Key` request header containing the license credential issued when you connected your account. Sent on dashboard visits (throttled by a short server-side cache) and on demand when you click "Verify License". No system metadata is included in this request;
 - Mobile push notifications: anonymized user identifier, your site domain, and the notification type/severity tag (the plugin no longer sends a pre-written title or body; the Tailwatch service composes those from the event context below, and the request goes to a single relay endpoint authenticated with a per-site routing token request header). When mobile notifications are enabled, an additional event-context payload is also stored on api.wptailwatch.com so the mobile app can render notification details when you tap a push. This event-context payload contains: the event name and feature, the action and any state-change narrative (before/after) describing what occurred, the timestamp, the requesting admin's own forensic baseline (IP address and user agent at the time of the event), and per-event fields needed for the mobile app's detail view (for example, for Email / SMTP events the recipient address and subject line so the notification is actionable). It does NOT include message bodies, credentials, tokens, license keys, or any other secret. The event-context payload is held on api.wptailwatch.com only; it is NOT forwarded to Firebase Cloud Messaging (see below) — Firebase only ever receives the slim title/body/type payload.
-- Deactivation feedback: site domain, deactivation reason, plugin version, your "keep data / delete data" choice from the deactivation modal, and optional free-form comments — sent only if you voluntarily click "Submit & Deactivate" (the "Skip & Deactivate" button avoids any transmission);
-- SOS Recovery: session metadata used to mint passwordless recovery links you initiate from the dashboard.
+- Deactivation feedback: site domain, deactivation reason, plugin version, your "keep data / delete data" choice from the deactivation modal, and optional free-form comments — sent only if you voluntarily click "Submit & Deactivate" (the "Skip & Deactivate" button avoids any transmission).
 
 Service provider: WP Tailwatch
 Privacy policy: https://wptailwatch.com/privacy-policy
 Terms: https://wptailwatch.com/terms-of-services
 
 = Tailwatch Dashboard (dashboard.wptailwatch.com) =
-The central web dashboard you use to connect your site, manage your account, and generate SOS Recovery links. The browser opens dashboard.wptailwatch.com only when you click "Connect License" or follow a dashboard-issued recovery link.
+The central web dashboard you use to connect your site and manage your account. The browser opens dashboard.wptailwatch.com only when you click "Connect License".
 
-What is sent: your site URL, environment type (staging or production), and CTA credentials (Client ID and Client Secret) are passed via URL parameters when you initiate the connection flow. License information is retrieved and stored in your WordPress database after you log in to the dashboard.
+What is sent: your site URL and environment type (staging or production) are passed via URL parameters when you initiate the connection flow. License information is retrieved and stored in your WordPress database after you log in to the dashboard.
 
 Service provider: WP Tailwatch
 Privacy policy: https://wptailwatch.com/privacy-policy
@@ -166,23 +136,10 @@ Privacy policy: https://firebase.google.com/support/privacy
 Terms: https://firebase.google.com/terms
 
 = Smart SSL Monitoring — host certificate inspection =
-The Smart SSL feature opens a TLS connection (raw socket) to the domains you have added to the monitor list to read their certificate metadata (issuer, validity dates, chain). It also issues an HTTP HEAD probe over plain HTTP to detect HTTP→HTTPS redirection behaviour. The set of hosts contacted is controlled entirely by you — Tailwatch does not maintain a list of external services for this purpose. Disable the Smart SSL feature in plugin settings if you do not want these requests issued.
+The Smart SSL feature opens a TLS connection (raw socket) to your own site's domain (derived from your WordPress Site Address / `home_url()`) to read its certificate metadata (issuer, validity dates, chain). It also issues an HTTP HEAD probe over plain HTTP to your own site to detect HTTP→HTTPS redirection behaviour. Only your own site is contacted — Tailwatch does not connect to any third-party service for this purpose. Disable the Smart SSL feature in plugin settings if you do not want these requests issued.
 
 = Broken Link Checker — external URL scanning =
 The Broken Links scanner contacts URLs that you (or your site's authors) have placed in your post content, pages, term descriptions, user meta, and options. The plugin issues GET requests to those URLs to determine whether they return 4xx or 5xx errors. The set of URLs contacted is therefore controlled entirely by your own site content — Tailwatch does not maintain a list of external services for this purpose. Disable the Broken Links feature in plugin settings if you do not want these requests issued.
-
-= MaxMind GeoLite2 database (download.maxmind.com) =
-Used by the IP Management / Login Defender geolocation feature to resolve visitor IP addresses to a country (for country whitelisting and, in the Pro plugin, country blocking). The plugin downloads the free GeoLite2-Country database directly from MaxMind to your server, where all IP-to-country lookups then run locally — no visitor IP is ever transmitted to MaxMind. The database is re-downloaded on a weekly schedule to stay current.
-
-This connection is only made after you enter your own MaxMind license key on the plugin's Integrations screen and is never contacted otherwise. You must create a free MaxMind account and accept MaxMind's terms to obtain a key.
-
-What is sent: your MaxMind license key (query string) to authenticate the database download. No visitor data and no site PII are sent.
-
-Endpoint contacted: https://download.maxmind.com/app/geoip_download
-
-Service provider: MaxMind, Inc.
-Privacy policy: https://www.maxmind.com/en/privacy-policy
-Terms: https://www.maxmind.com/en/geolite2/eula
 
 == Third-Party Libraries ==
 
@@ -190,8 +147,7 @@ Terms: https://www.maxmind.com/en/geolite2/eula
 
 Tailwatch bundles the following open-source PHP libraries. They run entirely on your server and are GPLv2-compatible.
 
-* Firebase PHP-JWT — JSON Web Token signing and verification for the plugin's internal REST API (mobile app + dashboard auth). Runs under the `Tailwatch\Vendor\*` namespace. Source: https://github.com/firebase/php-jwt — License: BSD-3-Clause
-* MaxMind GeoIP2 PHP API + MaxMind-DB Reader — reads the local GeoLite2-Country database to resolve visitor IPs to a country for the IP Management / Login Defender geolocation feature. Runs under the `Tailwatch\Vendor\MaxMind\*` namespace. Source: https://github.com/maxmind/GeoIP2-php and https://github.com/maxmind/MaxMind-DB-Reader-php — License: Apache-2.0 (full text in `Vendor/MaxMind/LICENSE`)
+* MaxMind GeoIP2 PHP API + MaxMind-DB Reader — reads a GeoLite2-Country database that you supply (by uploading it to your site's uploads directory) to resolve visitor IPs to a country for the IP Management / Login Defender geolocation feature. Runs under the `Tailwatch\Vendor\MaxMind\*` namespace. Source: https://github.com/maxmind/GeoIP2-php and https://github.com/maxmind/MaxMind-DB-Reader-php — License: Apache-2.0 (full text in `Vendor/MaxMind/LICENSE`)
 
 All server-side HTTP requests use WordPress core's built-in HTTP API (wp_remote_get / wp_remote_post / wp_remote_head). No external PHP HTTP client libraries (e.g. Guzzle) are bundled.
 
@@ -214,7 +170,7 @@ The plugin's admin dashboard is a React single-page application. Its compiled bu
 * lucide-react (License: ISC) and react-icons (License: MIT) — icon sets
 * @uppy/core (file selection) — https://uppy.io — License: MIT
 * file-saver (client-side file downloads) — https://github.com/eligrey/FileSaver.js — License: MIT
-* i18n-iso-countries and countries-list (country names, regions, and capitals for the geo-blocking screen) — License: MIT
+* i18n-iso-countries and countries-list (country names and metadata for country name and flag display) — License: MIT
 * DOMPurify (HTML sanitisation for user-supplied strings rendered in the dashboard) — https://github.com/cure53/DOMPurify — License: Apache-2.0 / MPL-2.0
 * prop-types (runtime prop checks) — https://github.com/facebook/prop-types — License: MIT
 * classnames (conditional CSS class-name joining) — https://github.com/JedWatson/classnames — License: MIT
@@ -229,7 +185,7 @@ No JavaScript library is loaded from a remote CDN at runtime; the bundle is serv
 
 == Privacy Policy ==
 
-Tailwatch stores all logs and operational data locally in your WordPress database (custom tables `{prefix}tw_settings` and `{prefix}tw_logs`) and in the `wp-content/tailwatch/wptw-logs/` and `wp-content/tailwatch/wptw-backup/` directories on disk.
+Tailwatch stores all logs and operational data locally in your WordPress database (custom tables `{prefix}tw_settings`, `{prefix}tw_logs`, `{prefix}tw_filemon_baseline`, and `{prefix}tw_filemon_scans`) and on disk under `uploads/tailwatch/wptw-logs/` (logs and generated data) and `wp-content/tailwatch/wptw-backup/` (backup archives). Both directories are sealed with deny files (.htaccess, index.php, web.config) so their contents are not reachable over the web.
 
 Data stored locally:
 
@@ -240,10 +196,9 @@ Data stored locally:
 – **File integrity baselines** — file path + hash snapshots used to detect added / modified / deleted files
 – **Broken link / redirection records** — URLs detected on your site and any redirects you have configured
 – **System configuration data** — every plugin feature toggle, schedule, and threshold lives in `{prefix}tw_settings`
-– **Client IP addresses** — captured for security-relevant events (failed logins, rate-limited requests, redirection hits, recovery-mode activations) so the dashboard and audit trail can show where the event came from
+– **Client IP addresses** — captured for security-relevant events (failed logins, rate-limited requests, redirection hits) so the dashboard and audit trail can show where the event came from
 – **Login Defender state** — IP addresses temporarily locked out after repeated failed logins, throttling counters, and the per-IP activity history that drives the lockout decisions
-– **Geo-blocking lists** — IPs and country codes you have explicitly allow-listed or block-listed via the Geo-blocking screen, plus the timestamp and admin who created each rule
-– **Authentication tokens** — for the mobile app and dashboard, the plugin issues signed JWTs. The token identifier (JTI), an issued-at timestamp, and a per-device fingerprint (MD5 hash of User-Agent + IP) are stored in WordPress options under `wptw_token_jti_*` so a stolen token can be revoked
+– **Geo-blocking lists** — IPs and IP ranges you have explicitly allow-listed or block-listed via the Geo-blocking screen, plus the timestamp and admin who created each rule
 – **Visit / usage telemetry** — a local-only counter in the `wptw_visit_data` option, used to drive in-dashboard onboarding hints; never transmitted
 
 No user data, logs, or PII is transmitted to external servers unless an optional feature is explicitly enabled by the site administrator. The full list of outbound transmissions is documented in the "External Services" section above.
@@ -255,27 +210,23 @@ No user data, logs, or PII is transmitted to external servers unless an optional
 3. SSL monitoring panel
 4. Backup system
 5. File integrity tracking
-6. Updates and rollback
-7. Security hardening audit
-8. Notification settings
+6. Security hardening audit
+7. Notification settings
 
 == Changelog ==
 
 = 1.0.0 =
 * Initial release
 * Activity monitoring system
-* Error and network logging
+* Error (HTTP 4xx / 5xx) logging
 * File integrity monitoring
 * SSL monitoring
-* Backup and restore system
-* Update and rollback system
+* Backup system (files and database)
 * Database optimization tools
 * Cron job manager
 * Login Defender (IP-based brute-force protection + lockouts)
-* Geo-blocking (IP and country allow/block lists)
-* Mobile push notification integration
-* SOS recovery mode
-* JWT-based REST API authentication
+* Geo-blocking (IP and IP-range allow/block lists)
+* Event-based push notifications
 
 == Source Code ==
 

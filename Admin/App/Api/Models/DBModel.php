@@ -6,7 +6,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-use Tailwatch\Admin\App\Api\Services\Auth\JwtService;
 
 /**
  * Database Model for Custom Plugin Tables.
@@ -1055,76 +1054,6 @@ class DBModel {
 			'limit'       => $limit,
 			'total_pages' => $limit > 0 ? (int) ceil( $total / $limit ) : 0,
 		);
-	}
-
-	/**
-	 * Delete all CTA keys from options table.
-	 *
-	 * Security cleanup operation to remove all client authentication keys.
-	 *
-	 * @return void
-	 */
-	public function wptw_delete_all_cta_keys() {
-		global $wpdb;
-
-		delete_option( 'wptw_cta_id' );
-		delete_option( 'wptw_auth_header_key' );
-
-		$like_pattern = $wpdb->esc_like( 'wptw_cta_secret_' ) . '%';
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Core options table; CTA-secret cleanup.
-		$options = $wpdb->get_results(
-			$wpdb->prepare(
-				'SELECT option_name FROM %i WHERE option_name LIKE %s',
-				$wpdb->options,
-				$like_pattern
-			),
-			ARRAY_A
-		);
-
-		if ( is_array( $options ) ) {
-			foreach ( $options as $option ) {
-				if ( isset( $option['option_name'] ) ) {
-					delete_option( $option['option_name'] );
-				}
-			}
-		}
-	}
-
-	/**
-	 * Revoke all JWT tokens.
-	 *
-	 * Security operation to invalidate all active JWT tokens.
-	 *
-	 * @return void
-	 */
-	public function wptw_revoke_all_tokens() {
-		global $wpdb;
-
-		$like_pattern = $wpdb->esc_like( 'wptw_token_jti_' ) . '%';
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Core options table; JWT-token revocation sweep.
-		$options = $wpdb->get_results(
-			$wpdb->prepare(
-				'SELECT option_name FROM %i WHERE option_name LIKE %s',
-				$wpdb->options,
-				$like_pattern
-			),
-			ARRAY_A
-		);
-
-		if ( is_array( $options ) ) {
-			foreach ( $options as $option ) {
-				if ( ! isset( $option['option_name'] ) ) {
-					continue;
-				}
-				$jti = str_replace( 'wptw_token_jti_', '', $option['option_name'] );
-				if ( ! JwtService::is_valid_jti_format( $jti ) ) {
-					continue;
-				}
-				update_option( 'wptw_token_revoked_' . $jti, true, false );
-			}
-		}
 	}
 
 	/**

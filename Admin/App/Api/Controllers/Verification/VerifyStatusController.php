@@ -239,7 +239,7 @@ class VerifyStatusController {
 			$license_data = array(
 				'devices'              => $data['devices'] ?? 1,
 				'email'                => sanitize_email( $data['email'] ),
-				'license_key'          => base64_encode( $data['licenseKey'] ),
+				'license_key'          => sanitize_text_field( $data['licenseKey'] ),
 				'plan_name'            => sanitize_text_field( $data['planName'] ),
 				'connection_date_time' => sanitize_text_field( $data['connectionDateTime'] ),
 				'user_id'              => sanitize_text_field( $data['userId'] ),
@@ -628,15 +628,6 @@ class VerifyStatusController {
 			}
 			$delete_key = $data;
 
-			$db_model = new DBModel();
-			$db_model->wptw_delete_all_cta_keys();
-			$db_model->wptw_revoke_all_tokens();
-
-			// Rotate JWT signing secret so any leaked previous secret cannot
-			// forge new tokens with new JTIs that would bypass the revocation
-			// list above. This invalidates ALL outstanding JWTs immediately.
-			( new VerificationKeysController() )->wptw_rotate_secret_key();
-
 			// Remove stale verification metadata that would otherwise leak
 			// the last-known plan/user info even after the license is gone.
 			delete_option( 'wptw_last_license_check' );
@@ -748,8 +739,8 @@ class VerifyStatusController {
 			} else {
 				// No license data exists — idempotent success. License was never
 				// connected (or already disconnected), so the desired state is
-				// already achieved. Cleanup actions (JWT rotation, cache clear)
-				// already ran above (lines 610-630).
+				// already achieved. Cleanup actions (cache clear, stale metadata
+				// removal) already ran above.
 				Log::info(
 					"Plugin activation data never existed (idempotent): {$delete_key}",
 					array(

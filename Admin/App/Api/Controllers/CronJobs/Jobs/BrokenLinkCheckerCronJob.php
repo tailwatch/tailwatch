@@ -78,7 +78,7 @@ class BrokenLinkCheckerCronJob extends AbstractCronJob {
 	 * @return string Display name.
 	 */
 	protected function get_schedule_display_name() {
-		return esc_html__( 'Broken Link Checker', 'tailwatch' );
+		return 'Broken Link Checker';
 	}
 
 	/**

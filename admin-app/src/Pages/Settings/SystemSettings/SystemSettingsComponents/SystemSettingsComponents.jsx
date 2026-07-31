@@ -1,5 +1,5 @@
 
-import { Server, Database, HardDrive, Shield, Globe, FileText,CheckCircle,XCircle,AlertTriangle,Info} from "lucide-react";
+import { Server, Database, HardDrive, Shield, Globe, CheckCircle,XCircle,AlertTriangle,Info} from "lucide-react";
 
 export const convertKeysToSnakeCase = (obj) => {
     if (obj === null || typeof obj !== 'object') {
@@ -75,7 +75,6 @@ export   const StatusIndicator = ({ value, type = "boolean" }) => {
   );
 
  export  const tabs = [    
-     { id: 'php', label: 'PHP Config', icon: <FileText className="w-4 h-4" /> },
     { id: 'server', label: 'Server', icon: <Server className="w-4 h-4" /> },
     { id: 'database', label: 'Database', icon: <Database className="w-4 h-4" /> },
     { id: 'wordpress', label: 'WordPress', icon: <Globe className="w-4 h-4" /> },

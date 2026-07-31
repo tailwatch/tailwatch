@@ -6,9 +6,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use Tailwatch\Vendor\MaxMind\GeoIp2\Database\Reader;
-use Tailwatch\Admin\App\Api\Controllers\Integration\GeoIp2\GeoLiteTwoController;
 
 class GeoIPService {
+
+	const DATABASE           = 'GeoLite2-Country';
+	const DATABASE_EXTENSION = '.mmdb';
+	const FOLDER_NAME        = 'geoip';
 
 	/**
 	 * Shared MaxMind readers keyed by database path. Opening the .mmdb is
@@ -24,7 +27,18 @@ class GeoIPService {
 	private $database_path;
 
 	public function __construct( $database_path = null ) {
-		$this->database_path = $database_path ?? GeoLiteTwoController::wptw_geo_lite_db_file_path();
+		$this->database_path = $database_path ?? self::wptw_geo_lite_db_file_path();
+	}
+
+	/**
+	 * Absolute path to the GeoLite2-Country database inside the uploads folder.
+	 * The database is supplied by the site owner; when it is absent, lookups
+	 * return "Unknown" and callers treat the country as undetermined.
+	 *
+	 * @return string
+	 */
+	public static function wptw_geo_lite_db_file_path() {
+		return WPTW_LOGS_DIRECTORY . '/' . self::FOLDER_NAME . '/' . self::DATABASE . self::DATABASE_EXTENSION;
 	}
 
 	/**
@@ -40,7 +54,7 @@ class GeoIPService {
 		if ( ! array_key_exists( $path, self::$readers ) ) {
 			self::$readers[ $path ] = null;
 			try {
-				if ( GeoLiteTwoController::wptw_is_geo_lite_db_file_exist() && file_exists( $path ) ) {
+				if ( file_exists( $path ) ) {
 					self::$readers[ $path ] = new Reader( $path );
 				}
 			} catch ( \Exception $e ) {

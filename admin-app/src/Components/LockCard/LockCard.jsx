@@ -5,7 +5,6 @@ import IconButton from "../Buttons/IconButton";
 import { useFeatureContent } from "../Hooks/useFeatureContent/useFeatureContent";
 import {
   handleConnect,
-  getSecretKeys,
 } from "../../Pages/Settings/LicenseTab/LicenseTabServices/LicenseTabServices";
 import { useFeaturesData } from "../Context/FeaturesDataContext";
 /* global wptw_ajax */
@@ -48,12 +47,9 @@ const LockCard = ({
   const handleActivateLicense = async () => {
     setConnecting(true);
     try {
-      const secretKeys = await getSecretKeys({ setConnecting });
       await handleConnect({
         setLoading: setLoading,
         wptw_ajax,
-        ctaId: secretKeys?.cta_id,
-        ctaSecret: secretKeys?.cta_secret,
         successCallback: async () => {
           await fetchFeaturesData();
           if (typeof afterToggleCallback === "function") {

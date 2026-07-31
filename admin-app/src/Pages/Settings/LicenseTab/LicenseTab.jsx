@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { LicenseTabSkeleton } from "../../../Components/Skeleton/LoaderSkeleton";
-import { handleConfirmDisconnect, getSecretKeys, fetchData, handleConnect,getCookies } from './LicenseTabServices/LicenseTabServices';
+import { handleConfirmDisconnect, fetchData, handleConnect } from './LicenseTabServices/LicenseTabServices';
 import { ConnectedLicenseView, NoLicenseView } from "./LicenseComponents/LicenseComponents";
 import { useFeaturesData } from "../../../Components/Context/FeaturesDataContext";
 import { alertService } from "../../../Components/AlertService/AlertService";
@@ -52,21 +52,19 @@ const LicenseTab = ({ activeTab, loading: parentLoading, setLoading }) => {
   }, [activeTab]);
 
   const handleConnectClick = async () => {
-    const secretKeys = await getSecretKeys({ setConnecting });    
-    const cookies = await getCookies({ setConnecting });
-    await handleConnect({
-      setLoading: setLoading,
-      wptw_ajax,
-      ctaId: secretKeys.cta_id,
-      ctaSecret: secretKeys.cta_secret,
-      authHeaderKey: secretKeys.auth_header_key,
-      cookieName: cookies.name,
-      cookieValue: cookies.value,
-      successCallback: async () => {
-        await fetchFeaturesData();
-        await fetchData({setEmail, setLicenseKey, setConnectionDateTime, setPlanName, setDevices, setStartData, setEndData, setLoading,setIsExpiry, setRole});
-      },
-    });
+    setConnecting(true);
+    try {
+      await handleConnect({
+        setLoading: setLoading,
+        wptw_ajax,
+        successCallback: async () => {
+          await fetchFeaturesData();
+          await fetchData({setEmail, setLicenseKey, setConnectionDateTime, setPlanName, setDevices, setStartData, setEndData, setLoading,setIsExpiry, setRole});
+        },
+      });
+    } finally {
+      setConnecting(false);
+    }
   };
 
   if (isLoading) {

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { getVisitFeatures, updateVisitFeatures, handleSubmitButton, handleFeatureCompletion } from '../VisitServices/VisitServices';
 import { FaSpinner, FaCog, FaRocket, FaCheckCircle, FaUserCog } from "react-icons/fa";
-import { handleConnect, getSecretKeys } from '../../Settings/LicenseTab/LicenseTabServices/LicenseTabServices'
+import { handleConnect } from '../../Settings/LicenseTab/LicenseTabServices/LicenseTabServices'
 import { useVerifyVisitStatus } from '../../../Components/Hooks/VerifyVisitStatus/VerifyVisitStatus';
 import { toast } from 'react-toastify';
 import VisitSteps from '../VisitSteps/VisitSteps';
@@ -86,15 +86,17 @@ const VisitFeatures = () => {
     };
 
     const handleConnectClick = async () => {
-        const secretKeys = await getSecretKeys({ setConnecting });
-        handleConnect({
-            setLoading: setIsLoading, wptw_ajax,
-            ctaId: secretKeys?.cta_id,
-            ctaSecret: secretKeys?.cta_secret,
-            successCallback: async () => {                
-                await getVisitFeatures(setFeatures, setIsLoading);
-            },
-        });
+        setConnecting(true);
+        try {
+            await handleConnect({
+                setLoading: setIsLoading, wptw_ajax,
+                successCallback: async () => {
+                    await getVisitFeatures(setFeatures, setIsLoading);
+                },
+            });
+        } finally {
+            setConnecting(false);
+        }
     };
 
     const handleCustomSettings = () => {

@@ -41,7 +41,6 @@ class Constants {
 		self::define_environment_constants();
 		self::define_version_constants();
 		self::define_misc_constants();
-		self::define_security_constants();
 	}
 
 	/**
@@ -117,9 +116,6 @@ class Constants {
 	 * @return void
 	 */
 	private static function define_api_constants() {
-		// API endpoint slug.
-		self::define( 'WPTW_API_SLUG', 'wptw-json' );
-
 		// API base URL for external services.
 		self::define( 'WPTW_API_BASE_URL', 'https://api.wptailwatch.com' );
 
@@ -145,6 +141,10 @@ class Constants {
 		// File-integrity baseline (one row per file) + scan-history tables.
 		self::define( 'WPTW_DB_FILEMON_BASELINE_TABLE', 'tw_filemon_baseline' );
 		self::define( 'WPTW_DB_FILEMON_SCANS_TABLE', 'tw_filemon_scans' );
+
+		// Database schema version. Bump only when the table structure changes;
+		// activation runs dbDelta only when the stored version differs from this.
+		self::define( 'WPTW_DB_VERSION', '1.0.0' );
 	}
 
 	/**
@@ -156,8 +156,8 @@ class Constants {
 		// Current site URL.
 		self::define( 'WPTW_GET_SITE_URL', get_site_url() );
 
-		// Plugin's slug-namespaced parent folder under wp-content.
-		// All plugin-generated data lives under this parent — a folder named after the plugin slug.
+		// Backup and migration storage: a slug-named folder in wp-content, kept
+		// independent of the per-site uploads directory.
 		self::define( 'WPTW_CONTENT_DIR_BASE', WP_CONTENT_DIR . '/tailwatch' );
 		self::define( 'WPTW_CONTENT_URL_BASE', content_url( '/tailwatch' ) );
 
@@ -165,8 +165,12 @@ class Constants {
 		self::define( 'WPTW_BACKUP_DIR', WPTW_CONTENT_DIR_BASE . '/wptw-backup' );
 		self::define( 'WPTW_BACKUP_URL', WPTW_CONTENT_URL_BASE . '/wptw-backup' );
 
-		// Logs directory path.
-		self::define( 'WPTW_LOGS_DIRECTORY', WPTW_CONTENT_DIR_BASE . '/wptw-logs' );
+		// Logs and generated data live in a slug-named folder inside the uploads
+		// directory, resolved through wp_get_upload_dir() so custom upload
+		// locations are honored.
+		$uploads      = wp_get_upload_dir();
+		$uploads_base = wp_normalize_path( $uploads['basedir'] );
+		self::define( 'WPTW_LOGS_DIRECTORY', trailingslashit( $uploads_base ) . 'tailwatch/wptw-logs' );
 	}
 
 	/**
@@ -190,40 +194,5 @@ class Constants {
 	private static function define_misc_constants() {
 		// Visit data option key.
 		self::define( 'WPTW_VISIT_DATA', 'wptw_visit_data' );
-	}
-
-	/**
-	 * Define security and authentication constants.
-	 *
-	 * @return void
-	 */
-	private static function define_security_constants() {
-		// JWT authentication secret key.
-		if ( ! defined( 'WPTW_JWT_AUTH_SECRET_KEY' ) ) {
-			if ( defined( 'WPTW_JWT_SECRET_KEY' ) ) {
-				// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.VariableConstantNameFound -- Dynamic constant definition.
-				define( 'WPTW_JWT_AUTH_SECRET_KEY', WPTW_JWT_SECRET_KEY );
-			} else {
-				$wptw_jwt_secret_key = get_option( 'wptw_jwt_secret_key' );
-				if ( $wptw_jwt_secret_key ) {
-					// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.VariableConstantNameFound -- Dynamic constant definition.
-					define( 'WPTW_JWT_AUTH_SECRET_KEY', $wptw_jwt_secret_key );
-				}
-			}
-		}
-
-		// Encryption key for sensitive data.
-		if ( ! defined( 'WPTW_ENCRYPTION_KEY' ) ) {
-			if ( defined( 'WPTW_SECRET_ENCRYPTION_KEY' ) ) {
-				// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.VariableConstantNameFound -- Dynamic constant definition.
-				define( 'WPTW_ENCRYPTION_KEY', WPTW_SECRET_ENCRYPTION_KEY );
-			} else {
-				$wptw_encryption_key = get_option( 'wptw_secret_encryption_key' );
-				if ( $wptw_encryption_key ) {
-					// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.VariableConstantNameFound -- Dynamic constant definition.
-					define( 'WPTW_ENCRYPTION_KEY', $wptw_encryption_key );
-				}
-			}
-		}
 	}
 }

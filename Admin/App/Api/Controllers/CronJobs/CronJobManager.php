@@ -17,17 +17,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\SmartSslCronJob;
-use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\ConfigSaltKeysCronJob;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\LicenseVerifyCronJob;
-use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\ThemeAutoUpdateCronJob;
-use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\PluginAutoUpdateCronJob;
-use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\CoreAutoUpdateCronJob;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\BackupCronJob;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\DatabaseOptimizerCronJob;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\IntegrityWatchCronJob;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\BrokenLinkCheckerCronJob;
-use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\JwtCleanupCronJob;
-use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\AutoLoginTokenCleanupCronJob;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\ProcessMonitorCleanupCronJob;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\BackupCleanupCronJob;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\IntegrityEntryMaintenanceCronJob;
@@ -35,7 +29,6 @@ use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\HardeningAuditCronJob;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\HardeningAuditMaintenanceCronJob;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\LoginDefenderExpiredBlocksCronJob;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\LoginDefenderLogsCleanupCronJob;
-use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\GeoLiteUpdateCronJob;
 
 /**
  * Class CronJobManager
@@ -94,18 +87,6 @@ class CronJobManager {
 		// Smart SSL Cron Job.
 		$this->cron_jobs['smart_ssl'] = new SmartSslCronJob();
 
-		// Security Keys Rotation Cron Job.
-		$this->cron_jobs['config_salt_keys'] = new ConfigSaltKeysCronJob();
-
-		// Theme Auto-Update Cron Job.
-		$this->cron_jobs['theme_auto_update'] = new ThemeAutoUpdateCronJob();
-
-		// Plugin Auto-Update Cron Job.
-		$this->cron_jobs['plugin_auto_update'] = new PluginAutoUpdateCronJob();
-
-		// Core Auto-Update Cron Job.
-		$this->cron_jobs['core_auto_update'] = new CoreAutoUpdateCronJob();
-
 		// Backup Cron Job (recurring scheduled backups).
 		$this->cron_jobs['backup'] = new BackupCronJob();
 
@@ -120,12 +101,6 @@ class CronJobManager {
 
 		// License Verification Cron Job.
 		$this->cron_jobs['license_verify'] = new LicenseVerifyCronJob();
-
-		// JWT Token Cleanup Cron Job (daily — purge expired wptw_token_jti_* options).
-		$this->cron_jobs['jwt_cleanup'] = new JwtCleanupCronJob();
-
-		// Auto-Login Token Cleanup Cron Job (daily — purge expired wptw_auto_login_token_* options).
-		$this->cron_jobs['auto_login_token_cleanup'] = new AutoLoginTokenCleanupCronJob();
 
 		// Process Monitor Cleanup Cron Job (weekly — delete process records older than 7 days).
 		$this->cron_jobs['process_monitor_cleanup'] = new ProcessMonitorCleanupCronJob();
@@ -147,10 +122,6 @@ class CronJobManager {
 
 		// Login Defender — purge old login-attempt activity logs (cleanup maintenance).
 		$this->cron_jobs['login_defender_logs_cleanup'] = new LoginDefenderLogsCleanupCronJob();
-
-		// MaxMind GeoLite2 database weekly update check (enabled only when the
-		// integration is connected and the .mmdb already exists).
-		$this->cron_jobs['geo_lite_update'] = new GeoLiteUpdateCronJob();
 
 		/**
 		 * Filter to add custom cron jobs.
@@ -345,9 +316,6 @@ class CronJobManager {
 			'wptw_verify_ssl',
 			'wptw_trigger_ssl_expiry_notice',
 
-			// Security Keys Rotation.
-			'wptw_generate_keys_in_config',
-
 			// Database Optimizer (recurring + chained steps).
 			'wptw_start_database_optimization',
 			'wptw_auto_db_optimize',
@@ -355,17 +323,6 @@ class CronJobManager {
 			// Visit Features.
 			'wptw_activate_recommended_features',
 			'wptw_inserting_rows_into_database',
-
-			// CTA Keys Cleanup.
-			'wptw_cleanup_jti',
-
-			// Auto-Login Token Cleanup.
-			'wptw_cleanup_auto_login_tokens',
-
-			// Auto-Update Cron Jobs.
-			'wptw_theme_auto_update_schedule',
-			'wptw_plugin_auto_update_schedule',
-			'wptw_core_auto_update_schedule',
 
 			// Backup (recurring schedule + chained single events).
 			'wptw_backup_schedule_run',
@@ -406,10 +363,6 @@ class CronJobManager {
 			// Legacy unprefixed names — keep in the uninstall sweep for one release cycle.
 			'login_defender_cleanup_expired',
 			'login_defender_cleanup',
-
-			// MaxMind GeoLite2 (weekly update cron + on-failure download retry cron).
-			'wptw_geo_lite_update_cron',
-			'wptw_download_geo_lite_two_database',
 		);
 
 		/**

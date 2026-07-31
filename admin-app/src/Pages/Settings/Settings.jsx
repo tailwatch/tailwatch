@@ -6,7 +6,6 @@ import SystemSettings from "./SystemSettings/SystemSettings.jsx";
 import { useNavigate, useLocation } from "react-router-dom";
 import LoadingBar from 'react-top-loading-bar';
 import GeneralTab from "./GeneralTab/GeneralTab.jsx";
-import IntegrationTab from "./IntegrationTab/IntegrationTab.jsx";
 
 const Settings = () => {
   const [activeTab, setActiveTab] = useState("general");
@@ -44,10 +43,7 @@ const Settings = () => {
     else if (currentPath === "system" && activeTab !== "system") {
       setActiveTab("system");
     }
-    else if (currentPath === "integration" && activeTab !== "integration") {
-      setActiveTab("integration");
-    }
-    else if (currentPath !== "general" && currentPath !== "license" && currentPath !== "system" && currentPath !== "integration") {
+    else if (currentPath !== "general" && currentPath !== "license" && currentPath !== "system") {
       setActiveTab("general");
       navigate("/dashboard/settings/general", { replace: true });
     }
@@ -70,7 +66,6 @@ const Settings = () => {
     { key: 'general', label: 'General Settings' },
     { key: 'license', label: 'License' },
     { key: 'system', label: 'System Settings' },
-    { key: 'integration', label: 'Integration' },
   ];
   return (
     <div className="relative min-h-screen pb-16">
@@ -87,9 +82,6 @@ const Settings = () => {
           )}
           {activeTab === "system" && (
             <SystemSettings loading={loading} setLoading={setLoading} />
-          )}
-          {activeTab === "integration" && (
-            <IntegrationTab />
           )}
         </div>
       </div>

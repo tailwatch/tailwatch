@@ -75,14 +75,11 @@ class FeatureNotificationMessagesController {
 			'default_two_step_authenticate'  => 'blocker',
 			// Hardener: one-time config applied site-wide.
 			'default_files_and_permission'   => 'hardener',
-			'default_config_generate_key'    => 'hardener',
 			// Monitor: passive logging.
 			'default_log_activity'           => 'monitor',
-			'default_ajax_log'               => 'monitor',
 			'default_monitoring_logs'        => 'monitor',
 			'default_email_configure'        => 'monitor',
 			// Config: dashboard tools / utilities.
-			'default_updates_rollback'       => 'config',
 			'default_database_optimizer'     => 'config',
 			'default_search_replace'         => 'config',
 			'advanced_user_access_control'   => 'config',
@@ -179,10 +176,6 @@ class FeatureNotificationMessagesController {
 				'enabled'  => 'Every login, logout, signup, and password reset is being recorded. You\'ll have a complete audit trail if anything goes wrong.',
 				'disabled' => 'User activity is no longer being logged. If someone gains access to your site, you\'ll have no record of who did what or when.',
 			),
-			'default_ajax_log'               => array(
-				'enabled'  => 'AJAX, REST, and background requests are being tracked. You\'ll spot slow responses, broken endpoints, and unusual traffic patterns in your dashboard.',
-				'disabled' => 'Network-level requests are no longer being tracked. You\'ll miss slow pages, failed background jobs, and unusual API traffic.',
-			),
 			'default_monitoring_logs'        => array(
 				'enabled'  => '4xx and 5xx errors on your site are being captured in real time. You\'ll know the moment something breaks — before your visitors complain.',
 				'disabled' => 'Site errors are no longer being captured. When your site breaks, you\'ll find out from your users instead of your dashboard.',
@@ -191,17 +184,9 @@ class FeatureNotificationMessagesController {
 				'enabled'  => 'Every outgoing email is being logged and SMTP is configured for reliable delivery. You\'ll catch delivery failures before customers do.',
 				'disabled' => 'Outgoing email is no longer logged. If welcome emails, password resets, or order confirmations stop reaching customers, you won\'t notice.',
 			),
-			'default_config_generate_key'    => array(
-				'enabled'  => 'Tailwatch is rotating your wp-config auth and salt keys on a schedule. Stolen session cookies stop working as soon as the next rotation runs.',
-				'disabled' => 'Your auth and salt keys are no longer being rotated. If a session cookie ever leaks, the attacker stays logged in until you manually rotate keys.',
-			),
 			'default_verify_ssl'             => array(
 				'enabled'  => 'Your SSL certificate is being checked daily. You\'ll get an alert well before it expires, so visitors never see a "Not Secure" warning.',
 				'disabled' => 'Your SSL certificate is no longer being monitored. If it expires unnoticed, visitors will see browser warnings and your site will look broken in search results.',
-			),
-			'default_updates_rollback'       => array(
-				'enabled'  => 'Update history and one-click rollback are available. If a plugin, theme, or core update breaks your site, you can restore the previous version in seconds.',
-				'disabled' => 'Update rollback is off. If an update breaks your site, you\'ll have to downgrade manually — and you may lose data in the process.',
 			),
 			'default_backup_enable'          => array(
 				'enabled'  => 'Your site is being backed up automatically. If it ever crashes, gets hacked, or you make a mistake, you can restore a working version in minutes.',

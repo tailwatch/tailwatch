@@ -85,7 +85,7 @@ class LoginDefenderExpiredBlocksCronJob extends AbstractCronJob {
 	 * @return string Display name.
 	 */
 	protected function get_schedule_display_name() {
-		return esc_html__( 'Login Defender Expired Blocks Cleanup', 'tailwatch' );
+		return 'Login Defender Expired Blocks Cleanup';
 	}
 
 	/**

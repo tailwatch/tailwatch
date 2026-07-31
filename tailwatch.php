@@ -12,7 +12,7 @@
  * Plugin URI:  https://wptailwatch.com/?utm_source=wp-plugins&utm_medium=wp-dash&utm_campaign=free&utm_content=plugin_uri
  * Author:      WP Tailwatch
  * Author URI:  https://wptailwatch.com/?utm_source=wp-plugins&utm_medium=wp-dash&utm_campaign=free&utm_content=author_uri
- * Description: Mobile-first WordPress security: backups, monitoring, SSL tracking, file integrity, rollback, and event-based push notifications.
+ * Description: WordPress security with backups, monitoring, SSL tracking, file integrity checks, and event-based push notifications.
  * Version:     1.0.0
  * License:     GPLv2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html

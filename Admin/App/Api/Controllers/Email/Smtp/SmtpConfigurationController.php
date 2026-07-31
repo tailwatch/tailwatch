@@ -29,7 +29,6 @@ class SmtpConfigurationController {
 		$hook_controller->add_filter_hook( 'wp_mail_from_name', array( $this, 'filter_wp_mail_from_name' ), 99, 1 );
 
 		new EmailLogController();
-		new SmtpTestController();
 	}
 
 	public function wptw_get_smtp_configuration() {
@@ -155,12 +154,6 @@ class SmtpConfigurationController {
 			if ( $provider === 'gmail' && ! $this->is_system_email() ) {
 				return;
 			}
-
-			// Tailwatch SMTP is enabled and will handle delivery for this message,
-			// so remove other mail handlers to avoid conflicting transports. This
-			// runs only once we know our SMTP is actually taking over the send.
-			remove_all_actions( 'phpmailer_init', 10 );
-			remove_all_actions( 'wp_mail', 10 );
 
 			if ( $provider === 'default' ) {
 				try {

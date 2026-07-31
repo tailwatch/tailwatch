@@ -83,7 +83,7 @@ class HardeningAuditCronJob extends AbstractCronJob {
 	}
 
 	protected function get_schedule_display_name() {
-		return esc_html__( 'Hardening Audit', 'tailwatch' );
+		return 'Hardening Audit';
 	}
 
 	public function execute() {

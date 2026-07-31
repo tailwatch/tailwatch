@@ -23,14 +23,15 @@
 		// Intercept plugin deactivation link.
 		$( document ).on( 'click', 'tr[data-slug="tailwatch"] .deactivate a', handleDeactivateClick );
 
-		// Modal close handlers.
+		// Modal close handlers. Delegated from document so they keep working
+		// regardless of when the modal markup is added to the page.
 		$( document ).on( 'click', '.wptw_modal-close', closeModal );
-		$( '#deleteModal' ).on( 'click', handleOutsideClick );
+		$( document ).on( 'click', '#deleteModal', handleOutsideClick );
 		$( document ).on( 'keydown', handleEscapeKey );
 
-		// Form submission handlers.
-		$( '#wptw-deactivate' ).on( 'click', handleSubmitDeactivation );
-		$( '#wptw-skip-deactivate' ).on( 'click', handleSkipDeactivation );
+		// Form submission handlers (delegated for the same reason).
+		$( document ).on( 'click', '#wptw-deactivate', handleSubmitDeactivation );
+		$( document ).on( 'click', '#wptw-skip-deactivate', handleSkipDeactivation );
 
 		// Radio button selection.
 		$( document ).on( 'click', '.wptw_option', handleRadioSelection );
@@ -212,6 +213,13 @@
 	 * Redirect to deactivation URL
 	 */
 	function deactivatePlugin() {
+		// Guard: if the modal was shown without the deactivation link being
+		// captured, there is nothing to redirect to. Re-enable the UI instead
+		// of navigating to an empty URL (which would just reload the page).
+		if ( ! deactivateUrl ) {
+			setLoadingState( false );
+			return;
+		}
 		setTimeout(
 			function () {
 				window.location.href = deactivateUrl;
