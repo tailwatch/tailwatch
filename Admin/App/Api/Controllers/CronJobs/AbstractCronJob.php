@@ -288,11 +288,7 @@ abstract class AbstractCronJob {
 
 		$schedules[ $this->schedule_name ] = array(
 			'interval' => $interval_seconds,
-			'display'  => sprintf(
-				/* translators: %s: Schedule name */
-				esc_html__( 'Tailwatch: %s', 'tailwatch' ),
-				$this->get_schedule_display_name()
-			),
+			'display'  => 'Tailwatch: ' . $this->get_schedule_display_name(),
 		);
 
 		return $schedules;

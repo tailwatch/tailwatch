@@ -56,7 +56,7 @@ class HardeningAuditMaintenanceCronJob extends AbstractCronJob {
 	}
 
 	protected function get_schedule_display_name() {
-		return esc_html__( 'Hardening Audit Report Cleanup', 'tailwatch' );
+		return 'Hardening Audit Report Cleanup';
 	}
 
 	public function execute() {

@@ -80,7 +80,7 @@ class SmartSslCronJob extends AbstractCronJob {
 	 * @return string Display name.
 	 */
 	protected function get_schedule_display_name() {
-		return esc_html__( 'Smart SSL Verification', 'tailwatch' );
+		return 'Smart SSL Verification';
 	}
 
 	/**

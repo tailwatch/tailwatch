@@ -6,8 +6,8 @@ use Tailwatch\Admin\App\Api\Models\DBModel;
 use Tailwatch\Admin\App\Api\Models\BackupModel;
 use Tailwatch\Admin\App\Api\Controllers\Hooks\HookControllers;
 use Tailwatch\Admin\App\Api\Services\ProcessManager;
+use Tailwatch\Admin\App\Api\Services\Common\SecureDirectoryService;
 use Tailwatch\Admin\App\Api\Logging\Log;
-use Tailwatch\Admin\App\Api\Controllers\LimitIncrease\PerformanceOptimizerController;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -120,10 +120,6 @@ class BackupDbController {
 
 	public function wptw_create_db_backup() {
 		try {
-			// Raise memory/time before dumping — hex-doubled BLOB chunks are an OOM/timeout source
-			// on small hosts. Idempotent; never lowers limits.
-			( new PerformanceOptimizerController() )->wptw_boost_for_scanning();
-
 			$feature_controller = new DBModel();
 			$wptw_key           = 'default_backup_scan';
 			$option             = 'scan_backp';
@@ -472,8 +468,9 @@ class BackupDbController {
 	}
 
 	public function create_backup_directories( $backup_directory, $folder_date ) {
-		if ( ! file_exists( $backup_directory ) ) {
-			wp_mkdir_p( $backup_directory );
+		if ( ! is_dir( $backup_directory ) ) {
+			// Seal the backup root with deny files so archives are not reachable over the web.
+			SecureDirectoryService::ensure_private_root( $backup_directory );
 		}
 
 		$db_directory = $backup_directory . 'database/';

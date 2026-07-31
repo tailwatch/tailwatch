@@ -23,7 +23,6 @@ export const useLogsActivity = (activeTab, key, option) => {
   const [featuresInfo, setFeaturesInfo] = useState({
     user: { featureId: null, isActive: null },
     error: { featureId: null, isActive: null },
-    "network-inspector": { featureId: null, isActive: null },
     email: { featureId: null, isActive: null }
   });
   // Filter data based on search term
@@ -55,15 +54,6 @@ export const useLogsActivity = (activeTab, key, option) => {
             item?.parsedValue?.log_message?.toLowerCase().includes(searchLower) ||
             item?.parsedValue?.status_code?.toString().includes(searchLower)
           );
-        case 'network-inspector':
-          return (
-            item?.parsedValue?.request?.post_data?.action_type?.toLowerCase().includes(searchLower) ||
-            item?.parsedValue?.endpoint?.action?.toLowerCase().includes(searchLower) ||
-            item?.parsedValue?.endpoint?.method?.toLowerCase().includes(searchLower) ||
-            item?.parsedValue?.response?.status_code?.toString().includes(searchLower) ||
-            item?.parsedValue?.meta?.ip_address?.toLowerCase().includes(searchLower) ||
-            item?.parsedValue?.meta?.request_time?.includes(searchLower)
-          );
         default:
           // Generic search for any string properties
           return Object.values(item).some(value =>
@@ -87,10 +77,6 @@ export const useLogsActivity = (activeTab, key, option) => {
           error: {
             featureId: data.errorLogsFeatureId,
             isActive: data.errorLogsIsActive
-          },
-          "network-inspector": {
-            featureId: data.ajaxLogsFeatureId,
-            isActive: data.ajaxLogsIsActive
           },
           email: {
             featureId: data.emailLogsFeatureId,
@@ -155,10 +141,6 @@ export const useLogsActivity = (activeTab, key, option) => {
         error: {
           featureId: data.errorLogsFeatureId,
           isActive: data.errorLogsIsActive
-        },
-        "network-inspector": {
-          featureId: data.ajaxLogsFeatureId,
-          isActive: data.ajaxLogsIsActive
         },
         email: {
           featureId: data.emailLogsFeatureId,

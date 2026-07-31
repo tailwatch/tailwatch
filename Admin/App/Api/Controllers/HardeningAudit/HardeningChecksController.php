@@ -67,7 +67,6 @@ class HardeningChecksController {
 			'database_prefix'          => 'check_database_prefix',
 			'security_keys'            => 'check_security_keys',
 			'admin_username'           => 'check_admin_username',
-			'file_permissions'         => 'check_file_permissions',
 			'ssl_https'                => 'check_ssl_configuration',
 			'debug_mode'               => 'check_debug_mode',
 			'xmlrpc'                   => 'check_xmlrpc',
@@ -746,83 +745,6 @@ class HardeningChecksController {
 		);
 	}
 
-	public function check_file_permissions() {
-		$label = __( 'File Permissions', 'tailwatch' );
-
-		$uploads_basedir = wp_get_upload_dir()['basedir'] ?? ( WP_CONTENT_DIR . '/uploads' );
-		$wp_config_path  = WpConfigLocator::locate();
-		$paths           = array(
-			ABSPATH . '.htaccess',
-			WP_CONTENT_DIR,
-			$uploads_basedir,
-			WP_PLUGIN_DIR,
-			get_theme_root(),
-		);
-		if ( null !== $wp_config_path ) {
-			array_unshift( $paths, $wp_config_path );
-		}
-
-		$issues = array();
-
-		foreach ( $paths as $path ) {
-			if ( ! file_exists( $path ) ) {
-				continue;
-			}
-
-			$perms     = fileperms( $path );
-			$octal     = substr( sprintf( '%o', $perms ), -4 );
-			$is_config = ( 'wp-config.php' === basename( $path ) );
-
-			if ( $is_config ) {
-				if ( ! in_array( $octal, self::SAFE_WP_CONFIG_PERMS, true ) ) {
-					$issues[] = array(
-						'path'        => $this->relative_path( $path ),
-						'current'     => $octal,
-						'recommended' => '0440 or 0640',
-						'severity'    => self::STATUS_CRITICAL,
-					);
-				}
-				continue;
-			}
-
-			// World-writable bit (0002) catches 0666, 0777, 0775, etc. — not
-			// just the literal 0777 a naïve check would flag.
-			if ( $perms & 0002 ) {
-				$issues[] = array(
-					'path'        => $this->relative_path( $path ),
-					'current'     => $octal,
-					'recommended' => is_dir( $path ) ? '0755' : '0644',
-					'severity'    => self::STATUS_WARNING,
-				);
-			}
-		}
-
-		if ( ! empty( $issues ) ) {
-			$has_critical = false;
-			foreach ( $issues as $issue ) {
-				if ( self::STATUS_CRITICAL === $issue['severity'] ) {
-					$has_critical = true;
-					break;
-				}
-			}
-
-			return $this->build_result(
-				'file_permissions',
-				$label,
-				$has_critical ? self::STATUS_CRITICAL : self::STATUS_WARNING,
-				__( 'One or more files have insecure permissions.', 'tailwatch' ),
-				array( 'issues' => $issues )
-			);
-		}
-
-		return $this->build_result(
-			'file_permissions',
-			$label,
-			self::STATUS_SECURE,
-			__( 'File permissions look good.', 'tailwatch' )
-		);
-	}
-
 	public function check_ssl_configuration() {
 		$label    = __( 'SSL / HTTPS', 'tailwatch' );
 		$site_url = (string) get_option( 'siteurl' );
@@ -1152,7 +1074,7 @@ class HardeningChecksController {
 	public function check_uploads_php_files() {
 		$label    = __( 'PHP Files in Uploads', 'tailwatch' );
 		$uploads  = wp_get_upload_dir();
-		$base_dir = isset( $uploads['basedir'] ) ? $uploads['basedir'] : WP_CONTENT_DIR . '/uploads';
+		$base_dir = $uploads['basedir'];
 
 		if ( ! is_dir( $base_dir ) ) {
 			return $this->build_result(

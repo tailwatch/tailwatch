@@ -9,7 +9,7 @@ import { useBlackList } from '../../../Components/Hooks/useIpManagement/useBlack
 import { useNavigate } from 'react-router-dom';
 import InfoBar from '../../../Components/InfoBar/InfoBar';
 
-const BlackListContent = ({inActive, refreshTrigger, widget = false, limit = 10, isGeoLicense }) => {    
+const BlackListContent = ({inActive, refreshTrigger, widget = false, limit = 10 }) => {    
     const navigate = useNavigate();
     const { selectedItems, handleDeletAll, handleBulkDelete, featureEnable, parentEnable, isDeleting, searchTerm, setSearchTerm, filteredData, handleAddToBlacklist, loading, columns, renderRow, pagination, handlePageChange, blackListData, showModal, handleCloseModal, getBlackListIpRanges, editingIpData, handlePageSizeChange, ipManagement, checkBlackListStatus, isLicenseConnect } = useBlackList(limit, widget);
     
@@ -27,7 +27,7 @@ const BlackListContent = ({inActive, refreshTrigger, widget = false, limit = 10,
         <div>
             {!widget && (
                 <TableControlStrip showCanvas={true} disbaled={filteredData.length === 0} featureId={ipManagement?.featureId} isDisabled={loading} CheckStatus={checkBlackListStatus} handleDeleteAll={handleDeletAll} selectedFilesCount={selectedItems.length} handleBulkDelete={handleBulkDelete} isDeleting={isDeleting} searchTerm={searchTerm} setSearchTerm={setSearchTerm} hasEligibleFiles={filteredData.length > 0} showDeleteButton={true} showControls={true}
-                    showAddButton={true} addButtonLabel="Add to BlackList" onAddButtonClick={handleAddToBlacklist} onButtonDisable={loading || featureEnable === false || inActive || !isGeoLicense?.is_connected || parentEnable === false} />
+                    showAddButton={true} addButtonLabel="Add to BlackList" onAddButtonClick={handleAddToBlacklist} onButtonDisable={loading || featureEnable === false || inActive || parentEnable === false} />
             )}
             {loading ? (
                 <LoaderSkeleton count="0" />
@@ -38,27 +38,8 @@ const BlackListContent = ({inActive, refreshTrigger, widget = false, limit = 10,
                         <InfoBar type="info" message={isLicenseConnect ? "License not connected. Please connect your license to use this feature." : "Please Configure your Settings First"} />
                     )}
                     
-                    {/* Geo License Info Bars */}
-                    {featureEnable === false || parentEnable === false || isGeoLicense?.file_exists === false && (
-                        <InfoBar 
-                            type="warning" 
-                            message={
-                                <span>
-                                    You have not connected the MaxMind license key. Please integrate it first.{' '}
-                                    <a href="/dashboard/settings/integration" className="underline font-semibold hover:text-blue-700" onClick={(e) => { e.preventDefault(); navigate('/dashboard/settings/integration'); }} >
-                                        Go to Integration
-                                    </a>
-                                </span>
-                            } 
-                        />
-                    )}
-                    
-                    {featureEnable === true || parentEnable === true || isGeoLicense?.file_exists === true && isGeoLicense?.is_connected === false && (
-                        <InfoBar type="info" message="Please update your Maxmind license key to get new updates." />
-                    )}
-                    
                     {widget && (
-                        <ActionButton defaultText="Add to BlackList" isDisabled={featureEnable === false || inActive || isGeoLicense?.is_connected === false || parentEnable === false} onClick={handleAddToBlacklist} />
+                        <ActionButton defaultText="Add to BlackList" isDisabled={featureEnable === false || inActive || parentEnable === false} onClick={handleAddToBlacklist} />
                     )}
                     {widget && ( <ActionButton defaultText="View More" onClick={handleViewMore} className="!ml-4" /> )}
                     <Table columns={columns} data={filteredData} renderRow={renderRow} noDataMessage="No blacklisted IP ranges found" />

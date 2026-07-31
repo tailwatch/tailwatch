@@ -2,7 +2,6 @@
 export const tabs = [
   { key: "user", label: "Activity Logs" },
   { key: "error", label: "Error Logs" },
-  { key: "network-inspector", label: "Network Logs" },
   { key: "email", label: "Email Logs" },
 ];
 

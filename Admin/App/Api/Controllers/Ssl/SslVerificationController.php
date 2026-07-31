@@ -293,8 +293,7 @@ class SslVerificationController extends BaseController {
 	 */
 	public function wptw_ssl_verification(): array {
 		try {
-            // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotValidated -- Server variable sanitized below
-			$domain = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
+			$domain = wp_parse_url( home_url(), PHP_URL_HOST );
 			if ( empty( $domain ) || ! $this->validate_domain( $domain ) ) {
 				Log::warning(
 					'SSL verification failed: Invalid or empty domain',
@@ -302,7 +301,7 @@ class SslVerificationController extends BaseController {
 						'feature' => 'ssl_verification',
 						'action'  => 'ssl_verification_failed',
 						'domain'  => $domain,
-						'error'   => empty( $domain ) ? 'HTTP_HOST server variable is empty or not set' : 'Invalid domain format',
+						'error'   => empty( $domain ) ? 'Site home URL host could not be determined' : 'Invalid domain format',
 						'title'     => 'SSL Verification Failed',
 						'meta_data' => array(
 							'feature' => 'Smart SSL',
@@ -645,8 +644,7 @@ class SslVerificationController extends BaseController {
 		$expiry_time   = null;
 
 		try {
-            // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotValidated -- Server variable sanitized below
-			$domain = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
+			$domain = wp_parse_url( home_url(), PHP_URL_HOST );
 
 			$ssl_status = $this->wptw_ssl_verification();
 
@@ -816,8 +814,7 @@ class SslVerificationController extends BaseController {
 			// Logic if called via Cron with specific threshold
 			if ( $days_threshold !== null && is_numeric( $days_threshold ) ) {
 				$days_threshold = (int) $days_threshold;
-                // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotValidated -- Server variable sanitized below
-				$domain = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : 'unknown';
+				$domain = wp_parse_url( home_url(), PHP_URL_HOST );
 
 				if ( $days_threshold === 0 ) {
 					// Expiry event - certificate has expired.

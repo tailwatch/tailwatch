@@ -213,15 +213,7 @@ class InterfaceController {
 			return;
 		}
 
-		// Remove the four notice hooks that other plugins / WP core write to.
-		// Scoped above to the Tailwatch screen; never affects other admin pages.
-		remove_all_actions( 'admin_notices' );
-		remove_all_actions( 'all_admin_notices' );
-		remove_all_actions( 'network_admin_notices' );
-		remove_all_actions( 'user_admin_notices' );
 
-		// Enqueue CSS as a belt-and-suspenders measure for any late-bound
-		// notices that might be added after we ran remove_all_actions().
 		add_action(
 			'admin_enqueue_scripts',
 			function () {

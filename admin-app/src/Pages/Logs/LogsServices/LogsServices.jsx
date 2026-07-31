@@ -121,7 +121,6 @@ export const checkLocalStorage = async (setShowTabs) => {
       const logs = localStorageData.find(item => item.option === "default_log_activity");
       const emailLogs = localStorageData.find(item => item.option === "default_email_configure");
       const errorLogs = localStorageData.find(item => item.option === "default_monitoring_logs");
-      const ajaxLogs = localStorageData.find(item => item.option === "default_ajax_log");            
       
       setShowTabs({
         showLogs: logs && logs.is_active === "0",
@@ -135,10 +134,6 @@ export const checkLocalStorage = async (setShowTabs) => {
         showErorLogs: errorLogs && errorLogs.is_active === "0",
         errorLogsFeatureId: errorLogs ? errorLogs.id : null,
         errorLogsIsActive: errorLogs ? errorLogs.is_active : null,
-
-        showAjaxLogs: ajaxLogs && ajaxLogs.is_active === "0",
-        ajaxLogsFeatureId: ajaxLogs ? ajaxLogs.id : null,
-        ajaxLogsIsActive: ajaxLogs ? ajaxLogs.is_active : null,
       });
     }
   } catch (error) {

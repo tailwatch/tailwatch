@@ -1,8 +1,7 @@
 import React from 'react';
 import ActionButton from '../../../Components/Buttons/ActionButton';
 import { CheckboxField } from '../../../Components/Fields/CheckboxField';
-import { MdCheckCircle, MdError, MdWarning, MdBlock, MdSyncAlt, MdOutlineAccessTime } from 'react-icons/md';
-import { BsFillLightningFill } from 'react-icons/bs';
+import { MdCheckCircle, MdError, MdBlock, MdSyncAlt } from 'react-icons/md';
 
 
 const parseUserData = (userData) => {
@@ -12,40 +11,6 @@ const parseUserData = (userData) => {
   } catch (e) {
     return {};
   }
-};
-
-const getMethodBadgeColor = (method) => {
-  switch (method) {
-    case 'GET':
-      return 'bg-green-100 text-green-800';
-    case 'POST':
-      return 'bg-blue-100 text-blue-800';
-    case 'PUT':
-      return 'bg-yellow-100 text-yellow-800';
-    case 'DELETE':
-      return 'bg-red-100 text-red-800';
-    case 'PATCH':
-      return 'bg-purple-100 text-purple-800';
-    default:
-      return 'bg-gray-100 text-gray-800';
-  }
-};
-
-
-const getDurationBadge = (ms) => {
-  if (ms === null || ms === undefined || isNaN(ms)) {
-    return { label: 'N/A', icon: null, classes: 'bg-gray-100 text-gray-600' };
-  }
-  if (ms >= 5000) {
-    return { label: `${ms}ms`, icon: <MdError className="inline-block ml-1" />, tag: 'Critical', classes: 'bg-red-100 text-red-800' };
-  }
-  if (ms >= 3000) {
-    return { label: `${ms}ms`, icon: <MdWarning className="inline-block ml-1" />, tag: 'Bad', classes: 'bg-orange-100 text-orange-800' };
-  }
-  if (ms >= 1000) {
-    return { label: `${ms}ms`, icon: <MdOutlineAccessTime className="inline-block ml-1" />, tag: 'Slow', classes: 'bg-yellow-100 text-yellow-800' };
-  }
-  return { label: `${ms}ms`, icon: <BsFillLightningFill className="inline-block ml-1" />, tag: null, classes: 'bg-green-100 text-green-800' };
 };
 
 const getStatusFlag = (statusCode) => {
@@ -155,50 +120,6 @@ const TableRows = ({ activeTab, rowData, handleErrorModalOpen, handleDetailModal
             <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xl whitespace-nowrap ${errorStatusFlag.classes}`}>
               {errorStatusFlag.icon}
               {logData?.status_code || 'N/A'}
-            </span>
-          </td>
-        </>
-      );
-    case "network-inspector":
-      const rawDuration = rowData?.parsedValue?.meta?.duration_ms ??
-        rowData?.parsedValue?.meta?.request_time;
-      const durationMs = parseFloat(String(rawDuration).replace(/[^0-9.]/g, ''));
-      const durationBadge = getDurationBadge(isNaN(durationMs) ? null : Math.round(durationMs));
-      const statusCode = rowData?.parsedValue?.response?.status_code;
-      const statusFlag = getStatusFlag(statusCode);
-
-      return (
-        <>
-          {commonColumns}
-          <td className="p-3 text-sm text-black">
-            {rowData?.parsedValue?.request?.post_data?.action_type ||
-              rowData?.parsedValue?.endpoint?.action || 'N/A'}
-          </td>
-          <td className="p-3 text-sm text-black">
-            <span
-              className={`px-2 py-1 text-xs font-medium rounded-xl ${getMethodBadgeColor(rowData?.parsedValue?.endpoint?.method)} whitespace-nowrap`}
-              title={rowData?.parsedValue?.endpoint?.method || 'N/A'}
-            >
-              {rowData?.parsedValue?.endpoint?.method || 'N/A'}
-            </span>
-          </td>
-
-          <td className="p-3 text-sm text-black">
-            <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xl whitespace-nowrap ${statusFlag.classes}`}>
-              {statusFlag.icon}
-              {statusFlag.label}
-            </span>
-          </td>
-
-          <td className="p-3 text-sm text-black">
-            {rowData?.parsedValue?.meta?.ip_address || 'N/A'}
-          </td>
-
-          <td className="p-3 text-sm text-black">
-            <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xl whitespace-nowrap ${durationBadge.classes}`}>
-              {durationBadge.icon}
-              {durationBadge.label}
-              {durationBadge.tag && <span className="font-semibold">{durationBadge.tag}</span>}
             </span>
           </td>
         </>

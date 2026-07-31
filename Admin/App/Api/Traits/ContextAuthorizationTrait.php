@@ -2,10 +2,8 @@
 /**
  * Tailwatch - Context Authorization Trait
  *
- * Provides a context-aware authorization gate for controllers that are
- * reachable from BOTH the wp-admin AJAX router (which has WP user-cookie
- * context) AND the JWT-gated mobile route (which is stateless and has no
- * WP user-cookie context).
+ * Provides an admin-capability authorization gate for controllers reachable
+ * from the wp-admin AJAX router.
  *
  * @package    Tailwatch
  * @subpackage Admin\App\Api\Traits
@@ -17,7 +15,6 @@
 
 namespace Tailwatch\Admin\App\Api\Traits;
 
-use Tailwatch\Admin\App\Api\Controllers\Verification\VerifyStatusController;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -26,31 +23,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 trait ContextAuthorizationTrait {
 
 	/**
-	 * Context-aware authorization gate.
+	 * Authorization gate — re-verifies the admin capability at the method level.
 	 *
-	 * Upstream gates (AjaxRequestController nonce+cap, MobileAppController JWT)
-	 * already authorize requests before reaching the controller. This helper
-	 * adds a defense-in-depth re-check at the method level for cases where a
-	 * caller reaches the controller outside the routers (Pro plugin direct
-	 * calls, future code paths, test harnesses).
-	 *
-	 * The check is context-aware because the JWT path has no WordPress
-	 * user-cookie context, so `current_user_can()` would always return false
-	 * there and break the mobile flow. Instead:
-	 *
-	 *   - AJAX path (get_current_user_id() > 0): re-verify `manage_options`.
-	 *   - JWT path (stateless): verify the license is still connected.
+	 * The AjaxRequestController already enforces a nonce + `manage_options` before
+	 * dispatch; this adds a defense-in-depth re-check for callers that reach the
+	 * controller outside the router (Pro plugin direct calls, test harnesses).
 	 *
 	 * @since 1.0.0
 	 *
 	 * @return bool True if the caller is authorized; false otherwise.
 	 */
 	private function is_authorized_request() {
-		if ( get_current_user_id() > 0 ) {
-			return current_user_can( 'manage_options' );
-		}
-		$activation = ( new VerifyStatusController() )->get_plugin_activation_status();
-		return is_array( $activation ) && ! empty( $activation['extended_connected'] );
+		return current_user_can( 'manage_options' );
 	}
 
 	/**

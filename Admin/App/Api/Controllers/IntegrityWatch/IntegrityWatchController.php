@@ -18,7 +18,6 @@ use Tailwatch\Admin\App\Api\Controllers\Logs\LiveLogs\LiveLogsController;
 use Tailwatch\Admin\App\Api\Logging\Log;
 use Tailwatch\Admin\App\Api\Services\Cron\CronHealthService;
 use Tailwatch\Admin\App\Api\Controllers\Hooks\HookControllers;
-use Tailwatch\Admin\App\Api\Controllers\LimitIncrease\PerformanceOptimizerController;
 use Tailwatch\Admin\App\Api\Services\ProcessManager;
 use Tailwatch\Admin\App\Api\Services\ProcessGuard;
 use Tailwatch\Admin\App\Api\Controllers\Base\BaseController;
@@ -427,7 +426,7 @@ class IntegrityWatchController extends BaseController {
 	 * Acquire the single-worker lock for the integrity scan tick. Without it, the recurring
 	 * 'wptw_files_integrity_schedule_run' cron and an injected 'wptw_files_integrity_scan'
 	 * step could run two workers on the same scan_snapshot row and clobber the cursor.
-	 * TTL is the boost's max_execution_time so it never expires mid-legitimate-tick; the
+	 * TTL is the PHP max_execution_time so it never expires mid-legitimate-tick; the
 	 * shutdown hook + finally release it on normal/timeout/fatal exit. Mirrors the backup
 	 * worker lock.
 	 *
@@ -648,14 +647,6 @@ class IntegrityWatchController extends BaseController {
 			}
 
 			if ( isset( $data['instant_scan'] ) && true === $data['instant_scan'] ) {
-
-				// Boost PHP limits before any heavy work — on-demand integrity
-				// scans load and decode large baseline files; the cron callback
-				// already boosts but it runs later, so we'd OOM before reaching
-				// it. Gated to the instant-scan path so validation/error paths
-				// above don't pay the cost.
-				$performance_controller = new PerformanceOptimizerController();
-				$performance_controller->wptw_boost_for_scanning();
 
 				$cron_status = ( new CronHealthService() )->test( 'files_integrity' );
 				if ( ! $cron_status['success'] ) {
@@ -1642,8 +1633,6 @@ class IntegrityWatchController extends BaseController {
 		$reschedule_delay = 0;
 
 		try {
-			$performance_controller = new PerformanceOptimizerController();
-			$performance_controller->wptw_boost_for_scanning();
 
 			$existing_entry  = $this->wptw_get_is_completed();
 			$path_to_monitor = $this->get_path_to_monitor();
@@ -2528,6 +2517,7 @@ class IntegrityWatchController extends BaseController {
 
 		$skip_folders_in_wp_content = array(
 			str_replace( '\\', '/', WPTW_CONTENT_DIR_BASE ),
+			str_replace( '\\', '/', WPTW_LOGS_DIRECTORY ),
 		);
 
 		$skip_these_folders = array_merge( $skip_root_folders, $skip_folders_in_wp_content );
@@ -2594,7 +2584,10 @@ class IntegrityWatchController extends BaseController {
 	private function wptw_build_scan_queue( $directory, $queue_file ) {
 		$skip_these_folders = array_merge(
 			$this->get_root_folders_name(),
-			array( str_replace( '\\', '/', WPTW_CONTENT_DIR_BASE ) )
+			array(
+				str_replace( '\\', '/', WPTW_CONTENT_DIR_BASE ),
+				str_replace( '\\', '/', WPTW_LOGS_DIRECTORY ),
+			)
 		);
 
 		$tmp = $queue_file . '.tmp';

@@ -3,7 +3,7 @@ import { FaWordpressSimple } from "react-icons/fa";
 import "react-loading-skeleton/dist/skeleton.css";
 import { SiGoogleauthenticator } from "react-icons/si";
 
-import { LayoutDashboard, Users, Network, MoveRight, ExternalLink, ShieldCheck, EarthLock, Unlink, ListOrdered,Clock, FileTerminal, MonitorCog, Database, Search, FileSearch, Lightbulb, Settings, Menu, X, Star, Zap, Smartphone, Wifi, Bell, Shield, RefreshCw, HardDriveDownload } from "lucide-react";
+import { LayoutDashboard, Users, Network, MoveRight, ExternalLink, ShieldCheck, EarthLock, Unlink, ListOrdered,Clock, FileTerminal, MonitorCog, Database, Search, FileSearch, Settings, Menu, X, Star, Zap, Smartphone, Wifi, Bell, Shield, RefreshCw, HardDriveDownload } from "lucide-react";
 import IconButton from "../Buttons/IconButton";
 import { useSidebar } from "../Hooks/useSidebar/useSidebar";
 import { bgprimary, sidebarColor } from "../Utils/Colors/Colors";
@@ -37,8 +37,6 @@ const Sidebar = () => {
   const isRedirectionActive = location.pathname.startsWith("/dashboard/redirection");
   const isBrokenLinksActive = location.pathname.startsWith("/dashboard/broken-links");
   const isSearchReplaceActive = location.pathname.startsWith("/dashboard/search-replace");
-  // Performance  
-  const isUpdatesActive = location.pathname.startsWith("/dashboard/updates");
   // Recovery
   const isBackupActive = location.pathname.startsWith("/dashboard/backup");
   const isMigrationActive = location.pathname.startsWith("/dashboard/migration");
@@ -53,7 +51,6 @@ const Sidebar = () => {
   // Section actives
   const isSecurityActive = isMalwareActive || isFileMonitoringActive || isGeoBlockingActive || isBruteForceActive || isFireWallActive || isTwoFAActive || isHardeningAuditActive;
   const isOptimizationActive = isDatabaseOptimizerActive || isCronJobActive || isRedirectionActive || isBrokenLinksActive || isSearchReplaceActive;
-  const isPerformanceActive = isUpdatesActive;
   const isRecoveryActive = isBackupActive || isMigrationActive;
   const isLogsActivityActive = isLogsActive;
 
@@ -128,15 +125,6 @@ const Sidebar = () => {
                 {renderNavButton("/dashboard/redirection", <ExternalLink size={20} />, "301 Redirection", isRedirectionActive)}
                 {renderNavButton("/dashboard/broken-links", <Unlink size={20} />, "Broken Links", isBrokenLinksActive)}
                 {renderNavButton("/dashboard/search-replace", <Search size={20} />, "Search & Replace", isSearchReplaceActive)}
-              </div>
-            )}
-          </div>
-          {/* Performance Section */}
-          <div className="flex flex-col justify-start items-center px-4 border-b border-gray-600 w-full">
-            {renderSectionHeader("Performance", isPerformanceActive, 'performance')}
-            {expandedMenu === 'performance' && (
-              <div className="flex flex-col space-y-1 w-full items-start pb-1 pl-2">
-                {renderNavButton("/dashboard/updates", <Lightbulb size={20} />, "Updates & Rollback", isUpdatesActive)}
               </div>
             )}
           </div>

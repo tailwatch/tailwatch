@@ -3,24 +3,18 @@ namespace Tailwatch\Admin\Includes;
 
 defined( 'ABSPATH' ) || exit;
 
-use Tailwatch\Admin\App\Api\Routes\Routes;
 use Tailwatch\Admin\App\Api\Models\OptionsModel;
 use Tailwatch\Admin\App\Api\Controllers\Routes\AjaxRequestController;
 use Tailwatch\Admin\View\Controller\InterfaceController;
 use Tailwatch\Admin\App\Api\Controllers\Logs\LogActivityController;
 use Tailwatch\Admin\App\Api\Controllers\Logs\MonitoringLogController;
-use Tailwatch\Admin\App\Api\Controllers\Logs\AjaxLogController;
-use Tailwatch\Admin\App\Api\Controllers\Login\AutoLoginController;
 use Tailwatch\Admin\App\Api\Controllers\Features\OptionsController;
 use Tailwatch\Admin\App\Api\Controllers\Visit\VisitController;
 use Tailwatch\Admin\App\Api\Controllers\Features\SecurityFeaturesVerifyController;
 use Tailwatch\Admin\App\Api\Controllers\Visit\RecommendedFeaturesController;
 use Tailwatch\Admin\App\Api\Controllers\Ssl\SslVerificationController;
-use Tailwatch\Admin\App\Api\Controllers\RewriteRule\HtaccessManager;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\CronJobManager;
 use Tailwatch\Admin\App\Api\Controllers\Email\EmailLogController;
-use Tailwatch\Admin\App\Api\Controllers\Verification\VerificationKeysController;
-use Tailwatch\Admin\App\Api\Controllers\History\HistoryHookController;
 use Tailwatch\Admin\App\Api\Controllers\Backup\BackupController;
 use Tailwatch\Admin\App\Api\Controllers\Database\DBOptimizer\DatabaseOptimizerController;
 use Tailwatch\Admin\App\Api\Controllers\Database\DBOptimizer\TablesOptimizeController;
@@ -29,19 +23,16 @@ use Tailwatch\Admin\App\Api\Controllers\IntegrityWatch\IntegrityWatchController;
 use Tailwatch\Admin\App\Api\Controllers\Email\Smtp\SmtpConfigurationController;
 use Tailwatch\Admin\App\Api\Controllers\BrowserKeys\DisableKeysController;
 use Tailwatch\Admin\App\Api\Controllers\FilesAndPermissions\FilesPermissionController;
-use Tailwatch\Admin\App\Api\Controllers\RecoveryMode\RecoveryModeController;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\CronControl\GetCronJobDetailsController;
 use Tailwatch\Admin\App\Api\Controllers\ProcessRecovery\ProcessRecoveryController;
 use Tailwatch\Admin\App\Api\Controllers\Users\UserRolesController;
 use Tailwatch\Admin\App\Api\Controllers\Redirections\RedirectionsManager;
 use Tailwatch\Admin\App\Api\Controllers\BrokenLinkChecker\BrokenLinkChecker;
 use Tailwatch\Admin\App\Api\Controllers\Settings\Reset\ResetAllFeatureController;
-use Tailwatch\Admin\App\Api\Controllers\LimitIncrease\PerformanceOptimizerController;
 use Tailwatch\Admin\App\Api\Controllers\HardeningAudit\HardeningAuditController;
 use Tailwatch\Admin\App\Api\Controllers\IpManagement\IpManagementController;
 use Tailwatch\Admin\App\Api\Controllers\LoginDefender\AuthenticationController;
 use Tailwatch\Admin\App\Api\Controllers\LoginDefender\LoginProtection\LoginProtectionController;
-use Tailwatch\Admin\App\Api\Controllers\Integration\GeoIp2\GeoLiteTwoController;
 
 /**
  * Bootstraps the Tailwatch plugin — registers lifecycle hooks
@@ -57,6 +48,7 @@ class Bootstrap {
 		register_activation_hook( WPTW_PLUGIN_FILE, array( $this, 'upon_activation' ) );
 		register_deactivation_hook( WPTW_PLUGIN_FILE, array( $this, 'upon_deactivation' ) );
 		add_action( 'plugins_loaded', array( $this, 'plugin_loaded' ) );
+		add_action( 'admin_init', array( $this, 'ensure_private_storage' ) );
 
 		require_once WPTW_ADMIN_API_DIR . 'Models/OptionsModel.php';
 	}
@@ -74,7 +66,6 @@ class Bootstrap {
 		$autoload_file = WPTW_DIR . 'tw_autoload.php';
 		if ( file_exists( $autoload_file ) ) {
 			require_once $autoload_file;
-			Routes::initialize();
 		} else {
 			wp_die( esc_html__( 'Something went wrong, please contact plugin support.', 'tailwatch' ) );
 		}
@@ -84,17 +75,13 @@ class Bootstrap {
 		new InterfaceController();
 		new LogActivityController();
 		new MonitoringLogController();
-		new AjaxLogController();
-		new AutoLoginController();
 		new OptionsController();
 		new VisitController();
 		new SecurityFeaturesVerifyController();
 		new RecommendedFeaturesController();
 		new SslVerificationController();
-		new HtaccessManager();
 		CronJobManager::get_instance();
 		new EmailLogController();
-		new HistoryHookController();
 		new BackupController();
 		new DatabaseOptimizerController();
 		new TablesOptimizeController();
@@ -103,19 +90,16 @@ class Bootstrap {
 		new SmtpConfigurationController();
 		new DisableKeysController();
 		new FilesPermissionController();
-		new RecoveryModeController();
 		new GetCronJobDetailsController();
 		new ProcessRecoveryController();
 		new UserRolesController();
 		new RedirectionsManager();
 		new BrokenLinkChecker();
 		new ResetAllFeatureController();
-		new PerformanceOptimizerController();
 		new HardeningAuditController();
 		new IpManagementController();
 		new AuthenticationController();
 		new LoginProtectionController();
-		new GeoLiteTwoController();
 	}
 
 	/**
@@ -127,13 +111,9 @@ class Bootstrap {
 		$autoload_file = WPTW_DIR . 'tw_autoload.php';
 		if ( file_exists( $autoload_file ) ) {
 			require_once $autoload_file;
-			Routes::initialize();
 		} else {
 			wp_die( esc_html__( 'Something went wrong, please contact plugin support.', 'tailwatch' ) );
 		}
-
-		$verification_controller = new VerificationKeysController();
-		$verification_controller->wptw_generate_secret_key();
 
 		$options_model = new OptionsModel();
 		$options_model->wptw_upon_activation();
@@ -193,14 +173,71 @@ class Bootstrap {
 		// settings do not exist yet); each job is isolated so one cannot break activation.
 		CronJobManager::get_instance()->schedule_all( true );
 
+		// Create the private uploads folder for logs and generated data and seal it
+		// with deny files so its contents are not reachable over the web.
+		\Tailwatch\Admin\App\Api\Services\Common\SecureDirectoryService::ensure_private_root( WPTW_LOGS_DIRECTORY );
+
+		// Seal the backup storage root the same way. Backup archives live under
+		// wp-content (the sanctioned location for backup plugins); the deny files
+		// keep those archives from being reachable by direct URL.
+		\Tailwatch\Admin\App\Api\Services\Common\SecureDirectoryService::ensure_private_root( WPTW_BACKUP_DIR );
+
 		$this->rewrite_rules();
+	}
+
+	/**
+	 * Keep the private storage roots sealed. Hooked to admin_init but throttled
+	 * with a transient — WordPress's standard mechanism for not repeating
+	 * filesystem work on every request — so the on-disk check runs at most once
+	 * per day rather than on every admin page load. The deny files are dropped
+	 * when each directory is created (activation and at mkdir time); this pass
+	 * is only a periodic self-heal that restores them if they are later removed.
+	 * Covers both the logs storage (in uploads) and the backup storage (in
+	 * wp-content).
+	 *
+	 * @return void
+	 */
+	public function ensure_private_storage() {
+		// Skip the filesystem check when it was verified recently. Keyed to the
+		// plugin version so an update (which may change the deny-file contents)
+		// forces a fresh verification.
+		$sealed_flag = 'wptw_storage_sealed_' . WPTW_VERSION;
+		if ( get_transient( $sealed_flag ) ) {
+			return;
+		}
+
+		$roots = array();
+		if ( defined( 'WPTW_LOGS_DIRECTORY' ) ) {
+			$roots[] = WPTW_LOGS_DIRECTORY;
+		}
+		if ( defined( 'WPTW_BACKUP_DIR' ) ) {
+			$roots[] = WPTW_BACKUP_DIR;
+		}
+
+		$all_sealed = true;
+		foreach ( $roots as $root ) {
+			if ( ! is_dir( $root ) ) {
+				continue;
+			}
+			if ( ! \Tailwatch\Admin\App\Api\Services\Common\SecureDirectoryService::is_protected( $root ) ) {
+				\Tailwatch\Admin\App\Api\Services\Common\SecureDirectoryService::protect_existing( $root );
+				if ( ! \Tailwatch\Admin\App\Api\Services\Common\SecureDirectoryService::is_protected( $root ) ) {
+					$all_sealed = false;
+				}
+			}
+		}
+
+		// Cache the verified state only when every existing root is sealed, so a
+		// transient write/permission failure is retried on the next admin load.
+		if ( $all_sealed ) {
+			set_transient( $sealed_flag, 1, DAY_IN_SECONDS );
+		}
 	}
 
 	public function upon_deactivation() {
 		$autoload_file = WPTW_DIR . 'tw_autoload.php';
 		if ( file_exists( $autoload_file ) ) {
 			require_once $autoload_file;
-			Routes::initialize();
 		} else {
 			wp_die( esc_html__( 'Something went wrong, please contact plugin support.', 'tailwatch' ) );
 		}

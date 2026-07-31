@@ -75,7 +75,7 @@ class DeactivationAlert {
 			return;
 		}
 		?>
-		<div class="wptw_modal-overlay" id="deleteModal" style="display: none;">
+		<div class="wptw_modal-overlay" id="deleteModal">
 			<div class="wptw_modal-container">
 				<div class="wptw_modal-header">
 					<div class="wptw_icon">⚠️</div>

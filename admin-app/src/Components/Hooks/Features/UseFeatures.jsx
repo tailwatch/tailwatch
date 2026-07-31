@@ -3,45 +3,6 @@ import { getLocalStorage } from '../../Utils/HelperFunctions/LocalStorageHelper'
 import { useFeaturesData } from '../../Context/FeaturesDataContext';
 
 
-export const useUpdateRollbackFeature = () => {
-  const [updateRollback, setUpdateRollback] = useState(null);
-
-  const checkLocalStorage = useCallback(async () => {
-    try {
-      const localStorageData = getLocalStorage('features_data', 'data');
-
-      if (localStorageData && Array.isArray(localStorageData)) {
-        const UpdateRollbackFeature = localStorageData.find(item => item.option === "default_updates_rollback");
-
-        if (UpdateRollbackFeature && UpdateRollbackFeature.value) {
-          const updateRollbackRule = JSON.parse(UpdateRollbackFeature.value);
-          const isUpdateRollbackFeature = updateRollbackRule?.options?.field_1?.values?.option?.selected === true;
-
-          setUpdateRollback({
-            UpdateRollbackFeature: UpdateRollbackFeature.is_active === "0" || isUpdateRollbackFeature === false,
-            featureId: UpdateRollbackFeature.id || null,
-            isActiveState: UpdateRollbackFeature.is_active || null,
-            isLocked: updateRollbackRule.is_locked || null            
-          });
-        } else {
-          setUpdateRollback({ UpdateRollbackFeature: false, featureId: null, isActiveState: null, isLocked: null });
-        }
-      } else {
-        setUpdateRollback({ UpdateRollbackFeature: false, featureId: null, isActiveState: null, isLocked: null });
-      }
-    } catch (error) {
-      console.error("Error checking localStorage:", error);
-      setUpdateRollback({ UpdateRollbackFeature: false, featureId: null, isActiveState: null, isLocked: null });
-    }
-  }, []);
-
-  useEffect(() => {
-    checkLocalStorage();
-  }, [checkLocalStorage]);
-
-  return { updateRollback, refreshUpdateRollback: checkLocalStorage };
-};
-
 export const UseMigrationFeature = () => {
   const [enableMigration, setEnableMigration] = useState(null);
 

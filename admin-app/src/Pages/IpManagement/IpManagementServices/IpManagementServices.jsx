@@ -546,19 +546,3 @@ export const previewBlockPage = async (payload = {}) => {
         return { success: false, message: msg };
     }
 };
-
-export const getGeoLiteConnection = async () => {
-    try {
-        const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_is_geo_lite_connected_or_exist');
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-        });
-
-        return response.data.data;
-
-    } catch (error) {
-    }
-}

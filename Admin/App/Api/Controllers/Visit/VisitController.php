@@ -17,7 +17,6 @@ class VisitController {
 	public function __construct() {
 		$hook_controller = new HookControllers();
 		$hook_controller->add_action_hook( 'admin_init', array( $this, 'wptw_check_activation_redirect' ) );
-		$hook_controller->add_action_hook( 'admin_notices', array( $this, 'wptw_alert_if_incompatible' ) );
 	}
 
 	/**
@@ -75,7 +74,7 @@ class VisitController {
 		);
 
 		if ( false === get_option( WPTW_VISIT_DATA ) ) {
-			add_option( WPTW_VISIT_DATA, wp_json_encode( $data ) );
+			add_option( WPTW_VISIT_DATA, wp_json_encode( $data ), '', false );
 		}
 	}
 
@@ -343,11 +342,10 @@ class VisitController {
 		global $wpdb;
 		$table_name = $wpdb->prefix . WPTW_DB_TABLE_NAME;
 
-		// Fast path for the passive admin_notices check ($update_data = false):
-		// if we have already confirmed the table exists in a prior run, trust the
-		// cached state instead of re-running SHOW TABLES on every admin page load.
-		// The AJAX entry point still uses the default $update_data = true and will
-		// re-verify on demand, so an externally dropped table is still caught.
+		// Cached fast path ($update_data = false): if a prior run already confirmed
+		// the table exists, trust the cached state instead of re-running SHOW TABLES.
+		// The AJAX entry point uses the default $update_data = true and re-verifies
+		// on demand, so an externally dropped table is still caught.
 		$get_data = json_decode( get_option( WPTW_VISIT_DATA ), true );
 
 		if ( false === $update_data && is_array( $get_data ) && ! empty( $get_data['wptw_table']['is_completed'] ) ) {
@@ -530,40 +528,4 @@ class VisitController {
 		}
 	}
 
-	/**
-	 * Display admin notice if setup is incomplete
-	 */
-	public function wptw_alert_if_incompatible() {
-		$get_data = json_decode( get_option( WPTW_VISIT_DATA ), true );
-
-		if ( ! empty( $get_data ) ) {
-			if ( ! $get_data['check_php_version']['is_completed'] || ! $get_data['check_wp_version']['is_completed'] || ! $get_data['wptw_table']['is_completed'] || ! $get_data['db_initialize']['is_completed'] ) {
-
-				$wptw_visit_page_url = admin_url( 'admin.php?page=tailwatch' );
-				?>
-				<div class="notice notice-error">
-					<h3>
-						<?php
-						/* translators: %s: Plugin name */
-						echo esc_html( sprintf( __( '%s: Incomplete Wizard', 'tailwatch' ), WPTW_NAME ) );
-						?>
-					</h3>
-					<p><?php esc_html_e( 'It seems like you have skipped some steps that are mandatory to get the complete functionality of this plugin.', 'tailwatch' ); ?></p>
-					<p><a href="<?php echo esc_url( $wptw_visit_page_url ); ?>" class="button-primary"><?php esc_html_e( 'Complete Setup Now', 'tailwatch' ); ?></a></p>
-				</div>
-				<?php
-			}
-		}
-
-		$all_response = array( $this->wptw_check_php_version( false ), $this->wptw_check_wordpress_version( false ), $this->check_wptw_table( false ), $this->wptw_check_cron_status( false ) );
-		foreach ( $all_response as $response_is ) {
-			if ( 400 === $response_is['code'] ) {
-				?>
-				<div class="notice notice-error" style="padding: 20px;">
-					<?php echo wp_kses_post( $response_is['message'] ); ?>
-				</div>
-				<?php
-			}
-		}
-	}
 }

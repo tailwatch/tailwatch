@@ -13,18 +13,12 @@ use Tailwatch\Admin\App\Api\Traits\ContextAuthorizationTrait;
  *
  * ## Authorization model
  *
- * These methods are reachable through two distinct entry points:
+ * These methods are reachable through the wp-admin AJAX router
+ * (AjaxRequestController) — the upstream gate verifies `wp_ajax_nonce` AND
+ * `current_user_can('manage_options')` before dispatch.
  *
- *   1. The wp-admin AJAX router (AjaxRequestController) — upstream gate
- *      verifies `wp_ajax_nonce` AND `current_user_can('manage_options')`.
- *   2. The JWT-gated mobile route (MobileAppController) — upstream gate
- *      verifies the JWT signature, expiry, license-connected state, and
- *      JTI revocation.
- *
- * Each public method calls `is_authorized_request()` (provided by
- * ContextAuthorizationTrait) as defense in depth. That helper context-switches
- * based on whether a WP user-cookie session exists: AJAX path re-verifies
- * `manage_options`; JWT path verifies the license is still connected.
+ * Each public method also calls `is_authorized_request()` (provided by
+ * ContextAuthorizationTrait) as defense in depth, re-verifying `manage_options`.
  */
 class UserModificationController {
 
@@ -195,9 +189,10 @@ class UserModificationController {
 				);
 			}
 
-			// get_editable_roles() respects the editable_roles filter (multisite admin-hiding).
-			// No current_user_can('promote_users') check: the JWT/mobile path runs with uid=0
-			// and would fail it, breaking the mobile app's user-create flow.
+			// get_editable_roles() respects the editable_roles filter (multisite admin-hiding)
+			// and constrains which roles may be assigned. The request is already behind the
+			// router's manage_options gate, so role assignment is validated against
+			// get_editable_roles() below rather than a separate promote_users check.
 			if ( ! function_exists( 'get_editable_roles' ) ) {
 				require_once ABSPATH . 'wp-admin/includes/user.php';
 			}
@@ -817,7 +812,7 @@ class UserModificationController {
 		$is_no_op = ( 1 === count( $current_roles ) ) && in_array( $new_role, $current_roles, true );
 
 		// Self-role-change guard. get_current_user_id() returns 0 when there is no logged-in
-		// user (e.g. JWT service-account path) — comparing against a positive $user->ID is
+		// user (e.g. a cron/CLI context) — comparing against a positive $user->ID is
 		// safe and only blocks the AJAX path where a real user session exists.
 		if ( ! $is_no_op && (int) $user->ID === get_current_user_id() ) {
 			return array(

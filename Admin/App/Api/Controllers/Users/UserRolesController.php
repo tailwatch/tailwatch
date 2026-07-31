@@ -114,7 +114,7 @@ class UserRolesController {
 			$new_roles      = array_diff_key( $user_roles, $existing_roles );
 
 			if ( ! empty( $new_roles ) ) {
-				update_option( 'wptw_user_roles', wp_json_encode( $user_roles ) );
+				update_option( 'wptw_user_roles', wp_json_encode( $user_roles ), false );
 				$this->wptw_update_user_roles_in_json( $user_roles );
 
 				return true;
