@@ -78,7 +78,7 @@ class BackupCleanupCronJob extends AbstractCronJob {
 	 * @return string Display name.
 	 */
 	protected function get_schedule_display_name() {
-		return esc_html__( 'Backup Cleanup', 'tailwatch' );
+		return 'Backup Cleanup';
 	}
 
 	/**

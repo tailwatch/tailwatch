@@ -87,7 +87,7 @@ class CronJobManagerController {
 		}
 		$created[ $signature ] = 1;
 		if ( false === get_option( 'wptw_created_cron_jobs', false ) ) {
-			add_option( 'wptw_created_cron_jobs', $created, '', 'no' );
+			add_option( 'wptw_created_cron_jobs', $created, '', false );
 		} else {
 			update_option( 'wptw_created_cron_jobs', $created );
 		}

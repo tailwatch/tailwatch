@@ -73,7 +73,7 @@ class ProcessMonitorCleanupCronJob extends AbstractCronJob {
 	 * @return string Display name.
 	 */
 	protected function get_schedule_display_name() {
-		return esc_html__( 'Process Monitor Cleanup', 'tailwatch' );
+		return 'Process Monitor Cleanup';
 	}
 
 	/**

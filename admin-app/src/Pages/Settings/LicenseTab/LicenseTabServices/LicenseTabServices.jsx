@@ -1,5 +1,4 @@
 import axios from 'axios';
-import { set } from 'react-hook-form';
 import { toast } from 'react-toastify';
 /* global wptw_ajax */
 export const handleConfirmDisconnect = async (email, setEmail, setLicenseKey, setConnectionDateTime, setPlanName, setDevices, setLoading, refreshLicense, fetchFeaturesData) => {
@@ -154,71 +153,14 @@ export const fetchData = async ({
     }
 };
 
-export const getCookies = async ({setConnecting}) => {  
-    setConnecting(true);
-    try {
-        const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_generate_recovery_cookie');
-        formData.append('nonce', wptw_ajax.nonce);
-
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data',
-            },
-        });                                
-        if (response.data.success && response.data.data) {
-            const { name, value } = response.data.data; 
-            return { name, value };
-        } else {
-            console.error('Failed to generate Cookie:', response.data.data.message);
-            return null;
-        }
-    } catch (error) {        
-        toast.error("Network error");
-        console.error('Error in generate cookie', error);
-        return null;
-    }finally{
-        setConnecting(false);
-    }
-};
-
-
-export const getSecretKeys = async ({ setConnecting }) => {
-    setConnecting(true);
-    try {
-        const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_get_generated_cta_keys');
-        formData.append('nonce', wptw_ajax.nonce);
-
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data',
-            },
-        });
-        if (response.data.success && response.data.data) {
-            const { cta_id, cta_secret,auth_header_key } = response.data.data;
-            return { cta_id, cta_secret, auth_header_key };
-        } else {
-            return null;
-        }
-    } catch (error) {
-        return null;
-    } finally {
-        setConnecting(false);
-    }
-};
-
-export const handleConnect = async ({ setLoading, wptw_ajax, successCallback, ctaId, ctaSecret,cookieName,cookieValue, authHeaderKey }) => {
+export const handleConnect = async ({ setLoading, wptw_ajax, successCallback }) => {
     const website = encodeURIComponent(wptw_ajax.base_url);
     const ac = encodeURIComponent('link');
     const env = encodeURIComponent('production');
-    const popupUrl = `https://dashboard.wptailwatch.com/signin?ip=true&website=${website}&ac=${ac}&env=${env}&client_id=${ctaId}&client_secret=${ctaSecret}&cookie_name=${cookieName}&cookie_value=${cookieValue}&auth_header_key=${authHeaderKey}`;
+    const popupUrl = `https://dashboard.wptailwatch.com/signin?ip=true&website=${website}&ac=${ac}&env=${env}`;
 
-    // If the popup is already open from a previous click, refresh it with the URL built from
-    // the latest credentials. The backend rotates client_id/client_secret/cookie on every call,
-    // so re-using the old popup would leave it pointing at invalid credentials.
+    // If the popup is already open from a previous click, refresh it so a re-click always
+    // reflects the latest sign-in URL instead of a stale one.
     if (window.connectPopupOpen && window.connectPopup && !window.connectPopup.closed) {
         try {
             window.connectPopup.location.href = popupUrl;

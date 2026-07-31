@@ -58,9 +58,7 @@ class SecurityFeaturesVerifyController {
 		'default_two_step_authenticate',
 		'default_log_activity',
 		'default_monitoring_logs',
-		'default_config_generate_key',
 		'default_verify_ssl',
-		'default_updates_rollback',
 		'default_backup_enable',
 		'default_database_optimizer',
 		'default_hardening_audit',
@@ -570,10 +568,11 @@ class SecurityFeaturesVerifyController {
 		// `wptw_calculate_security_feature_score`).
 		//
 		// Free weights: files_and_permission 9, file_integrity_check 12,
-		// log_activity 6, monitoring_logs 6, config_generate_key 6,
-		// verify_ssl 6, updates_rollback 6, backup_enable 6,
-		// database_optimizer 6, hardening_audit 6, login_defender_management 8
-		// — sum 77.
+		// log_activity 8, monitoring_logs 8, verify_ssl 8,
+		// backup_enable 8, database_optimizer 8, hardening_audit 8,
+		// login_defender_management 8 — sum 77.
+		// Extension weights (Pro, via the dispatcher filter below):
+		// malware_scan 14, two_step_authenticate 9 — sum 23. Grand total 100.
 		// Extension weights (handled by the dispatcher branch below):
 		// malware_scan 14, two_step_authenticate 9 — sum 23.
 		// login_defender_management (8) was re-added; its 8 points were
@@ -598,14 +597,6 @@ class SecurityFeaturesVerifyController {
 				$decode_options,
 				$feature_active
 			);
-		} elseif ( $calculate_status === 'default_config_generate_key' ) {
-			$feature_name = 'Security Keys Rotation';
-			if ( $feature_active ) {
-				$config_generate_key = $this->wptw_calculate_config_generate_key( $decode_options['options'], 6, $feature_name, $calculate_status );
-			} else {
-				$config_generate_key = $this->wptw_return_if_feature_disable( $feature_name, $calculate_status );
-			}
-			$existing_data['all_features']['default_config_generate_key'] = $config_generate_key;
 		} elseif ( $calculate_status === 'default_file_integrity_check' ) {
 			$feature_name = 'File Integrity Watch';
 			if ( $feature_active ) {
@@ -617,7 +608,7 @@ class SecurityFeaturesVerifyController {
 		} elseif ( $calculate_status === 'default_log_activity' ) {
 			$feature_name = 'Activity Logs';
 			if ( $feature_active ) {
-				$user_activity_logs = $this->wptw_calculate_user_activity_logs( $decode_options['options'], 6, $feature_name, $calculate_status );
+				$user_activity_logs = $this->wptw_calculate_user_activity_logs( $decode_options['options'], 8, $feature_name, $calculate_status );
 			} else {
 				$user_activity_logs = $this->wptw_return_if_feature_disable( $feature_name, $calculate_status );
 			}
@@ -625,7 +616,7 @@ class SecurityFeaturesVerifyController {
 		} elseif ( $calculate_status === 'default_monitoring_logs' ) {
 			$feature_name = 'Error Logs';
 			if ( $feature_active ) {
-				$error_logs = $this->wptw_calculate_error_logs( $decode_options['options'], 6, $feature_name, $calculate_status );
+				$error_logs = $this->wptw_calculate_error_logs( $decode_options['options'], 8, $feature_name, $calculate_status );
 			} else {
 				$error_logs = $this->wptw_return_if_feature_disable( $feature_name, $calculate_status );
 			}
@@ -633,23 +624,15 @@ class SecurityFeaturesVerifyController {
 		} elseif ( $calculate_status === 'default_verify_ssl' ) {
 			$feature_name = 'Smart SSL';
 			if ( $feature_active ) {
-				$smart_ssl = $this->wptw_calculate_smart_ssl( $decode_options['options'], 6, $feature_name, $calculate_status );
+				$smart_ssl = $this->wptw_calculate_smart_ssl( $decode_options['options'], 8, $feature_name, $calculate_status );
 			} else {
 				$smart_ssl = $this->wptw_return_if_feature_disable( $feature_name, $calculate_status );
 			}
 			$existing_data['all_features']['default_verify_ssl'] = $smart_ssl;
-		} elseif ( $calculate_status === 'default_updates_rollback' ) {
-			$feature_name = 'Updates & Rollback';
-			if ( $feature_active ) {
-				$safe_updates = $this->wptw_calculate_safe_updates( $decode_options['options'], 6, $feature_name, $calculate_status );
-			} else {
-				$safe_updates = $this->wptw_return_if_feature_disable( $feature_name, $calculate_status );
-			}
-			$existing_data['all_features']['default_updates_rollback'] = $safe_updates;
 		} elseif ( $calculate_status === 'default_backup_enable' ) {
 			$feature_name = 'Backup Vault';
 			if ( $feature_active ) {
-				$backup = $this->wptw_calculate_backup( $decode_options['options'], 6, $feature_name, $calculate_status );
+				$backup = $this->wptw_calculate_backup( $decode_options['options'], 8, $feature_name, $calculate_status );
 			} else {
 				$backup = $this->wptw_return_if_feature_disable( $feature_name, $calculate_status );
 			}
@@ -657,7 +640,7 @@ class SecurityFeaturesVerifyController {
 		} elseif ( $calculate_status === 'default_database_optimizer' ) {
 			$feature_name = 'Database Optimizer';
 			if ( $feature_active ) {
-				$db_optimizer = $this->wptw_calculate_database_optimizer( $decode_options['options'], 6, $feature_name, $calculate_status );
+				$db_optimizer = $this->wptw_calculate_database_optimizer( $decode_options['options'], 8, $feature_name, $calculate_status );
 			} else {
 				$db_optimizer = $this->wptw_return_if_feature_disable( $feature_name, $calculate_status );
 			}
@@ -665,7 +648,7 @@ class SecurityFeaturesVerifyController {
 		} elseif ( $calculate_status === 'default_hardening_audit' ) {
 			$feature_name = 'Hardening Audit';
 			if ( $feature_active ) {
-				$hardening_audit = $this->wptw_calculate_hardening_audit( $decode_options['options'], 6, $feature_name, $calculate_status );
+				$hardening_audit = $this->wptw_calculate_hardening_audit( $decode_options['options'], 8, $feature_name, $calculate_status );
 			} else {
 				$hardening_audit = $this->wptw_return_if_feature_disable( $feature_name, $calculate_status );
 			}
@@ -717,10 +700,6 @@ class SecurityFeaturesVerifyController {
 		$expected_features = array(
 			'disable_file_editor_in_plugins',
 			'disable_file_editor_in_themes',
-			'disable_access_to_wp_includes',
-			'disable_access_to_wp_admin',
-			'disable_access_to_wp_content',
-			'disable_access_to_root_files',
 			'disable_access_to_xmlrpc',
 			'restrict_author_archive_access',
 			'remove_headers',
@@ -797,37 +776,6 @@ class SecurityFeaturesVerifyController {
 			'is_upgrade_feature' => true,
 			'message'            => __( 'This feature requires the Tailwatch Pro Plugin.', 'tailwatch' ),
 			'disabled_features'  => array(),
-		);
-	}
-
-	public function wptw_calculate_config_generate_key( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
-		$expected_features = array(
-			'generate_security_keys',
-		);
-
-		$total_features    = count( $expected_features );
-		$active_features   = 0;
-		$disabled_features = array();
-
-		$verify_feature = new VerifyingFeaturesController();
-		$all_options    = $verify_feature->wptw_verify_options_status( $feature_options );
-		$label_map      = $verify_feature->wptw_get_option_labels( $feature_options );
-
-		foreach ( $expected_features as $feature ) {
-			if ( in_array( $feature, $all_options ) ) {
-				++$active_features;
-			} else {
-				$disabled_features[] = $label_map[ $feature ] ?? $feature;
-			}
-		}
-
-		$total_score   = ( $active_features / $total_features ) * $percentage;
-
-		return array(
-			'feature_name'      => $feature_name,
-			'total_score'       => $total_score,
-			'message'           => ! empty( $disabled_features ) ? __( 'Please enable these settings to improve your security score.', 'tailwatch' ) : '',
-			'disabled_features' => $disabled_features,
 		);
 	}
 
@@ -986,39 +934,6 @@ class SecurityFeaturesVerifyController {
 	public function wptw_calculate_smart_ssl( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
 		$expected_features = array(
 			'verify_ssl',
-		);
-
-		$total_features    = count( $expected_features );
-		$active_features   = 0;
-		$disabled_features = array();
-
-		$verify_feature = new VerifyingFeaturesController();
-		$all_options    = $verify_feature->wptw_verify_options_status( $feature_options );
-		$label_map      = $verify_feature->wptw_get_option_labels( $feature_options );
-
-		foreach ( $expected_features as $feature ) {
-			if ( in_array( $feature, $all_options ) ) {
-				++$active_features;
-			} else {
-				$disabled_features[] = $label_map[ $feature ] ?? $feature;
-			}
-		}
-
-		$total_score   = ( $active_features / $total_features ) * $percentage;
-
-		return array(
-			'feature_name'      => $feature_name,
-			'total_score'       => $total_score,
-			'message'           => ! empty( $disabled_features ) ? __( 'Please enable these settings to improve your security score.', 'tailwatch' ) : '',
-			'disabled_features' => $disabled_features,
-		);
-	}
-
-	public function wptw_calculate_safe_updates( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
-		$expected_features = array(
-			'enable_updates_rollback_theme',
-			'enable_updates_rollback_plugin',
-			'enable_updates_rollback_core',
 		);
 
 		$total_features    = count( $expected_features );

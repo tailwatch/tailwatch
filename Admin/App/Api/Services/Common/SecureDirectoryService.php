@@ -83,7 +83,7 @@ class SecureDirectoryService {
 	 * Apache, and adding per-subdir deny files just clutters the tree.
 	 *
 	 * Idempotent: safe to call repeatedly on the same path.
-	 * Path MUST be inside WP_CONTENT_DIR — otherwise rejected.
+	 * Path MUST be inside wp-content or the uploads directory — otherwise rejected.
 	 *
 	 * @param string $path             Absolute filesystem path to the directory.
 	 * @param bool   $drop_deny_files  True only at the root of a private tree.
@@ -100,8 +100,8 @@ class SecureDirectoryService {
 		}
 
 		// Re-validate AFTER mkdir using realpath, in case the path or any
-		// ancestor was a symlink that escaped WP_CONTENT_DIR.
-		if ( ! self::realpath_inside_wp_content( $path ) ) {
+		// ancestor was a symlink that escaped the allowed storage roots.
+		if ( ! self::realpath_inside_allowed_bases( $path ) ) {
 			return false;
 		}
 
@@ -136,7 +136,7 @@ class SecureDirectoryService {
 		if ( ! self::is_valid_path( $path ) || ! is_dir( $path ) ) {
 			return false;
 		}
-		if ( ! self::realpath_inside_wp_content( $path ) ) {
+		if ( ! self::realpath_inside_allowed_bases( $path ) ) {
 			return false;
 		}
 		self::drop_deny_files( $path );
@@ -172,50 +172,15 @@ class SecureDirectoryService {
 	}
 
 	/**
-	 * True when $real_path resolves under any canonical WP root (ABSPATH,
-	 * WP_CONTENT_DIR, WP_PLUGIN_DIR, theme root, uploads). Roots can resolve to
-	 * different real paths on symlinked installs, so a single ABSPATH check is not
-	 * enough. A path under none of the roots is outside the install.
-	 *
-	 * @param string $real_path A realpath()-resolved absolute path.
-	 * @return bool
-	 */
-	public static function is_path_inside_wp_roots( $real_path ) {
-		if ( ! is_string( $real_path ) || '' === $real_path ) {
-			return false;
-		}
-
-		$target  = wp_normalize_path( $real_path );
-		$roots   = array( ABSPATH, WP_CONTENT_DIR, WP_PLUGIN_DIR, get_theme_root() );
-		$uploads = wp_get_upload_dir();
-		if ( ! empty( $uploads['basedir'] ) ) {
-			$roots[] = $uploads['basedir'];
-		}
-
-		foreach ( $roots as $root ) {
-			$real_root = realpath( $root );
-			if ( false === $real_root ) {
-				continue;
-			}
-			$real_root = wp_normalize_path( $real_root );
-			if ( $target === $real_root || strpos( $target, $real_root . '/' ) === 0 ) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	/**
 	 * Validate that a path is safe to operate on (string-level checks).
 	 *
 	 * Rejects:
 	 * - Empty or non-string paths.
 	 * - Paths containing ".." (traversal).
 	 * - Paths containing null bytes (truncation attacks).
-	 * - Paths outside WP_CONTENT_DIR (string prefix match).
+	 * - Paths outside the allowed storage roots (string prefix match).
 	 *
-	 * Symlink resolution is handled separately by realpath_inside_wp_content()
+	 * Symlink resolution is handled separately by realpath_inside_allowed_bases()
 	 * which runs AFTER mkdir, because realpath() returns false for paths
 	 * that don't exist yet.
 	 *
@@ -232,15 +197,33 @@ class SecureDirectoryService {
 		}
 
 		$normalized = wp_normalize_path( $path );
-		$wp_content = wp_normalize_path( WP_CONTENT_DIR );
-
-		return $normalized === $wp_content
-			|| strpos( $normalized, $wp_content . '/' ) === 0;
+		foreach ( self::allowed_bases() as $base ) {
+			if ( $normalized === $base || strpos( $normalized, $base . '/' ) === 0 ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
-	 * Verify the realpath of an existing directory resolves inside
-	 * WP_CONTENT_DIR. This catches symlinks that escape the content root —
+	 * Filesystem roots a private directory may live under: the wp-content
+	 * directory and the uploads base directory. The uploads base is resolved at
+	 * call time via wp_get_upload_dir() so custom upload locations are honored.
+	 *
+	 * @return string[] Normalized absolute base paths (no trailing slash).
+	 */
+	private static function allowed_bases() {
+		$bases   = array( wp_normalize_path( WP_CONTENT_DIR ) );
+		$uploads = wp_get_upload_dir();
+		if ( ! empty( $uploads['basedir'] ) ) {
+			$bases[] = wp_normalize_path( $uploads['basedir'] );
+		}
+		return $bases;
+	}
+
+	/**
+	 * Verify the realpath of an existing directory resolves inside one of the
+	 * allowed storage roots. This catches symlinks that escape those roots —
 	 * something string-level validation cannot detect.
 	 *
 	 * Only callable AFTER the directory exists. realpath() returns false
@@ -248,18 +231,22 @@ class SecureDirectoryService {
 	 *
 	 * @param string $path Absolute filesystem path to an existing directory.
 	 *
-	 * @return bool True if realpath($path) resolves inside WP_CONTENT_DIR.
+	 * @return bool True if realpath($path) resolves inside an allowed root.
 	 */
-	private static function realpath_inside_wp_content( $path ) {
+	private static function realpath_inside_allowed_bases( $path ) {
 		$real = realpath( $path );
 		if ( false === $real ) {
 			return false;
 		}
-		$real       = wp_normalize_path( $real );
-		$wp_content = wp_normalize_path( realpath( WP_CONTENT_DIR ) ?: WP_CONTENT_DIR );
+		$real = wp_normalize_path( $real );
 
-		return $real === $wp_content
-			|| strpos( $real, $wp_content . '/' ) === 0;
+		foreach ( self::allowed_bases() as $base ) {
+			$real_base = wp_normalize_path( realpath( $base ) ? realpath( $base ) : $base );
+			if ( $real === $real_base || strpos( $real, $real_base . '/' ) === 0 ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -336,9 +323,8 @@ class SecureDirectoryService {
 	 * file_put_contents fallback for early-bootstrap / cron contexts where
 	 * WP_Filesystem may not be initialized.
 	 *
-	 * Mirrors the pattern used by VerificationKeysController for the JWT
-	 * secret write: prefer the filesystem abstraction, fall back to raw I/O
-	 * so the write still has a chance to succeed.
+	 * Prefer the filesystem abstraction, fall back to raw I/O so the write
+	 * still has a chance to succeed.
 	 *
 	 * ## Why the raw file_put_contents fallback is necessary
 	 *

@@ -6,7 +6,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use Tailwatch\Admin\App\Api\Controllers\Features\VerifyingFeaturesController;
-use Tailwatch\Admin\App\Api\Controllers\Logs\AjaxLogController;
 use Tailwatch\Admin\App\Api\Controllers\Logs\MonitoringLogController;
 use Tailwatch\Admin\App\Api\Controllers\Logs\LogActivityController;
 use Tailwatch\Admin\App\Api\Controllers\Backup\BackupMaintainController;
@@ -31,7 +30,6 @@ class DashboardController {
 		try {
 			$verifying_controller = new VerifyingFeaturesController();
 			$logs_activity        = new LogActivityController();
-			$ajax_logs            = new AjaxLogController();
 			$monitoring_logs      = new MonitoringLogController();
 			$email_logs           = new EmailLogController();
 
@@ -67,23 +65,6 @@ class DashboardController {
 			} else {
 				$logs_data[] = array(
 					'feature_name' => 'Email Logs',
-					'message'      => __( 'Feature is not enabled', 'tailwatch' ),
-				);
-			}
-
-			// Network Logs.
-			$ajax_status = $ajax_logs->wptw_ajax_log_is_enabled();
-			if ( ! empty( $ajax_status['feature_enable'] ) && true === $ajax_status['feature_enable'] ) {
-				$key         = 'default_feature_logs';
-				$option      = 'default_ajax_logs';
-				$total_count = $verifying_controller->wptw_counts_logs_activity( $option, $key );
-				$logs_data[] = array(
-					'feature_name' => 'Network Logs',
-					'total_count'  => $total_count,
-				);
-			} else {
-				$logs_data[] = array(
-					'feature_name' => 'Network Logs',
 					'message'      => __( 'Feature is not enabled', 'tailwatch' ),
 				);
 			}

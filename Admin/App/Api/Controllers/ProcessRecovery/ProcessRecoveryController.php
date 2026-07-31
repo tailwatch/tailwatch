@@ -111,7 +111,7 @@ class ProcessRecoveryController {
 		// remove the alias after that cycle.
 		$schedules['wptw_every_3_minutes'] = array(
 			'interval' => 180,
-			'display'  => __( 'Every 3 Minutes', 'tailwatch' ),
+			'display'  => 'Every 3 Minutes',
 		);
 		$schedules['every_3_minutes'] = $schedules['wptw_every_3_minutes'];
 

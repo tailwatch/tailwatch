@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle } from 'react';
 import {
-  ShieldCheck, ClipboardCheck, Activity, Network, Send, MailX, KeyRound,
-  LockKeyhole, RotateCcw, Construction, Bug, Timer, Fingerprint, Bot,
+  ShieldCheck, ClipboardCheck, Activity, Network, Send, MailX,
+  LockKeyhole, Construction, Bug, Timer, Fingerprint, Bot,
   FileSearch, DatabaseBackup, FileLock2, Ban, Webhook, LifeBuoy, ShieldAlert,
   Database, Replace, FolderSync, BrickWall, Users, Forward, Unlink, Globe,
   Cctv, LineChart, Eye, UserCheck, FolderLock, ListChecks
@@ -16,9 +16,7 @@ const FEATURE_ICON_MAP = {
   'Network Logs': Network,
   'Email/SMTP Logs': Send,
   'Error Logs': MailX,
-  'Security Keys Rotation': KeyRound,
   'Smart SSL': LockKeyhole,
-  'Updates & Rollback': RotateCcw,
   'Maintenance Mode': Construction,
   'Malware Guard': Bug,
   'Cron Jobs': Timer,

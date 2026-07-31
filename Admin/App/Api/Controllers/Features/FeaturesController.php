@@ -40,7 +40,6 @@ class FeaturesController {
 	 */
 	private static $feature_cron_map = array(
 		'smart_ssl'        => 'smart_ssl',
-		'config_salt_keys' => 'config_salt_keys',
 		'verify_features'  => 'verify_features',
 	);
 

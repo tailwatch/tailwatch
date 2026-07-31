@@ -9,8 +9,6 @@ import Settings from "./Pages/Settings/Settings.jsx";
 import Features from "./Pages/Features/Features.jsx";
 import Logs from "./Pages/Logs/Logs.jsx";
 import Visit from "./Pages/Visit/Visit.jsx";
-import Updates from "./Pages/Updates/Updates.jsx";
-import Innerscreen from "./Pages/Updates/InnerContent/InnerScreen.jsx";
 import VisitFeatures from "./Pages/Visit/VisitFeatures/VisitFeatures.jsx";
 import Backup from './Pages/Backup/Backup.jsx';
 import InnerFiles from './Pages/Backup/BackupFiles/InnerFiles/InnerFiles.jsx';
@@ -76,10 +74,6 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           {/* Database Optimizer */}
           <Route path="database-optimizer" element={<DatabaseOptimizer />} />
           <Route path="database-optimizer/*" element={<Navigate to="/dashboard/database-optimizer" replace />} />
-
-          {/* Updates */}
-          <Route path="updates/details/:pluginSlug" element={<Innerscreen />} />
-          <Route path="updates/*" element={<Updates />} />
 
           {/* Malware Scanner */}
           <Route path="malwarescanner" element={<MalwareScanner />} />

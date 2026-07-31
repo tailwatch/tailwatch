@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getGeoLiteConnection } from '../../../Pages/IpManagement/IpManagementServices/IpManagementServices';
 export const useIpManagement = () => {
-    const [isGeoLicense, setGeoLicense] = useState(null);
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -14,11 +12,6 @@ export const useIpManagement = () => {
         }
         return 'black-list';
     };
-
-    const geoLiteConnectionStatus = async () => {
-        const status = await getGeoLiteConnection();
-        setGeoLicense(status);
-    }
 
     const [activeTab, setActiveTab] = useState(getActiveTabFromURL());
 
@@ -40,10 +33,7 @@ export const useIpManagement = () => {
         setActiveTab(newTab);
     };
 
-    useEffect(() => {
-        geoLiteConnectionStatus();
-    }, []);
     return {
-        activeTab, handleTabChange,isGeoLicense
+        activeTab, handleTabChange
     }
 }

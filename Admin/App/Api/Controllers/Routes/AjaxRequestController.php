@@ -27,15 +27,9 @@ use Tailwatch\Admin\App\Api\Controllers\Ssl\SslVerificationController;
 use Tailwatch\Admin\App\Api\Controllers\LimitIncrease\WebsiteStatsController;
 use Tailwatch\Admin\App\Api\Controllers\Disk\DiskSpaceController;
 use Tailwatch\Admin\App\Api\Controllers\Verification\VerifyStatusController;
-use Tailwatch\Admin\App\Api\Controllers\Verification\VerificationKeysController;
 use Tailwatch\Admin\App\Api\Controllers\Settings\Reset\ResetByFeatureOptionController;
 use Tailwatch\Admin\App\Api\Controllers\Settings\Reset\ResetAllFeatureController;
 use Tailwatch\Admin\App\Api\Controllers\Settings\SettingsController;
-use Tailwatch\Admin\App\Api\Controllers\PluginTheme\PluginThemeController;
-use Tailwatch\Admin\App\Api\Controllers\PluginTheme\Plugin\PluginController;
-use Tailwatch\Admin\App\Api\Controllers\PluginTheme\Theme\ThemeController;
-use Tailwatch\Admin\App\Api\Controllers\Core\CoreController;
-use Tailwatch\Admin\App\Api\Controllers\History\HistoryController;
 use Tailwatch\Admin\App\Api\Controllers\Backup\BackupController;
 use Tailwatch\Admin\App\Api\Controllers\Backup\BackupMaintainController;
 use Tailwatch\Admin\App\Api\Controllers\Database\DBOptimizer\DatabaseOptimizerController;
@@ -48,16 +42,13 @@ use Tailwatch\Admin\App\Api\Controllers\Users\UserRolesController;
 use Tailwatch\Admin\App\Api\Controllers\IntegrityWatch\IntegrityWatchController;
 use Tailwatch\Admin\App\Api\Controllers\HardeningAudit\HardeningAuditController;
 use Tailwatch\Admin\App\Api\Controllers\Features\SecurityFeaturesVerifyController;
-use Tailwatch\Admin\App\Api\Controllers\Email\Smtp\SmtpTestController;
 use Tailwatch\Admin\App\Api\Controllers\Redirections\RedirectionsManager;
 use Tailwatch\Admin\App\Api\Controllers\BrokenLinkChecker\BrokenLinkChecker;
 use Tailwatch\Admin\App\Api\Controllers\BrokenLinkChecker\BrokenLinkStatus;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\CronControl\GetCronJobDetailsController;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\CronControl\CronJobManagerController;
 use Tailwatch\Admin\App\Api\Controllers\ProcessMonitoring\ProcessMonitoringController;
-use Tailwatch\Admin\App\Api\Controllers\RecoveryMode\RecoveryModeService;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\CronHeal\CronHealer;
-use Tailwatch\Admin\App\Api\Controllers\LimitIncrease\PerformanceOptimizerController;
 use Tailwatch\Admin\App\Api\Controllers\Features\BulkFeatureActivationController;
 use Tailwatch\Admin\App\Api\Controllers\IpManagement\BlackList\IpBlackListController;
 use Tailwatch\Admin\App\Api\Controllers\IpManagement\IpManagementController;
@@ -66,8 +57,6 @@ use Tailwatch\Admin\App\Api\Controllers\IpManagement\WhiteList\CountryWhiteListC
 use Tailwatch\Admin\App\Api\Controllers\LoginDefender\IpProtections\IpProtectionController;
 use Tailwatch\Admin\App\Api\Controllers\Logs\FeatureCounts\IpManagementLogCount;
 use Tailwatch\Admin\App\Api\Controllers\Logs\FeatureCounts\LoginDefenderLogCount;
-use Tailwatch\Admin\App\Api\Controllers\Integration\IntegrationController;
-use Tailwatch\Admin\App\Api\Controllers\Integration\GeoIp2\GeoLiteTwoController;
 use Tailwatch\Admin\App\Api\Controllers\Media\MediaController;
 
 /**
@@ -110,23 +99,6 @@ use Tailwatch\Admin\App\Api\Controllers\Media\MediaController;
  * once, upstream, in this class. Repeating the checks in every downstream
  * method would be redundant (the gate is unconditional and cannot be bypassed)
  * and would obscure the actual auth model.
- *
- * ## Endpoints that intentionally bypass this class (and why)
- *
- * Three endpoints in the plugin DO use inline auth checks instead of routing
- * through this class, because they cannot accept a wp_nonce by design:
- *
- *   - RecoveryModeController::wptw_redirect_to_login_link() — clicked from an
- *     out-of-band SOS recovery link; user is NOT logged in yet.
- *   - AutoLogin::wptw_handle_auto_login_request() — passwordless login link;
- *     user is NOT logged in yet.
- *   - HtaccessManager::handle_htaccess_regeneration_request() — server-to-server
- *     dashboard recovery; no logged-in user session exists.
- *
- * Each of those three handlers has its own auth model documented inline at the
- * handler (state transient, single-use cookie, opaque token, signed JWT
- * respectively). See the `## Why this endpoint does not use wp_verify_nonce()`
- * docblock section at the top of each handler.
  *
  */
 class AjaxRequestController {
@@ -178,8 +150,7 @@ class AjaxRequestController {
 			// applies the correct sanitizer per field (sanitize_email for email, absint for IDs,
 			// sanitize_textarea_field for descriptions, esc_url_raw for URLs, etc.). A blanket
 			// sanitize_text_field across the whole JSON string would strip HTML from legitimate
-			// content fields BEFORE json_decode runs. This pattern mirrors MobileAppController
-			// so both routers behave identically.
+			// content fields BEFORE json_decode runs.
 			// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- See deferred-sanitization rationale above; nonce verified earlier in this method; per-field sanitization is performed by each controller after json_decode().
 			$post_data = isset( $_POST['data'] ) ? wp_unslash( $_POST['data'] ) : null;
 
@@ -370,11 +341,6 @@ class AjaxRequestController {
 				'controller' => new SettingsController(),
 				'method'     => 'wptw_get_user_info',
 			),
-			'wptw_get_generated_cta_keys'               => array(
-				'controller' => new VerificationKeysController(),
-				'method'     => 'wptw_get_generated_cta_keys',
-			),
-
 			// Logs Controllers.
 			'wptw_logs_feature'                         => array(
 				'controller' => new GetLogs(),
@@ -502,132 +468,6 @@ class AjaxRequestController {
 			'wptw_verify_import_and_reset_status'       => array(
 				'controller' => new SettingsController(),
 				'method'     => 'wptw_verify_import_and_reset_status',
-			),
-
-			// Theme Controller
-			'wptw_get_all_installed_themes'             => array(
-				'controller' => new ThemeController(),
-				'method'     => 'wptw_get_all_installed_themes',
-			),
-			'wptw_delete_theme'                         => array(
-				'controller' => new ThemeController(),
-				'method'     => 'wptw_delete_theme',
-			),
-			'wptw_activate_theme'                       => array(
-				'controller' => new ThemeController(),
-				'method'     => 'wptw_activate_theme',
-			),
-			'wptw_update_theme'                         => array(
-				'controller' => new ThemeController(),
-				'method'     => 'wptw_update_theme',
-			),
-			'wptw_get_theme_versions'                   => array(
-				'controller' => new ThemeController(),
-				'method'     => 'wptw_get_theme_versions',
-			),
-			'wptw_theme_details'                        => array(
-				'controller' => new ThemeController(),
-				'method'     => 'wptw_theme_details',
-			),
-			'wptw_theme_rollback'                       => array(
-				'controller' => new ThemeController(),
-				'method'     => 'wptw_theme_rollback',
-			),
-			'wptw_check_theme_compatibility'            => array(
-				'controller' => new ThemeController(),
-				'method'     => 'wptw_check_theme_compatibility',
-			),
-
-			// Plugin Controller
-			'wptw_get_all_installed_plugins'            => array(
-				'controller' => new PluginController(),
-				'method'     => 'wptw_get_all_installed_plugins',
-			),
-			'wptw_update_plugin'                        => array(
-				'controller' => new PluginController(),
-				'method'     => 'wptw_update_plugin',
-			),
-			'wptw_get_plugin_versions'                  => array(
-				'controller' => new PluginController(),
-				'method'     => 'wptw_get_plugin_versions',
-			),
-			'wptw_plugin_details'                       => array(
-				'controller' => new PluginController(),
-				'method'     => 'wptw_plugin_details',
-			),
-			'wptw_plugin_rollback'                      => array(
-				'controller' => new PluginController(),
-				'method'     => 'wptw_plugin_rollback',
-			),
-			'wptw_activate_plugin'                      => array(
-				'controller' => new PluginController(),
-				'method'     => 'wptw_activate_plugin',
-			),
-			'wptw_deactivate_plugin'                    => array(
-				'controller' => new PluginController(),
-				'method'     => 'wptw_deactivate_plugin',
-			),
-			'wptw_delete_plugin'                        => array(
-				'controller' => new PluginController(),
-				'method'     => 'wptw_delete_plugin',
-			),
-			'wptw_bulk_plugin_action'                   => array(
-				'controller' => new PluginController(),
-				'method'     => 'wptw_bulk_plugin_action',
-			),
-			'wptw_check_plugin_compatibility'           => array(
-				'controller' => new PluginController(),
-				'method'     => 'wptw_check_plugin_compatibility',
-			),
-
-			// Core Controller
-			'wptw_get_wordpress_details'                => array(
-				'controller' => new CoreController(),
-				'method'     => 'wptw_get_wordpress_details',
-			),
-			'wptw_get_core_updates'                     => array(
-				'controller' => new CoreController(),
-				'method'     => 'wptw_get_core_updates',
-			),
-			'wptw_update_core'                          => array(
-				'controller' => new CoreController(),
-				'method'     => 'wptw_update_core',
-			),
-			'wptw_rollback_update_core'                 => array(
-				'controller' => new CoreController(),
-				'method'     => 'wptw_rollback_update_core',
-			),
-			'wptw_get_core_versions'                    => array(
-				'controller' => new CoreController(),
-				'method'     => 'wptw_get_core_versions',
-			),
-			'wptw_check_core_compatibility'             => array(
-				'controller' => new CoreController(),
-				'method'     => 'wptw_check_core_compatibility',
-			),
-
-			// Plugin + Theme Controller
-			'wptw_get_total_updates_available'          => array(
-				'controller' => new PluginThemeController(),
-				'method'     => 'wptw_get_total_updates_available',
-			),
-
-			// History Controller.
-			'wptw_get_history'                          => array(
-				'controller' => new HistoryController(),
-				'method'     => 'wptw_get_history',
-			),
-			'wptw_get_plugin_history'                   => array(
-				'controller' => new HistoryController(),
-				'method'     => 'wptw_get_plugin_history',
-			),
-			'wptw_get_theme_history'                    => array(
-				'controller' => new HistoryController(),
-				'method'     => 'wptw_get_theme_history',
-			),
-			'wptw_get_core_history'                     => array(
-				'controller' => new HistoryController(),
-				'method'     => 'wptw_get_core_history',
 			),
 
 			// Backup.
@@ -879,12 +719,6 @@ class AjaxRequestController {
 				'method'     => 'wptw_execute_security_features_cron_if_failed',
 			),
 
-			// Email and Smtp Controllers.
-			'wptw_smtp_test_email'                      => array(
-				'controller' => new SmtpTestController(),
-				'method'     => 'wptw_smtp_test_email',
-			),
-
 			// Redirection Rules
 			'wptw_create_redirection_rules'             => array(
 				'controller' => new RedirectionsManager(),
@@ -992,28 +826,9 @@ class AjaxRequestController {
 				'method'     => 'wptw_get_process_monitoring_status',
 			),
 
-			// Recovery Mode
-			'wptw_generate_recovery_cookie'             => array(
-				'controller' => new RecoveryModeService(),
-				'method'     => 'wptw_generate_recovery_cookie',
-			),
-
 			'wptw_cron_healer'                          => array(
 				'controller' => new CronHealer(),
 				'method'     => 'wptw_cron_healer',
-			),
-
-			'wptw_get_php_settings'                     => array(
-				'controller' => new PerformanceOptimizerController(),
-				'method'     => 'wptw_get_php_settings',
-			),
-			'wptw_save_php_settings'                    => array(
-				'controller' => new PerformanceOptimizerController(),
-				'method'     => 'wptw_save_php_settings',
-			),
-			'wptw_remove_php_settings'                  => array(
-				'controller' => new PerformanceOptimizerController(),
-				'method'     => 'wptw_remove_php_settings',
 			),
 
 			// Bulk Feature Activation
@@ -1108,24 +923,6 @@ class AjaxRequestController {
 			'wptw_ip_management_log_count'              => array(
 				'controller' => new IpManagementLogCount(),
 				'method'     => 'wptw_ip_management_log_count',
-			),
-
-			// Integrations (MaxMind GeoIP2)
-			'wptw_get_integration_data'                 => array(
-				'controller' => new IntegrationController(),
-				'method'     => 'wptw_get_integration_data',
-			),
-			'wptw_update_integration_data'              => array(
-				'controller' => new IntegrationController(),
-				'method'     => 'wptw_update_integration_data',
-			),
-			'wptw_delete_integration_data'              => array(
-				'controller' => new IntegrationController(),
-				'method'     => 'wptw_delete_integration_data',
-			),
-			'wptw_is_geo_lite_connected_or_exist'       => array(
-				'controller' => new GeoLiteTwoController(),
-				'method'     => 'wptw_is_geo_lite_connected_or_exist',
 			),
 
 			// Media Routes.

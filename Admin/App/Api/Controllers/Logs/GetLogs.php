@@ -8,7 +8,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 use Tailwatch\Admin\App\Api\Models\DBModel;
 use Tailwatch\Admin\App\Api\Controllers\Logs\LogActivityController;
 use Tailwatch\Admin\App\Api\Controllers\Logs\MonitoringLogController;
-use Tailwatch\Admin\App\Api\Controllers\Logs\AjaxLogController;
 use Tailwatch\Admin\App\Api\Controllers\Email\EmailLogController;
 
 /**
@@ -277,7 +276,6 @@ class GetLogs {
 			$facet_map = array(
 				'default_logs_activity'       => array( 'type' => 'Action', 'username' => 'User' ),
 				'default_monitoring_logs'     => array( 'type' => 'Status Code', 'type_state' => 'URL', 'ip_address' => 'IP Address' ),
-				'default_ajax_logs'           => array( 'type' => 'Request Type', 'action' => 'Action', 'facet_2' => 'Method', 'ip_address' => 'IP Address' ),
 				'default_email_logs'          => array( 'type' => 'Status', 'facet_1' => 'Sent To' ),
 				'wptw_capturing_all_activity' => array( 'type' => 'Request Type', 'action' => 'Action', 'facet_2' => 'Method', 'ip_address' => 'IP Address', 'username' => 'User' ),
 			);
@@ -313,10 +311,6 @@ class GetLogs {
 				$monitoring_logs = new MonitoringLogController();
 				return $monitoring_logs->wptw_monitoring_is_enabled( $field_id );
 
-			case 'default_ajax_logs':
-				$ajax_logs = new AjaxLogController();
-				return $ajax_logs->wptw_ajax_log_is_enabled();
-
 			case 'default_email_logs':
 				$email_logs = new EmailLogController();
 				return $email_logs->wptw_email_log_is_enabled();
@@ -346,7 +340,6 @@ class GetLogs {
 		return array(
 			'default_logs_activity',
 			'default_monitoring_logs',
-			'default_ajax_logs',
 			'default_email_logs',
 			'wptw_capturing_all_activity',
 		);

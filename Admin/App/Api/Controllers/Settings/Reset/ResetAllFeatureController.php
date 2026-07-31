@@ -14,7 +14,6 @@ use Tailwatch\Admin\App\Api\Controllers\Features\OptionsController;
 use Tailwatch\Admin\App\Api\Services\ProcessManager;
 use Tailwatch\Admin\App\Api\Services\ProcessGuard;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\CronJobManager;
-use Tailwatch\Admin\App\Api\Controllers\Integration\IntegrationController;
 
 class ResetAllFeatureController {
 
@@ -107,7 +106,6 @@ class ResetAllFeatureController {
 				'truncate_scans',
 				'purge_backup_dir',
 				'purge_logs_dir',
-				'reset_integrations',
 				'reset_pro_data',
 			) : array();
 
@@ -433,13 +431,6 @@ class ResetAllFeatureController {
 				return $this->wptw_purge_dir_contents( WPTW_BACKUP_DIR, $deadline );
 			case 'purge_logs_dir':
 				return $this->wptw_purge_dir_contents( WPTW_LOGS_DIRECTORY, $deadline );
-			case 'reset_integrations':
-				// A data wipe should not keep user-configured third-party integrations. Use the
-				// integration controller's own delete so the MaxMind key row, its downloaded
-				// GeoLite2 .mmdb database, and the update/retry crons all go — not just the key row.
-				( new IntegrationController() )
-					->wptw_delete_integration_data( wp_json_encode( array( 'section' => 'maxmind' ) ) );
-				return true;
 			case 'reset_pro_data':
 				// Pro (if active) clears its own data — user-meta blocks, GeoIP db, country-rule
 				// caches, pro logs. No-op when pro is inactive.

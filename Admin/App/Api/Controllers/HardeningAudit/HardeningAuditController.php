@@ -7,7 +7,6 @@ use Tailwatch\Admin\App\Api\Controllers\CronJobs\CronJobManager;
 use Tailwatch\Admin\App\Api\Services\Cron\CronHealthService;
 use Tailwatch\Admin\App\Api\Controllers\Features\OptionsController;
 use Tailwatch\Admin\App\Api\Controllers\Hooks\HookControllers;
-use Tailwatch\Admin\App\Api\Controllers\LimitIncrease\PerformanceOptimizerController;
 use Tailwatch\Admin\App\Api\Controllers\Logs\LiveLogs\LiveLogsController;
 use Tailwatch\Admin\App\Api\Controllers\PushNotifications\PushNotificationController;
 use Tailwatch\Admin\App\Api\Logging\Log;
@@ -224,11 +223,10 @@ class HardeningAuditController {
 	/**
 	 * Normalize the route layer's `$post_data` argument.
 	 *
-	 * AjaxRequestController dispatches with the raw `$_POST['data']` string
-	 * (JSON-encoded by the frontend); MobileAppController dispatches with the
-	 * already-sanitized array form. Each public AJAX entry needs to read the
-	 * same logical fields out of either shape, so funnel both through one
-	 * helper instead of repeating the dance per method.
+	 * The route layer may pass either the raw `$_POST['data']` string
+	 * (JSON-encoded by the frontend) or an already-decoded array. Each public
+	 * AJAX entry needs to read the same logical fields out of either shape, so
+	 * funnel both through one helper instead of repeating the dance per method.
 	 *
 	 * @param mixed $post_data
 	 * @return array
@@ -1254,13 +1252,6 @@ class HardeningAuditController {
 		if ( in_array( $cancel_pause['scan_state'], array( 'pause', 'cancel', 'completed' ), true ) ) {
 			return;
 		}
-
-		// Boost PHP limits before the chunked worker runs — mirrors Backup
-		// and File Integrity so a large site's audit doesn't hit the host's
-		// default memory_limit / max_execution_time. Idempotent; only raises
-		// values when they're lower than recommended.
-		$performance_controller = new PerformanceOptimizerController();
-		$performance_controller->wptw_boost_for_scanning();
 
 		$process_id = isset( $cancel_pause['process_id'] ) ? $cancel_pause['process_id'] : null;
 		if ( $process_id ) {

@@ -18,8 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Class FilesystemService
  *
  * Shared service class for WordPress filesystem operations.
- * Used by ThemeManagerService, PluginManagerService, and CoreController
- * to initialize the WordPress filesystem for file operations.
+ * Initializes the WordPress filesystem for plugin file operations.
  *
  */
 class FilesystemService {

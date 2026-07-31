@@ -101,7 +101,7 @@ class LicenseVerifyCronJob extends AbstractCronJob {
 	 * @return string Display name.
 	 */
 	protected function get_schedule_display_name() {
-		return esc_html__( 'License Verification', 'tailwatch' );
+		return 'License Verification';
 	}
 
 	/**

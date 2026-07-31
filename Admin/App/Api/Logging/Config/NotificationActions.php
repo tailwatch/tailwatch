@@ -50,8 +50,6 @@ class NotificationActions {
 		'IntegrityWatchController'      => 'Tailwatch\Admin\App\Api\Controllers\IntegrityWatch\IntegrityWatchController',
 		'DatabaseOptimizerController'   => 'Tailwatch\Admin\App\Api\Controllers\Database\DBOptimizer\DatabaseOptimizerController',
 		'EmailLogController'            => 'Tailwatch\Admin\App\Api\Controllers\Email\EmailLogController',
-		'PluginThemeController'         => 'Tailwatch\Admin\App\Api\Controllers\PluginTheme\PluginThemeController',
-		'ConfigGenerateKeyController'   => 'Tailwatch\Admin\App\Api\Controllers\RewriteRule\ConfigGenerateKeyController',
 		'BrokenLinkChecker'             => 'Tailwatch\Admin\App\Api\Controllers\BrokenLinkChecker\BrokenLinkChecker',
 		'HardeningAuditController'      => 'Tailwatch\Admin\App\Api\Controllers\HardeningAudit\HardeningAuditController',
 		'IpProtectionController'        => 'Tailwatch\Admin\App\Api\Controllers\LoginDefender\IpProtections\IpProtectionController',
@@ -113,118 +111,6 @@ class NotificationActions {
 		'visit_recommended_feature_update_failed'      => array(
 			'type'  => 'static',
 			'value' => false,
-		),
-
-		// Plugin/Theme/Core updates - dynamic checks based on feature push_notification settings.
-		'plugin_update_completed'                      => array(
-			'type'    => 'dynamic',
-			'handler' => 'PluginThemeController',
-			'method'  => 'should_notify_plugin_update',
-		),
-		'plugin_update_failed'                         => array(
-			'type'    => 'dynamic',
-			'handler' => 'PluginThemeController',
-			'method'  => 'should_notify_plugin_update',
-		),
-		'plugin_rollback_completed'                    => array(
-			'type'    => 'dynamic',
-			'handler' => 'PluginThemeController',
-			'method'  => 'should_notify_plugin_update',
-		),
-		'plugin_rollback_failed'                       => array(
-			'type'    => 'dynamic',
-			'handler' => 'PluginThemeController',
-			'method'  => 'should_notify_plugin_update',
-		),
-		'plugin_activate_completed'                    => array(
-			'type'    => 'dynamic',
-			'handler' => 'PluginThemeController',
-			'method'  => 'should_notify_plugin_update',
-		),
-		'plugin_activate_failed'                       => array(
-			'type'    => 'dynamic',
-			'handler' => 'PluginThemeController',
-			'method'  => 'should_notify_plugin_update',
-		),
-		'plugin_deactivate_completed'                  => array(
-			'type'    => 'dynamic',
-			'handler' => 'PluginThemeController',
-			'method'  => 'should_notify_plugin_update',
-		),
-		'plugin_deactivate_failed'                     => array(
-			'type'    => 'dynamic',
-			'handler' => 'PluginThemeController',
-			'method'  => 'should_notify_plugin_update',
-		),
-		'plugin_delete_completed'                      => array(
-			'type'    => 'dynamic',
-			'handler' => 'PluginThemeController',
-			'method'  => 'should_notify_plugin_update',
-		),
-		'plugin_delete_failed'                         => array(
-			'type'    => 'dynamic',
-			'handler' => 'PluginThemeController',
-			'method'  => 'should_notify_plugin_update',
-		),
-		'theme_update_completed'                       => array(
-			'type'    => 'dynamic',
-			'handler' => 'PluginThemeController',
-			'method'  => 'should_notify_theme_update',
-		),
-		'theme_update_failed'                          => array(
-			'type'    => 'dynamic',
-			'handler' => 'PluginThemeController',
-			'method'  => 'should_notify_theme_update',
-		),
-		'theme_rollback_completed'                     => array(
-			'type'    => 'dynamic',
-			'handler' => 'PluginThemeController',
-			'method'  => 'should_notify_theme_update',
-		),
-		'theme_rollback_failed'                        => array(
-			'type'    => 'dynamic',
-			'handler' => 'PluginThemeController',
-			'method'  => 'should_notify_theme_update',
-		),
-		'theme_activate_completed'                     => array(
-			'type'    => 'dynamic',
-			'handler' => 'PluginThemeController',
-			'method'  => 'should_notify_theme_update',
-		),
-		'theme_activate_failed'                        => array(
-			'type'    => 'dynamic',
-			'handler' => 'PluginThemeController',
-			'method'  => 'should_notify_theme_update',
-		),
-		'theme_delete_completed'                       => array(
-			'type'    => 'dynamic',
-			'handler' => 'PluginThemeController',
-			'method'  => 'should_notify_theme_update',
-		),
-		'theme_delete_failed'                          => array(
-			'type'    => 'dynamic',
-			'handler' => 'PluginThemeController',
-			'method'  => 'should_notify_theme_update',
-		),
-		'core_update_completed'                        => array(
-			'type'    => 'dynamic',
-			'handler' => 'PluginThemeController',
-			'method'  => 'should_notify_core_update',
-		),
-		'core_update_failed'                           => array(
-			'type'    => 'dynamic',
-			'handler' => 'PluginThemeController',
-			'method'  => 'should_notify_core_update',
-		),
-		'core_rollback_completed'                      => array(
-			'type'    => 'dynamic',
-			'handler' => 'PluginThemeController',
-			'method'  => 'should_notify_core_update',
-		),
-		'core_rollback_failed'                         => array(
-			'type'    => 'dynamic',
-			'handler' => 'PluginThemeController',
-			'method'  => 'should_notify_core_update',
 		),
 
 		// Cron jobs.
@@ -657,13 +543,6 @@ class NotificationActions {
 		'baseline_updated_for_cleaned_files'           => array(
 			'type'  => 'static',
 			'value' => false,
-		),
-
-		// Security Keys Rotation operations.
-		'config_key_generate_completed'                => array(
-			'type'    => 'dynamic',
-			'handler' => 'ConfigGenerateKeyController',
-			'method'  => 'config_key_generate_push_notification',
 		),
 
 		// Search & Replace operations.
@@ -1283,11 +1162,6 @@ class NotificationActions {
 			'value' => false,
 		),
 		'ajax_strength_check_error'                    => array(
-			'type'  => 'static',
-			'value' => false,
-		),
-
-		'recovery_mode_generate_recovery_link'         => array(
 			'type'  => 'static',
 			'value' => false,
 		),

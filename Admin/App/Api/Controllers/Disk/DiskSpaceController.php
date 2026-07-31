@@ -73,20 +73,26 @@ class DiskSpaceController {
 		try {
 			$upload_dir = wp_upload_dir();
 
-			// Calculate sizes using calculate_folder_size method.
-			$root        = self::calculate_folder_size( ABSPATH );
-			$wp_admin    = self::calculate_folder_size( ABSPATH . 'wp-admin' );
-			$wp_includes = self::calculate_folder_size( ABSPATH . WPINC );
-			$wp_content  = self::calculate_folder_size( WP_CONTENT_DIR );
-			$plugins     = self::calculate_folder_size( WP_PLUGIN_DIR );
-			$themes      = self::calculate_folder_size( get_theme_root() );
-			$uploads     = self::calculate_folder_size( $upload_dir['basedir'] );
+			// 1. Build paths cleanly using core constants and safe slash helpers
+			$abspath_dir  = ABSPATH;
+			$wp_admin_dir = trailingslashit( ABSPATH ) . 'wp-admin';
+			$wp_inc_dir   = trailingslashit( ABSPATH ) . WPINC;
+			$content_dir  = WP_CONTENT_DIR;
+			$plugins_dir  = WP_PLUGIN_DIR;
+			$themes_dir   = get_theme_root();
+			$uploads_dir  = $upload_dir['basedir'];
 
-			$root_size       = $root - $wp_admin - $wp_content - $wp_includes;
-			$wp_content_size = $wp_content - $plugins - $themes - $uploads;
+			// 2. Calculate sizes
+			$root        = self::calculate_folder_size( $abspath_dir );
+			$wp_admin    = self::calculate_folder_size( $wp_admin_dir );
+			$wp_includes = self::calculate_folder_size( $wp_inc_dir );
+			$wp_content  = self::calculate_folder_size( $content_dir );
+			$plugins     = self::calculate_folder_size( $plugins_dir );
+			$themes      = self::calculate_folder_size( $themes_dir );
+			$uploads     = self::calculate_folder_size( $uploads_dir );
 
-			$root_size       = max( 0, $root_size );
-			$wp_content_size = max( 0, $wp_content_size );
+			$root_size       = max( 0, $root - $wp_admin - $wp_content - $wp_includes );
+			$wp_content_size = max( 0, $wp_content - $plugins - $themes - $uploads );
 
 			$total_site_size = $root_size + $wp_admin + $wp_includes + $wp_content_size + $plugins + $themes + $uploads;
 

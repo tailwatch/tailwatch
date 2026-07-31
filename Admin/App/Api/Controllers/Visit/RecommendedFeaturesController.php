@@ -42,7 +42,6 @@ class RecommendedFeaturesController {
 	public static $recommended_features = array(
 		'default_log_activity',
 		'default_monitoring_logs',
-		'default_config_generate_key',
 		'default_verify_ssl',
 	);
 

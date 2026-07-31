@@ -36,6 +36,7 @@ class LoginProtectionController {
 		$hook_controller->add_action_hook( 'admin_init', array( $this, 'custom_disable_user_registration' ) );
 		$hook_controller->add_filter_hook( 'login_display_language_dropdown', array( $this, 'hide_language_dropdown_from_login_page' ) );
 		$hook_controller->add_action_hook( 'login_enqueue_scripts', array( $this, 'hide_lost_password_link' ) );
+		$hook_controller->add_action_hook( 'login_enqueue_scripts', array( $this, 'enqueue_honeypot_style' ) );
 		$hook_controller->add_action_hook( 'login_init', array( $this, 'block_lost_password_page' ) );
 
 		// These login-form gates run at priority 25 — AFTER WP's password check
@@ -142,6 +143,13 @@ class LoginProtectionController {
 		wp_add_inline_style( 'login', '.wp-login-lost-password,#nav a[href*="action=lostpassword"]{display:none !important;}' );
 	}
 
+	public function enqueue_honeypot_style() {
+		if ( ! $this->is_feature_enabled( 'field_15' ) ) {
+			return;
+		}
+		wp_add_inline_style( 'login', '.wptw-honeypot-field{position:absolute;left:-9999px;top:-9999px;height:0;width:0;overflow:hidden;}' );
+	}
+
 	public function block_lost_password_page() {
 		if ( ! $this->is_feature_enabled( 'field_17' ) ) {
 			return;
@@ -237,7 +245,7 @@ class LoginProtectionController {
 
 			$nonce_valid = $this->with_logged_out_session(
 				static function () {
-					// phpcs:ignore WordPress.Security.NonceVerification.Missing -- this IS the nonce verification gate.
+					// phpcs:ignore WordPress.Security.NonceVerification.Missing, PluginCheck.Security.VerifyNonce.UnsafeVerifyNonceStatement -- this IS the nonce verification gate; wp_verify_nonce()'s result is returned from this closure into $nonce_valid and checked below (login is rejected when false).
 					return isset( $_POST['login_nonce'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['login_nonce'] ) ), 'login_nonce_action' );
 				}
 			);
@@ -276,7 +284,7 @@ class LoginProtectionController {
 		if ( ! $this->is_feature_enabled( 'field_15' ) ) {
 			return;
 		}
-		echo '<p style="position:absolute;left:-9999px;top:-9999px;height:0;width:0;overflow:hidden;" aria-hidden="true">';
+		echo '<p class="wptw-honeypot-field" aria-hidden="true">';
 		echo '<label for="wptw-verify-check">' . esc_html__( 'Leave this field empty', 'tailwatch' ) . '</label>';
 		echo '<input type="text" name="wptw_verify_check" id="wptw-verify-check" value="" tabindex="-1" autocomplete="off" />';
 		echo '</p>';

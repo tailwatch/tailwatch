@@ -16,7 +16,6 @@ namespace Tailwatch\Admin\Includes;
 
 use Tailwatch\Admin\App\Api\Templates\DeactivationAlert;
 use Tailwatch\Admin\App\Api\Controllers\Features\FeatureCacheController;
-use Tailwatch\Admin\App\Api\Controllers\Verification\VerificationKeysController;
 use Tailwatch\Admin\App\Api\Models\DBModel;
 
 // Exit if accessed directly.
@@ -68,12 +67,11 @@ class Deactivation {
 
 			$this->wptw_remove_all_option_meta_data( $db_model );
 
-			$verification_keys = new VerificationKeysController();
-			$verification_keys->wptw_remove_secret_key_from_config();
-
-			// Clean up plugin directories.
+			// Clean up plugin directories: the wp-content backup folder and the
+			// slug-named folder inside the uploads directory that holds logs.
 			$folders = array(
 				WPTW_CONTENT_DIR_BASE,
+				dirname( WPTW_LOGS_DIRECTORY ),
 			);
 
 			foreach ( $folders as $folder ) {
@@ -94,13 +92,25 @@ class Deactivation {
 	 * @return bool True on success, false on failure.
 	 */
 	private function wptw_delete_directory( $dir ) {
-		// Require exact match or trailing "/" so wp-content-evil/ isn't accepted as wp-content.
-		$wp_content_dir = rtrim( wp_normalize_path( WP_CONTENT_DIR ), '/' );
-		$target_dir     = rtrim( wp_normalize_path( $dir ), '/' );
+		$target_dir = rtrim( wp_normalize_path( $dir ), '/' );
 
-		if ( $target_dir !== $wp_content_dir
-			&& 0 !== strpos( $target_dir, $wp_content_dir . '/' )
-		) {
+		// Only allow deletion inside WordPress-managed storage roots (wp-content or
+		// the uploads directory), matched exactly or as a "<root>/" prefix so a
+		// sibling like wp-content-evil/ is never accepted.
+		$allowed_roots = array( rtrim( wp_normalize_path( WP_CONTENT_DIR ), '/' ) );
+		$uploads       = wp_get_upload_dir();
+		if ( ! empty( $uploads['basedir'] ) ) {
+			$allowed_roots[] = rtrim( wp_normalize_path( $uploads['basedir'] ), '/' );
+		}
+
+		$inside = false;
+		foreach ( $allowed_roots as $root ) {
+			if ( $target_dir === $root || 0 === strpos( $target_dir, $root . '/' ) ) {
+				$inside = true;
+				break;
+			}
+		}
+		if ( ! $inside ) {
 			return false;
 		}
 
@@ -112,7 +122,7 @@ class Deactivation {
 			return wp_delete_file( $target_dir );
 		}
 
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_scandir -- $target_dir is validated against WP_CONTENT_DIR prefix above (line 108); WP_Filesystem::dirlist() returns a different structure and is heavier than needed for this enumeration.
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_scandir -- $target_dir is validated against the allowed storage roots above; WP_Filesystem::dirlist() returns a different structure and is heavier than needed for this enumeration.
 		$items = scandir( $target_dir );
 		if ( false === $items ) {
 			return false;
@@ -152,10 +162,7 @@ class Deactivation {
 		delete_option( WPTW_VISIT_DATA );
 		delete_option( 'wptw_plugin_activation_redirect' );
 		delete_option( 'wptw_deactivate_plugin' );
-
-		// CTA Keys + mobile auth header key.
-		delete_option( 'wptw_cta_id' );
-		delete_option( 'wptw_auth_header_key' );
+		delete_option( 'wptw_db_version' );
 
 		// Additional cleanup.
 		$db_model->wptw_delete_data_on_deactivate();
@@ -184,7 +191,7 @@ class Deactivation {
 		}
 
 		// Set deactivation flag.
-		$result = update_option( 'wptw_deactivate_plugin', true );
+		$result = update_option( 'wptw_deactivate_plugin', true, false );
 
 		if ( $result ) {
 			wp_send_json_success(

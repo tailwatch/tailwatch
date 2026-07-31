@@ -61,7 +61,7 @@ class OptionsModel {
 		$create_tables = array(
 			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared -- dbDelta requires literal table-name interpolation; both names derived from $wpdb->prefix + code-literal constants.
 			"CREATE TABLE $settings_table_name (
-                id INT AUTO_INCREMENT PRIMARY KEY,
+                id INT NOT NULL AUTO_INCREMENT,
                 user_id INT,
                 child_of INT,
                 `key` VARCHAR(255),
@@ -72,11 +72,12 @@ class OptionsModel {
                 date_created VARCHAR(255),
                 date_modified VARCHAR(255),
                 is_active TINYINT(1) DEFAULT 0,
+                PRIMARY KEY  (id),
                 KEY idx_process_monitor (`key`(50), `option`(100), date_modified)
             ) $charset_collate;",
 			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared -- dbDelta requires literal table-name interpolation; both names derived from $wpdb->prefix + code-literal constants.
 			"CREATE TABLE $logs_table_name (
-                id INT AUTO_INCREMENT PRIMARY KEY,
+                id INT NOT NULL AUTO_INCREMENT,
                 user_id INT,
                 child_of INT,
                 `key` VARCHAR(255),
@@ -92,6 +93,7 @@ class OptionsModel {
                 date_created DATETIME,
                 date_modified DATETIME,
                 is_active TINYINT(1) DEFAULT 0,
+                PRIMARY KEY  (id),
                 KEY idx_process_recovery (`key`(50), `option`(100), date_created),
                 KEY idx_logs_username (`option`(50), username, id),
                 KEY idx_logs_ip (`option`(50), ip_address, id),
@@ -145,13 +147,28 @@ class OptionsModel {
 			) $charset_collate;",
 		);
 
-		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+		// Only run the schema build when the stored schema version differs from the
+		// current one. dbDelta re-parses every CREATE TABLE definition to diff it
+		// against the live tables on each call, so gating it keeps routine
+		// re-activations from repeating that work once the schema is already current.
+		if ( get_option( 'wptw_db_version' ) !== WPTW_DB_VERSION ) {
+			require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
-		foreach ( $create_tables as $sql ) {
-			dbDelta( $sql );
+			foreach ( $create_tables as $sql ) {
+				dbDelta( $sql );
+			}
+
+			update_option( 'wptw_db_version', WPTW_DB_VERSION, false );
 		}
 
-		add_option( 'wptw_plugin_activation_redirect', true );
+		add_option( 'wptw_plugin_activation_redirect', true, '', false );
+
+		// Seed operational options as NON-autoloaded. They are read only on specific
+		// admin screens (Cron Manager), so they must not load on every page request.
+		// Creating them here means later update_option() calls preserve the non-autoload
+		// state (autoload is only re-evaluated on creation).
+		add_option( 'wptw_paused_cron_jobs', array(), '', false );
+		add_option( 'wptw_custom_schedules', array(), '', false );
 	}
 
 	/**
@@ -286,17 +303,17 @@ class OptionsModel {
 								'tab_icon'  => 'code',
 							),
 							array(
-								'field_ids' => array( 'field_3', 'field_4', 'field_5', 'field_6', 'field_7', 'field_8', 'field_16' ),
+								'field_ids' => array( 'field_7', 'field_16' ),
 								'tab_title' => 'Files & Directory Access',
 								'tab_icon'  => 'folder',
 							),
 							array(
-								'field_ids' => array( 'field_10', 'field_11', 'field_12', 'field_13', 'field_20' ),
+								'field_ids' => array( 'field_10', 'field_12', 'field_13', 'field_20' ),
 								'tab_title' => 'Info Disclosure',
 								'tab_icon'  => 'eye-slash',
 							),
 							array(
-								'field_ids' => array( 'field_19', 'field_21', 'field_22', 'field_23' ),
+								'field_ids' => array( 'field_21', 'field_22', 'field_23' ),
 								'tab_title' => 'Scripts & Feeds',
 								'tab_icon'  => 'file-code',
 							),
@@ -336,70 +353,6 @@ class OptionsModel {
 								),
 							),
 							// Files & Directory Access
-							'field_3'         => array(
-								'key'         => 'disable_access_to_wp_includes',
-								'id'          => 'disable_access_to_wp_includes',
-								'type'        => 'checkbox',
-								'label'       => 'Disable direct access to wp-includes',
-								'description' => 'Prevents direct access to files within the wp-includes directory.',
-								'placeholder' => 'Disable direct access to wp-includes',
-								'required'    => true,
-								'register'    => 'disable_access_to_wp_includes',
-								'values'      => array(
-									'option' => array(
-										'value'    => '',
-										'selected' => true,
-									),
-								),
-							),
-							'field_4'         => array(
-								'key'         => 'disable_access_to_wp_admin',
-								'id'          => 'disable_access_to_wp_admin',
-								'type'        => 'checkbox',
-								'label'       => 'Disable direct access to wp-admin',
-								'description' => 'Prevents direct access to files within the wp-admin directory.',
-								'placeholder' => 'Disable direct access to wp-admin',
-								'required'    => true,
-								'register'    => 'disable_access_to_wp_admin',
-								'values'      => array(
-									'option' => array(
-										'value'    => '',
-										'selected' => true,
-									),
-								),
-							),
-							'field_5'         => array(
-								'key'         => 'disable_access_to_wp_content',
-								'id'          => 'disable_access_to_wp_content',
-								'type'        => 'checkbox',
-								'label'       => 'Disable direct access to wp-content',
-								'description' => 'Prevents direct access to files within the wp-content directory.',
-								'placeholder' => 'Disable direct access to wp-content',
-								'required'    => true,
-								'register'    => 'disable_access_to_wp_content',
-								'values'      => array(
-									'option' => array(
-										'value'    => '',
-										'selected' => true,
-									),
-								),
-							),
-							'field_6'         => array(
-								'key'         => 'disable_access_to_root_files',
-								'id'          => 'disable_access_to_root_files',
-								'type'        => 'checkbox',
-								'label'       => 'Disable direct access to root files',
-								'description' => 'Prevents direct access to critical root files such as wp-config.php, readme.html, and license.txt.',
-								'placeholder' => 'Disable direct access to root files',
-								'required'    => true,
-								'register'    => 'disable_access_to_root_files',
-								'values'      => array(
-									'option' => array(
-										'value'    => '',
-										'selected' => true,
-									),
-								),
-							),
 							'field_7'         => array(
 								'key'         => 'disable_access_to_xmlrpc',
 								'id'          => 'disable_access_to_xmlrpc',
@@ -483,22 +436,6 @@ class OptionsModel {
 								),
 							),
 							// Scripts & Feeds
-							'field_19'        => array(
-								'key'         => 'disable_script_concatenation',
-								'id'          => 'disable_script_concatenation',
-								'type'        => 'checkbox',
-								'label'       => 'Disable Script Concatenation',
-								'description' => 'Combines many WordPress admin JavaScript files into fewer requests to improve dashboard loading performance.',
-								'placeholder' => 'Disable Script Concatenation',
-								'required'    => true,
-								'register'    => 'disable_script_concatenation',
-								'values'      => array(
-									'option' => array(
-										'value'    => '',
-										'selected' => false,
-									),
-								),
-							),
 							'field_20'        => array(
 								'key'         => 'remove_wp_version_information',
 								'id'          => 'remove_wp_version_information',
@@ -756,45 +693,6 @@ class OptionsModel {
 				'date_created'  => current_time( 'mysql' ),
 				'date_modified' => current_time( 'mysql' ),
 				'is_active'     => 1,
-			),
-			// Network Logs Controller
-			'default_ajax_log'               => array(
-				'user_id'       => $user_id,
-				'child_of'      => 0,
-				'key'           => 'default_feature_settings',
-				'option'        => 'default_ajax_log',
-				'value'         => wp_json_encode(
-					array(
-						'icon'                => 'Icon',
-						'title'               => 'Network Logs',
-						'category'            => array( 'monitoring' ),
-						'description'         => 'Monitor WordPress AJAX, REST API, background requests, errors, and slow responses in real time.',
-						'verify_status'       => 'check_ajax_logs',
-						'options'             => array(
-							'field_1' => array(
-								'key'         => 'log_ajax_request',
-								'id'          => 'log_ajax_request',
-								'type'        => 'checkbox',
-								'label'       => 'Log Internal Requests',
-								'description' => 'Track internal website requests such as AJAX calls and background system requests.',
-								'placeholder' => 'Log Internal Requests',
-								'required'    => true,
-								'register'    => 'log_ajax_request',
-								'values'      => array(
-									'option' => array(
-										'value'    => '',
-										'selected' => true,
-									),
-								),
-							),
-						),
-					)
-				),
-				'type'          => 'json',
-				'type_state'    => 'inactive',
-				'date_created'  => current_time( 'mysql' ),
-				'date_modified' => current_time( 'mysql' ),
-				'is_active'     => 0,
 			),
 			// Error Log Controller
 			'default_monitoring_logs'        => array(
@@ -1348,92 +1246,6 @@ class OptionsModel {
 				'date_modified' => current_time( 'mysql' ),
 				'is_active'     => 0,
 			),
-			// Security Keys Rotation
-			'default_config_generate_key'    => array(
-				'user_id'       => $user_id,
-				'child_of'      => 0,
-				'key'           => 'default_feature_settings',
-				'option'        => 'default_config_generate_key',
-				'value'         => wp_json_encode(
-					array(
-						'icon'                => 'Icon',
-						'title'               => 'Security Keys Rotation',
-						'category'            => array( 'security' ),
-						'description'         => 'Automatically regenerate your WordPress security keys inside the wp-config.php file at regular intervals, such as 24 hours, 48 hours, or a custom schedule. Enhance protection against cookie theft and session hijacking without any manual editing.',
-						'verify_status'       => 'check_security_key',
-						'mobile_notification' => true,
-						'recommended_feature' => true,
-						'options'             => array(
-							'field_1' => array(
-								'key'               => 'generate_security_keys',
-								'id'                => 'generate_security_keys',
-								'push_notification' => true,
-								'push_notification_title'       => 'Security Keys Rotated',
-								'push_notification_description' => 'You will receive a notification on your mobile each time WordPress auth and salt keys are regenerated and all active sessions are logged out.',
-								'type'              => 'checkbox',
-								'label'             => 'Auto Generate Keys',
-								'description'       => 'Automatically regenerate WordPress auth and salt keys. This will automatically log out all active sessions after each rotation.',
-								'placeholder'       => 'Auto Generate Keys',
-								'required'          => true,
-								'register'          => 'generate_security_keys',
-								'values'            => array(
-									'option' => array(
-										'value'    => '',
-										'selected' => true,
-									),
-								),
-								'sub_options'       => array(
-									'field_2' => array(
-										'key'         => 'generate_keys_duration',
-										'id'          => 'generate_keys_duration',
-										'type'        => 'radio',
-										'display'     => 'tab_view',
-										'label'       => 'Rotation Frequency',
-										'description' => 'Choose how often keys should be regenerated.',
-										'placeholder' => 'Auto Generate Keys',
-										'required'    => true,
-										'register'    => 'generate_keys_duration',
-										'values'      => array(
-											'option3' => array(
-												'value'    => '15 Days',
-												'selected' => true,
-											),
-											'option4' => array(
-												'value'    => 'Monthly',
-												'selected' => false,
-											),
-										),
-									),
-								),
-							),
-							'upgrade_notice' => array(
-								'key'         => 'upgrade_notice',
-								'id'          => 'upgrade_notice',
-								'type'        => 'info',
-								'label'       => 'Unlock more with Tailwatch Pro',
-								'description' => 'Tailwatch Pro extends Security Keys Rotation with faster rotation schedules including daily (1 Day) and weekly options for tighter session-hijack protection.',
-								'links'       => array(
-									array(
-										'url'  => 'https://wptailwatch.com/pricing/?utm_source=wp-plugins&utm_medium=wp-dash&utm_campaign=pro_upgrade&utm_content=upgrade_notice_security_keys',
-										'text' => 'Upgrade Now',
-									),
-								),
-								'values'      => array(
-									'option' => array(
-										'value'    => '',
-										'selected' => true,
-									),
-								),
-							),
-						),
-					)
-				),
-				'type'          => 'json',
-				'type_state'    => 'inactive',
-				'date_created'  => current_time( 'mysql' ),
-				'date_modified' => current_time( 'mysql' ),
-				'is_active'     => 0,
-			),
 			// Smart SSL Feature
 			'default_verify_ssl'             => array(
 				'user_id'       => $user_id,
@@ -1537,295 +1349,6 @@ class OptionsModel {
 				'date_created'  => current_time( 'mysql' ),
 				'date_modified' => current_time( 'mysql' ),
 				'is_active'     => 1,
-			),
-			// Updates & Rollback Feature
-			'default_updates_rollback'       => array(
-				'user_id'       => $user_id,
-				'child_of'      => 0,
-				'key'           => 'default_feature_settings',
-				'option'        => 'default_updates_rollback',
-				'value'         => wp_json_encode(
-					array(
-						'icon'                => 'shield-check',
-						'title'               => 'Updates & Rollback',
-						'category'            => array( 'performance', 'security' ),
-						'description'         => 'Confidently update your WordPress core, plugins, and themes. Review changes, apply updates with ease, or instantly roll back to previous versions when needed. Maintain a complete update history and receive instant notifications on your smartphone.',
-						'verify_status'       => 'check_updates_rollback',
-						'mobile_notification' => true,
-						'recommended_feature' => true,
-						'display_as_tabs'     => true,
-						'tab_config'          => array(
-							array(
-								'field_ids' => array( 'field_1' ),
-								'tab_title' => 'Theme Updates',
-								'tab_icon'  => 'paint-brush',
-							),
-							array(
-								'field_ids' => array( 'field_4' ),
-								'tab_title' => 'Plugin Updates',
-								'tab_icon'  => 'plug',
-							),
-							array(
-								'field_ids' => array( 'field_7' ),
-								'tab_title' => 'Core Updates',
-								'tab_icon'  => 'wordpress',
-							),
-						),
-						'options'             => array(
-							'field_1' => array(
-								'key'               => 'enable_updates_rollback_theme',
-								'id'                => 'enable_updates_rollback_theme',
-								'type'              => 'checkbox',
-								'push_notification' => true,
-								'push_notification_title'       => 'Theme Update / Rollback',
-								'push_notification_description' => 'You will receive a notification on your mobile each time a theme is updated or rolled back on your site.',
-								'label'             => 'Theme Updates & Rollback Management',
-								'description'       => 'Enable or disable theme update management and rollback functionality.',
-								'placeholder'       => 'Updates & Rollback for Theme',
-								'required'          => true,
-								'register'          => 'enable_updates_rollback_theme',
-								'values'            => array(
-									'option' => array(
-										'value'    => '',
-										'selected' => true,
-									),
-								),
-								'sub_options'       => array(
-									'field_2' => array(
-										'key'         => 'enable_theme_scheduler',
-										'id'          => 'enable_theme_scheduler',
-										'type'        => 'checkbox',
-										'label'       => 'Automatic Theme Updates',
-										'description' => 'Automatically install available theme updates based on your selected schedule.',
-										'placeholder' => 'Enable Scheduler',
-										'required'    => false,
-										'register'    => 'enable_theme_scheduler',
-										'values'      => array(
-											'option' => array(
-												'value'    => '',
-												'selected' => true,
-											),
-										),
-										'sub_options' => array(
-											'field_3' => array(
-												'key'      => 'theme_scheduler_interval',
-												'id'       => 'theme_scheduler_interval',
-												'type'     => 'select',
-												'display'  => 'tab_view',
-												'label'    => 'Update Interval',
-												'description' => 'Select how frequently theme updates should be checked and installed.',
-												'placeholder' => 'Select Interval',
-												'required' => true,
-												'register' => 'theme_scheduler_interval',
-												'values'   => array(
-													'option'  => array(
-														'label' => '1 Day',
-														'value' => '1_day',
-														'selected' => false,
-													),
-													'option2' => array(
-														'label' => '3 Days',
-														'value' => '3_days',
-														'selected' => true,
-													),
-													'option3' => array(
-														'label' => '1 Week',
-														'value' => '1_week',
-														'selected' => false,
-													),
-													'option4' => array(
-														'label' => '2 Weeks',
-														'value' => '2_weeks',
-														'selected' => false,
-													),
-													'option5' => array(
-														'label' => '1 Month',
-														'value' => '1_month',
-														'selected' => false,
-													),
-													'option6' => array(
-														'label' => '3 Months',
-														'value' => '3_months',
-														'selected' => false,
-													),
-												),
-											),
-										),
-									),
-								),
-							),
-							'field_4' => array(
-								'key'               => 'enable_updates_rollback_plugin',
-								'id'                => 'enable_updates_rollback_plugin',
-								'type'              => 'checkbox',
-								'push_notification' => true,
-								'push_notification_title'       => 'Plugin Update / Rollback',
-								'push_notification_description' => 'You will receive a notification on your mobile each time a plugin is updated or rolled back on your site.',
-								'label'             => 'Plugin Updates & Rollback Management',
-								'description'       => 'Enable or disable plugin update management and rollback functionality.',
-								'placeholder'       => 'Updates & Rollback for Plugin',
-								'required'          => true,
-								'register'          => 'enable_updates_rollback_plugin',
-								'values'            => array(
-									'option' => array(
-										'value'    => '',
-										'selected' => true,
-									),
-								),
-								'sub_options'       => array(
-									'field_5' => array(
-										'key'         => 'enable_plugin_scheduler',
-										'id'          => 'enable_plugin_scheduler',
-										'type'        => 'checkbox',
-										'label'       => 'Automatic Plugin Updates',
-										'description' => 'Automatically install available plugin updates based on your selected schedule.',
-										'placeholder' => 'Enable Scheduler',
-										'required'    => false,
-										'register'    => 'enable_plugin_scheduler',
-										'values'      => array(
-											'option' => array(
-												'value'    => '',
-												'selected' => true,
-											),
-										),
-										'sub_options' => array(
-											'field_6' => array(
-												'key'      => 'plugin_scheduler_interval',
-												'id'       => 'plugin_scheduler_interval',
-												'type'     => 'select',
-												'display'  => 'tab_view',
-												'label'    => 'Update Interval',
-												'description' => 'Select how frequently plugin updates should be checked and installed.',
-												'placeholder' => 'Select Interval',
-												'required' => true,
-												'register' => 'plugin_scheduler_interval',
-												'values'   => array(
-													'option'  => array(
-														'label' => '1 Day',
-														'value' => '1_day',
-														'selected' => false,
-													),
-													'option2' => array(
-														'label' => '3 Days',
-														'value' => '3_days',
-														'selected' => true,
-													),
-													'option3' => array(
-														'label' => '1 Week',
-														'value' => '1_week',
-														'selected' => false,
-													),
-													'option4' => array(
-														'label' => '2 Weeks',
-														'value' => '2_weeks',
-														'selected' => false,
-													),
-													'option5' => array(
-														'label' => '1 Month',
-														'value' => '1_month',
-														'selected' => false,
-													),
-													'option6' => array(
-														'label' => '3 Months',
-														'value' => '3_months',
-														'selected' => false,
-													),
-												),
-											),
-										),
-									),
-								),
-							),
-							'field_7' => array(
-								'key'               => 'enable_updates_rollback_core',
-								'id'                => 'enable_updates_rollback_core',
-								'type'              => 'checkbox',
-								'push_notification' => true,
-								'push_notification_title'       => 'WordPress Core Update / Rollback',
-								'push_notification_description' => 'You will receive a notification on your mobile each time the WordPress core is updated or rolled back on your site.',
-								'label'             => 'Core Updates & Rollback Management',
-								'description'       => 'Enable or disable WordPress core update management and rollback functionality.',
-								'placeholder'       => 'Updates & Rollback for Core',
-								'required'          => true,
-								'register'          => 'enable_updates_rollback_core',
-								'values'            => array(
-									'option' => array(
-										'value'    => '',
-										'selected' => true,
-									),
-								),
-								'sub_options'       => array(
-									'field_8' => array(
-										'key'         => 'enable_core_scheduler',
-										'id'          => 'enable_core_scheduler',
-										'type'        => 'checkbox',
-										'label'       => 'Automatic Core Updates',
-										'description' => 'Automatically install WordPress core updates to keep your website secure and up to date.',
-										'placeholder' => 'Enable Scheduler',
-										'required'    => false,
-										'register'    => 'enable_core_scheduler',
-										'values'      => array(
-											'option' => array(
-												'value'    => '',
-												'selected' => true,
-											),
-										),
-										'sub_options' => array(
-											'field_9' => array(
-												'key'      => 'core_scheduler_interval',
-												'id'       => 'core_scheduler_interval',
-												'type'     => 'select',
-												'display'  => 'tab_view',
-												'label'    => 'Update Interval',
-												'description' => 'Choose how often WordPress core updates should be checked and installed.',
-												'placeholder' => 'Select Interval',
-												'required' => true,
-												'register' => 'core_scheduler_interval',
-												'values'   => array(
-													'option'  => array(
-														'label' => '1 Day',
-														'value' => '1_day',
-														'selected' => false,
-													),
-													'option2' => array(
-														'label' => '3 Days',
-														'value' => '3_days',
-														'selected' => true,
-													),
-													'option3' => array(
-														'label' => '1 Week',
-														'value' => '1_week',
-														'selected' => false,
-													),
-													'option4' => array(
-														'label' => '2 Weeks',
-														'value' => '2_weeks',
-														'selected' => false,
-													),
-													'option5' => array(
-														'label' => '1 Month',
-														'value' => '1_month',
-														'selected' => false,
-													),
-													'option6' => array(
-														'label' => '3 Months',
-														'value' => '3_months',
-														'selected' => false,
-													),
-												),
-											),
-										),
-									),
-								),
-							),
-						),
-					)
-				),
-				'type'          => 'json',
-				'type_state'    => 'inactive',
-				'date_created'  => current_time( 'mysql' ),
-				'date_modified' => current_time( 'mysql' ),
-				'is_active'     => 0,
 			),
 			// Backup Vault
 			'default_backup_enable'          => array(
@@ -2936,7 +2459,7 @@ class OptionsModel {
 						'icon'                => 'Icon',
 						'title'               => 'Geo-blocking',
 						'category'            => array( 'security' ),
-						'description'         => 'Block or allow individual IPs, IP ranges, or entire countries temporarily or permanently. Control access to login forms or your entire site, and display custom messages to blocked visitors.',
+						'description'         => 'Block or allow individual IPs or IP ranges, temporarily or permanently. Control access to login forms or your entire site, and display custom messages to blocked visitors.',
 						'verify_status'       => 'check_ip_management',
 						'mobile_notification' => false,
 						'display_as_tabs'     => true,
