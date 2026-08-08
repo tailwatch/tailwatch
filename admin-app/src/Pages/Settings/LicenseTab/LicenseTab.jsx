@@ -7,7 +7,7 @@ import { alertService } from "../../../Components/AlertService/AlertService";
 import { useUser } from "../../../Components/Context/UserContext";
 import { useLicenseProvider } from "../../../Components/Context/LicenseProvider";
 
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 const LicenseTab = ({ activeTab, loading: parentLoading, setLoading }) => {    
   const [email, setEmail] = useState(null);
@@ -56,7 +56,7 @@ const LicenseTab = ({ activeTab, loading: parentLoading, setLoading }) => {
     try {
       await handleConnect({
         setLoading: setLoading,
-        wptw_ajax,
+        tailwatch_ajax,
         successCallback: async () => {
           await fetchFeaturesData();
           await fetchData({setEmail, setLicenseKey, setConnectionDateTime, setPlanName, setDevices, setStartData, setEndData, setLoading,setIsExpiry, setRole});

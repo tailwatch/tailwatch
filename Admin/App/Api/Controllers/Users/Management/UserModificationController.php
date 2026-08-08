@@ -14,7 +14,7 @@ use Tailwatch\Admin\App\Api\Traits\ContextAuthorizationTrait;
  * ## Authorization model
  *
  * These methods are reachable through the wp-admin AJAX router
- * (AjaxRequestController) — the upstream gate verifies `wp_ajax_nonce` AND
+ * (AjaxRequestController) — the upstream gate verifies `tailwatch_ajax_nonce` AND
  * `current_user_can('manage_options')` before dispatch.
  *
  * Each public method also calls `is_authorized_request()` (provided by
@@ -28,7 +28,7 @@ class UserModificationController {
 	 * Apply caller-supplied meta to a user, allowlisting the keys so
 	 * `wp_capabilities` / `wp_user_level` / `session_tokens` etc.
 	 * can't be written via `sanitize_key()` (which permits them).
-	 * Extend the allowlist via the `wptw_user_modification_allowed_meta_keys`
+	 * Extend the allowlist via the `tailwatch_user_modification_allowed_meta_keys`
 	 * filter.
 	 *
 	 * @return string[] Keys actually applied.
@@ -39,7 +39,7 @@ class UserModificationController {
 		}
 
 		$allowed_keys = apply_filters(
-			'wptw_user_modification_allowed_meta_keys',
+			'tailwatch_user_modification_allowed_meta_keys',
 			array(
 				'first_name',
 				'last_name',
@@ -73,7 +73,7 @@ class UserModificationController {
 	 * @param string $post_data JSON string containing user data
 	 * @return array Response with success status and user ID or error
 	 */
-	public function wptw_create_user( $post_data ) {
+	public function tailwatch_create_user( $post_data ) {
 		try {
 			if ( ! $this->is_authorized_request() ) {
 				return $this->unauthorized_response();
@@ -331,7 +331,7 @@ class UserModificationController {
 	 * @param string $post_data JSON string containing user data to update
 	 * @return array Response with success status
 	 */
-	public function wptw_update_user( $post_data ) {
+	public function tailwatch_update_user( $post_data ) {
 		try {
 			if ( ! $this->is_authorized_request() ) {
 				return $this->unauthorized_response();
@@ -571,7 +571,7 @@ class UserModificationController {
 	 * @param string $post_data JSON string containing user_id and new_role
 	 * @return array Response with success status
 	 */
-	public function wptw_change_user_role( $post_data ) {
+	public function tailwatch_change_user_role( $post_data ) {
 		try {
 			if ( ! $this->is_authorized_request() ) {
 				return $this->unauthorized_response();
@@ -675,7 +675,7 @@ class UserModificationController {
 	 * @param string $post_data JSON string containing user_id and status
 	 * @return array Response with success status
 	 */
-	public function wptw_update_user_status( $post_data ) {
+	public function tailwatch_update_user_status( $post_data ) {
 		try {
 			if ( ! $this->is_authorized_request() ) {
 				return $this->unauthorized_response();
@@ -742,9 +742,9 @@ class UserModificationController {
 			}
 
 			if ( ! empty( $status ) ) {
-				update_user_meta( $user_id, '_wptw_user_status', $status );
+				update_user_meta( $user_id, '_tailwatch_user_status', $status );
 			} else {
-				delete_user_meta( $user_id, '_wptw_user_status' );
+				delete_user_meta( $user_id, '_tailwatch_user_status' );
 			}
 
 			Log::info(
@@ -851,7 +851,7 @@ class UserModificationController {
 		//   2. The target is a REAL admin (not a passwordless temp user)
 		//   3. There would be no other real admin left after the demotion
 		if ( in_array( 'administrator', $current_roles, true ) && 'administrator' !== $new_role ) {
-			$target_status        = get_user_meta( $user->ID, '_wptw_user_status', true );
+			$target_status        = get_user_meta( $user->ID, '_tailwatch_user_status', true );
 			$target_is_real_admin = ( 'without_password' !== $target_status );
 
 			if ( $target_is_real_admin ) {
@@ -863,11 +863,11 @@ class UserModificationController {
 							'meta_query' => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Admin-only listing endpoint; bounded result set.
 								'relation' => 'OR',
 								array(
-									'key'     => '_wptw_user_status',
+									'key'     => '_tailwatch_user_status',
 									'compare' => 'NOT EXISTS',
 								),
 								array(
-									'key'     => '_wptw_user_status',
+									'key'     => '_tailwatch_user_status',
 									'value'   => 'without_password',
 									'compare' => '!=',
 								),

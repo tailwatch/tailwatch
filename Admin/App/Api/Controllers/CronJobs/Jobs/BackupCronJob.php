@@ -4,7 +4,7 @@
  * Backup Cron Job
  *
  * Handles scheduled recurring backups using the same Jobs pattern as other features.
- * When the schedule fires, it triggers one backup cycle (wptw_backup_daily_scan);
+ * When the schedule fires, it triggers one backup cycle (tailwatch_backup_daily_scan);
  * the backup controller then chains further single events until the run completes.
  *
  * @package    Tailwatch
@@ -46,8 +46,8 @@ class BackupCronJob extends AbstractCronJob {
 	 *
 	 */
 	public function __construct() {
-		$this->cron_hook_name   = 'wptw_backup_schedule_run';
-		$this->schedule_name    = 'wptw_backup_schedule';
+		$this->cron_hook_name   = 'tailwatch_backup_schedule_run';
+		$this->schedule_name    = 'tailwatch_backup_schedule';
 		$this->default_interval = 'Every 3 Days';
 
 		parent::__construct();
@@ -110,7 +110,7 @@ class BackupCronJob extends AbstractCronJob {
 	/**
 	 * Execute the backup cron job.
 	 *
-	 * Triggers the main backup hook so BackupController::wptw_run_backup_cron runs.
+	 * Triggers the main backup hook so BackupController::tailwatch_run_backup_cron runs.
 	 * That method handles the full backup cycle (and chains single events internally).
 	 *
 	 * @return void
@@ -141,12 +141,12 @@ class BackupCronJob extends AbstractCronJob {
 		 * Fires before backup cron executes.
 		 *
 		 */
-		do_action( 'wptw_before_backup_cron_execute' );
+		do_action( 'tailwatch_before_backup_cron_execute' );
 
-		// Start a fresh backup cycle. We must NOT call wptw_run_backup_cron() here:
+		// Start a fresh backup cycle. We must NOT call tailwatch_run_backup_cron() here:
 		// that method is the worker that resumes an in-flight scan record, and it
 		// silently returns when no record exists (which is the case for every fresh
-		// scheduled run). wptw_start_backup_creation() is the bootstrap entry point
+		// scheduled run). tailwatch_start_backup_creation() is the bootstrap entry point
 		// that unschedules the recurring job for the duration of the run, seeds a
 		// new scan_backp record, and kicks off the backup chain.
 		//
@@ -156,14 +156,14 @@ class BackupCronJob extends AbstractCronJob {
 		// for instant backups only). The helper runs the same gate chain
 		// as the user-initiated path so both honour the same configuration.
 		$backup_controller = new BackupController();
-		$backup_data       = $this->get_backup_maintain_controller()->wptw_get_backup_settings();
+		$backup_data       = $this->get_backup_maintain_controller()->tailwatch_get_backup_settings();
 		$database_optimize = $backup_controller->should_optimize_database_for_backup( $backup_data );
-		$backup_controller->wptw_start_backup_creation( $database_optimize, false, 'automatically' );
+		$backup_controller->tailwatch_start_backup_creation( $database_optimize, false, 'automatically' );
 
 		/**
 		 * Fires after backup cron was triggered.
 		 *
 		 */
-		do_action( 'wptw_after_backup_cron_execute' );
+		do_action( 'tailwatch_after_backup_cron_execute' );
 	}
 }

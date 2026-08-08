@@ -4,7 +4,7 @@ import LoaderSkeleton from "../../../Components/Skeleton/LoaderSkeleton.jsx";
 import BackupContent from "./BackupContent/BackupContent.jsx";
 import { deleteBackupFolder, fetchBackupFiles } from '../../Backup/BackupServices/BackupServices.jsx';
 import Pagination from "../../../Components/Pagination/Pagination.jsx";
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 const BackupFiles = ({ setErrorMessages,backupStatus}) => {    
   const [activeTab, setActiveTab] = useState("Files");

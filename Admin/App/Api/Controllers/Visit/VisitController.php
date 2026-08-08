@@ -16,15 +16,15 @@ class VisitController {
 	 */
 	public function __construct() {
 		$hook_controller = new HookControllers();
-		$hook_controller->add_action_hook( 'admin_init', array( $this, 'wptw_check_activation_redirect' ) );
+		$hook_controller->add_action_hook( 'admin_init', array( $this, 'tailwatch_check_activation_redirect' ) );
 	}
 
 	/**
 	 * Check and handle activation redirect
 	 */
-	public function wptw_check_activation_redirect() {
-		if ( get_option( 'wptw_plugin_activation_redirect', false ) ) {
-			delete_option( 'wptw_plugin_activation_redirect' );
+	public function tailwatch_check_activation_redirect() {
+		if ( get_option( 'tailwatch_plugin_activation_redirect', false ) ) {
+			delete_option( 'tailwatch_plugin_activation_redirect' );
 			wp_safe_redirect( admin_url( 'admin.php?page=tailwatch' ) );
 			exit;
 		}
@@ -33,7 +33,7 @@ class VisitController {
 	/**
 	 * Insert initial visit data structure
 	 */
-	public function wptw_insert_visit_data() {
+	public function tailwatch_insert_visit_data() {
 		$data = array(
 			'check_php_version'    => array(
 				'required'       => true,
@@ -45,7 +45,7 @@ class VisitController {
 				'is_completed'   => false,
 				'failed_attempt' => 0,
 			),
-			'wptw_table'           => array(
+			'tailwatch_table'           => array(
 				'required'       => true,
 				'is_completed'   => false,
 				'failed_attempt' => 0,
@@ -73,8 +73,8 @@ class VisitController {
 			),
 		);
 
-		if ( false === get_option( WPTW_VISIT_DATA ) ) {
-			add_option( WPTW_VISIT_DATA, wp_json_encode( $data ), '', false );
+		if ( false === get_option( TAILWATCH_VISIT_DATA ) ) {
+			add_option( TAILWATCH_VISIT_DATA, wp_json_encode( $data ), '', false );
 		}
 	}
 
@@ -83,11 +83,11 @@ class VisitController {
 	 *
 	 * @return array Visit progress status with current step information.
 	 */
-	public function wptw_verify_visit_progress() {
+	public function tailwatch_verify_visit_progress() {
 		try {
-			$this->wptw_insert_visit_data();
+			$this->tailwatch_insert_visit_data();
 
-			$get_data = json_decode( get_option( WPTW_VISIT_DATA ), true );
+			$get_data = json_decode( get_option( TAILWATCH_VISIT_DATA ), true );
 
 			// Ensure all required fields exist with defaults.
 			$defaults = array(
@@ -101,7 +101,7 @@ class VisitController {
 					'is_completed'   => false,
 					'failed_attempt' => 0,
 				),
-				'wptw_table'           => array(
+				'tailwatch_table'           => array(
 					'required'       => true,
 					'is_completed'   => false,
 					'failed_attempt' => 0,
@@ -134,7 +134,7 @@ class VisitController {
 			$visit_data = array(
 				'check_php_version'    => $get_data['check_php_version']['is_completed'],
 				'check_wp_version'     => $get_data['check_wp_version']['is_completed'],
-				'wptw_table'           => $get_data['wptw_table']['is_completed'],
+				'tailwatch_table'           => $get_data['tailwatch_table']['is_completed'],
 				'check_cron_status'    => $get_data['check_cron_status']['is_completed'],
 				'db_initialize'        => $get_data['db_initialize']['is_completed'],
 				'recommended_features' => $get_data['recommended_features']['is_completed'],
@@ -144,7 +144,7 @@ class VisitController {
 			$steps = array(
 				'check_php_version'    => __( 'Version check is pending.', 'tailwatch' ),
 				'check_wp_version'     => __( 'Version check is pending.', 'tailwatch' ),
-				'wptw_table'           => __( 'Table creation check is pending.', 'tailwatch' ),
+				'tailwatch_table'           => __( 'Table creation check is pending.', 'tailwatch' ),
 				'check_cron_status'    => __( 'Verify WP Cron check is pending.', 'tailwatch' ),
 				'db_initialize'        => __( 'Database initialization check is pending.', 'tailwatch' ),
 				'recommended_features' => __( 'Recommended Features check is pending.', 'tailwatch' ),
@@ -239,22 +239,22 @@ class VisitController {
 	 * @param bool $update_data Whether to update visit data.
 	 * @return array Compatibility check result.
 	 */
-	public static function wptw_check_php_version( $update_data = true ) {
-		$get_data = json_decode( get_option( WPTW_VISIT_DATA ), true );
+	public static function tailwatch_check_php_version( $update_data = true ) {
+		$get_data = json_decode( get_option( TAILWATCH_VISIT_DATA ), true );
 
 		$result_is = false === $update_data && isset( $get_data['check_php_version']['is_completed'] ) && false === $get_data['check_php_version']['is_completed'];
 
-		if ( version_compare( PHP_VERSION, WPTW_PHP_VERSION, '<' ) || $result_is ) {
+		if ( version_compare( PHP_VERSION, TAILWATCH_PHP_VERSION, '<' ) || $result_is ) {
 			if ( is_array( $get_data ) ) {
 				if ( true === $get_data['check_php_version']['is_completed'] ) {
 					$get_data['check_php_version']['is_completed']    = false;
 					$get_data['check_php_version']['failed_attempt'] += 1;
-					update_option( WPTW_VISIT_DATA, wp_json_encode( $get_data ) );
+					update_option( TAILWATCH_VISIT_DATA, wp_json_encode( $get_data ) );
 				}
 			}
 
 			return array(
-				'required_php_version' => WPTW_PHP_VERSION,
+				'required_php_version' => TAILWATCH_PHP_VERSION,
 				'current_php_version'  => PHP_VERSION,
 				'message'              => sprintf(
 					/* translators: 1: Required PHP version, 2: Current PHP version */
@@ -262,7 +262,7 @@ class VisitController {
 						'<h3><u>WP Tail Watch:</u></h3>This plugin cannot run because it requires <strong>PHP %1$s</strong> or <strong>Higher</strong>. Your current <strong>PHP Version</strong> is <strong>%2$s</strong>.<br/><br/>Please contact your hosting provider to upgrade your PHP version for assistance.',
 						'tailwatch'
 					),
-					esc_html( WPTW_PHP_VERSION ),
+					esc_html( TAILWATCH_PHP_VERSION ),
 					esc_html( PHP_VERSION )
 				),
 				'code'                 => 400,
@@ -270,11 +270,11 @@ class VisitController {
 		} else {
 			if ( is_array( $get_data ) ) {
 				$get_data['check_php_version']['is_completed'] = true;
-				update_option( WPTW_VISIT_DATA, wp_json_encode( $get_data ) );
+				update_option( TAILWATCH_VISIT_DATA, wp_json_encode( $get_data ) );
 			}
 
 			return array(
-				'required_php_version' => WPTW_PHP_VERSION,
+				'required_php_version' => TAILWATCH_PHP_VERSION,
 				'current_php_version'  => PHP_VERSION,
 				'message'              => __( 'Version Successfully Compatible.', 'tailwatch' ),
 				'code'                 => 200,
@@ -288,23 +288,23 @@ class VisitController {
 	 * @param bool $update_data Whether to update visit data.
 	 * @return array Compatibility check result.
 	 */
-	public function wptw_check_wordpress_version( $update_data = true ) {
+	public function tailwatch_check_wordpress_version( $update_data = true ) {
 		$current_wp_version = get_bloginfo( 'version' );
-		$get_data           = json_decode( get_option( WPTW_VISIT_DATA ), true );
+		$get_data           = json_decode( get_option( TAILWATCH_VISIT_DATA ), true );
 
 		$result_is = false === $update_data && isset( $get_data['check_wp_version']['is_completed'] ) && false === $get_data['check_wp_version']['is_completed'];
 
-		if ( version_compare( $current_wp_version, WPTW_WP_VERSION, '<' ) || $result_is ) {
+		if ( version_compare( $current_wp_version, TAILWATCH_WP_VERSION, '<' ) || $result_is ) {
 			if ( is_array( $get_data ) ) {
 				if ( true === $get_data['check_wp_version']['is_completed'] ) {
 					$get_data['check_wp_version']['is_completed']    = false;
 					$get_data['check_wp_version']['failed_attempt'] += 1;
-					update_option( WPTW_VISIT_DATA, wp_json_encode( $get_data ) );
+					update_option( TAILWATCH_VISIT_DATA, wp_json_encode( $get_data ) );
 				}
 			}
 
 			return array(
-				'required_wp_version' => WPTW_WP_VERSION,
+				'required_wp_version' => TAILWATCH_WP_VERSION,
 				'current_wp_version'  => $current_wp_version,
 				'message'             => sprintf(
 					/* translators: 1: Required WordPress version, 2: Current WordPress version */
@@ -312,7 +312,7 @@ class VisitController {
 						'<h3><u>WP Tail Watch:</u></h3>This plugin cannot run because it requires <strong>WordPress %1$s</strong> or <strong>Higher</strong>. Your current <strong>WordPress Version</strong> is <strong>%2$s</strong>.<br/><br/>Please contact your developer or hosting provider to upgrade your WordPress version.',
 						'tailwatch'
 					),
-					esc_html( WPTW_WP_VERSION ),
+					esc_html( TAILWATCH_WP_VERSION ),
 					esc_html( $current_wp_version )
 				),
 				'code'                => 400,
@@ -320,11 +320,11 @@ class VisitController {
 		} else {
 			if ( is_array( $get_data ) ) {
 				$get_data['check_wp_version']['is_completed'] = true;
-				update_option( WPTW_VISIT_DATA, wp_json_encode( $get_data ) );
+				update_option( TAILWATCH_VISIT_DATA, wp_json_encode( $get_data ) );
 			}
 
 			return array(
-				'required_wp_version' => WPTW_WP_VERSION,
+				'required_wp_version' => TAILWATCH_WP_VERSION,
 				'current_wp_version'  => $current_wp_version,
 				'message'             => __( 'Version is Compatible.', 'tailwatch' ),
 				'code'                => 200,
@@ -338,19 +338,19 @@ class VisitController {
 	 * @param bool $update_data Whether to update visit data.
 	 * @return array Table existence check result.
 	 */
-	public function check_wptw_table( $update_data = true ) {
+	public function check_tailwatch_table( $update_data = true ) {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 
 		// Cached fast path ($update_data = false): if a prior run already confirmed
 		// the table exists, trust the cached state instead of re-running SHOW TABLES.
 		// The AJAX entry point uses the default $update_data = true and re-verifies
 		// on demand, so an externally dropped table is still caught.
-		$get_data = json_decode( get_option( WPTW_VISIT_DATA ), true );
+		$get_data = json_decode( get_option( TAILWATCH_VISIT_DATA ), true );
 
-		if ( false === $update_data && is_array( $get_data ) && ! empty( $get_data['wptw_table']['is_completed'] ) ) {
+		if ( false === $update_data && is_array( $get_data ) && ! empty( $get_data['tailwatch_table']['is_completed'] ) ) {
 			return array(
-				'wptw_table'   => $table_name,
+				'tailwatch_table'   => $table_name,
 				'table_exists' => true,
 				'message'      => __( 'Required plugin tables are created.', 'tailwatch' ),
 				'code'         => 200,
@@ -360,19 +360,19 @@ class VisitController {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- SHOW TABLES requires direct query. Table existence check during plugin setup.
 		$table_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) );
 
-		$result_is = false === $update_data && isset( $get_data['wptw_table']['is_completed'] ) && false === $get_data['wptw_table']['is_completed'];
+		$result_is = false === $update_data && isset( $get_data['tailwatch_table']['is_completed'] ) && false === $get_data['tailwatch_table']['is_completed'];
 
 		if ( $table_exists !== $table_name || $result_is ) {
 			if ( is_array( $get_data ) ) {
-				if ( true === $get_data['wptw_table']['is_completed'] ) {
-					$get_data['wptw_table']['is_completed']    = false;
-					$get_data['wptw_table']['failed_attempt'] += 1;
-					update_option( WPTW_VISIT_DATA, wp_json_encode( $get_data ) );
+				if ( true === $get_data['tailwatch_table']['is_completed'] ) {
+					$get_data['tailwatch_table']['is_completed']    = false;
+					$get_data['tailwatch_table']['failed_attempt'] += 1;
+					update_option( TAILWATCH_VISIT_DATA, wp_json_encode( $get_data ) );
 				}
 			}
 
 			return array(
-				'wptw_table'   => $table_name,
+				'tailwatch_table'   => $table_name,
 				'table_exists' => false,
 				'message'      => __(
 					'<h3><u>WP Tail Watch:</u></h3>This plugin requires the necessary database table for <strong>"WP Tail Watch"</strong> to exist. Please ensure that the required table has been created successfully.<br/><br/>If you believe this is a bug or the table is missing, please contact support for assistance.',
@@ -382,12 +382,12 @@ class VisitController {
 			);
 		} else {
 			if ( is_array( $get_data ) ) {
-				$get_data['wptw_table']['is_completed'] = true;
-				update_option( WPTW_VISIT_DATA, wp_json_encode( $get_data ) );
+				$get_data['tailwatch_table']['is_completed'] = true;
+				update_option( TAILWATCH_VISIT_DATA, wp_json_encode( $get_data ) );
 			}
 
 			return array(
-				'wptw_table'   => $table_name,
+				'tailwatch_table'   => $table_name,
 				'table_exists' => true,
 				'message'      => __( 'Required plugin tables are created.', 'tailwatch' ),
 				'code'         => 200,
@@ -401,8 +401,8 @@ class VisitController {
 	 * @param bool $update_data Whether to update visit data.
 	 * @return array Cron status check result.
 	 */
-	public function wptw_check_cron_status( $update_data = true ) {
-		$get_data = json_decode( get_option( WPTW_VISIT_DATA ), true );
+	public function tailwatch_check_cron_status( $update_data = true ) {
+		$get_data = json_decode( get_option( TAILWATCH_VISIT_DATA ), true );
 
 		// Passive re-check (the admin-notice check that runs on every admin page)
 		// must not fire a loopback request each load - reuse the stored result.
@@ -426,7 +426,7 @@ class VisitController {
 			if ( is_array( $get_data ) ) {
 				$get_data['check_cron_status']['is_completed'] = true;
 				unset( $get_data['check_cron_status']['failed_message'] );
-				update_option( WPTW_VISIT_DATA, wp_json_encode( $get_data ) );
+				update_option( TAILWATCH_VISIT_DATA, wp_json_encode( $get_data ) );
 			}
 
 			return array(
@@ -446,7 +446,7 @@ class VisitController {
 			$get_data['check_cron_status']['is_completed']   = false;
 			$get_data['check_cron_status']['failed_attempt'] = ( isset( $get_data['check_cron_status']['failed_attempt'] ) ? (int) $get_data['check_cron_status']['failed_attempt'] : 0 ) + 1;
 			$get_data['check_cron_status']['failed_message'] = $message;
-			update_option( WPTW_VISIT_DATA, wp_json_encode( $get_data ) );
+			update_option( TAILWATCH_VISIT_DATA, wp_json_encode( $get_data ) );
 		}
 
 		return array(
@@ -461,14 +461,14 @@ class VisitController {
 	 *
 	 * @return array Initialization status.
 	 */
-	public function wptw_verify_initialize_completed() {
-		$get_data = json_decode( get_option( WPTW_VISIT_DATA ), true );
+	public function tailwatch_verify_initialize_completed() {
+		$get_data = json_decode( get_option( TAILWATCH_VISIT_DATA ), true );
 
 		$cron_running         = $get_data['db_initialize']['cron_running'] ?? false;
 		$initialize_completed = ! empty( $get_data['db_initialize']['is_completed'] );
 
 		if ( false === $cron_running ) {
-			wp_schedule_single_event( time() + 5, 'wptw_inserting_rows_into_database' );
+			wp_schedule_single_event( time() + 5, 'tailwatch_inserting_rows_into_database' );
 
 			return array(
 				'code'                 => 200,
@@ -484,11 +484,11 @@ class VisitController {
 		// the polled status arrives and initialization isn't complete yet, make
 		// sure the worker is queued so progress can resume — otherwise the
 		// dashboard would show a frozen progress bar forever.
-		if ( ! $initialize_completed && ! wp_next_scheduled( 'wptw_inserting_rows_into_database' ) ) {
-			wp_schedule_single_event( time() + 5, 'wptw_inserting_rows_into_database' );
+		if ( ! $initialize_completed && ! wp_next_scheduled( 'tailwatch_inserting_rows_into_database' ) ) {
+			wp_schedule_single_event( time() + 5, 'tailwatch_inserting_rows_into_database' );
 		}
 
-		return $this->wptw_get_db_initialize_progress();
+		return $this->tailwatch_get_db_initialize_progress();
 	}
 
 	/**
@@ -496,10 +496,10 @@ class VisitController {
 	 *
 	 * @return array Progress information.
 	 */
-	public function wptw_get_db_initialize_progress() {
+	public function tailwatch_get_db_initialize_progress() {
 		$option_model = new OptionsModel();
-		$get_data     = $option_model->wptw_get_initialization_data();
-		$visit_data   = json_decode( get_option( WPTW_VISIT_DATA ), true );
+		$get_data     = $option_model->tailwatch_get_initialization_data();
+		$visit_data   = json_decode( get_option( TAILWATCH_VISIT_DATA ), true );
 
 		if ( ! empty( $get_data ) && ! empty( $get_data['progress_percentage'] ) ) {
 			return array(

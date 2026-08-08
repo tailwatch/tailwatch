@@ -15,15 +15,15 @@ class RedirectionRules {
 	 */
 	public function __construct() {
 		$hook_controller = new HookControllers();
-		$hook_controller->add_action_hook( 'init', array( $this, 'wptw_check_redirection_feature_status' ) );
+		$hook_controller->add_action_hook( 'init', array( $this, 'tailwatch_check_redirection_feature_status' ) );
 	}
 
 	/**
 	 * Checks if redirections are enabled and registers template_redirect and related hooks.
 	 */
-	public function wptw_check_redirection_feature_status() {
+	public function tailwatch_check_redirection_feature_status() {
 		$redirection_controller = new RedirectionsManager();
-		$is_enabled             = $redirection_controller->wptw_redirection_feature_enable();
+		$is_enabled             = $redirection_controller->tailwatch_redirection_feature_enable();
 
 		if ( $is_enabled['feature_enable'] ) {
 			$hook_controller = new HookControllers();

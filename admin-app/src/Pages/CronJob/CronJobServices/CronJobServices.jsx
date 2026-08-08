@@ -1,18 +1,18 @@
 import axios from "axios";
 import { toast } from 'react-toastify';
 import { alertService } from "../../../Components/AlertService/AlertService";
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 export const getCronJobLists = async ({ setCronJobData, setLoading, page = 1, limit = 10, setPagination, setParentEnable, setFeatureEnable }) => {
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_get_cron_jobs_with_source');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_get_cron_jobs_with_source');
         formData.append('data', JSON.stringify({ page, limit }));
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
 
@@ -42,12 +42,12 @@ export const getSheduleCron = async ({ setScheduleCronData, setLoading, page = 1
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_get_schedules');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_get_schedules');
         formData.append('data', JSON.stringify({ page, limit }));
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (response.data.data.code === 200) {
@@ -76,13 +76,13 @@ export const getSheduleCron = async ({ setScheduleCronData, setLoading, page = 1
 export const bulkActions = async ({ type, hashes, bulk_action }) => {
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_bulk_cron_action');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_bulk_cron_action');
         const payload = { hashes: hashes, bulk_action: bulk_action };
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
 
@@ -100,13 +100,13 @@ export const bulkActions = async ({ type, hashes, bulk_action }) => {
 export const pauseCronJob = async ({ hash, fetchCronJobs }) => {
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_pause_cron_job');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_pause_cron_job');
         const payload = { hash: hash };
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
 
@@ -128,13 +128,13 @@ export const deleteCronJob = async ({ hash, fetchCronJobs }) => {
     }
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_delete_cron_job');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_delete_cron_job');
         const payload = { hash: hash };
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
 
@@ -157,13 +157,13 @@ export const deleteCronSchedule = async ({ slug, fetchScheduleJobs,setDeleting }
     try {
         setDeleting(true);
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_delete_schedule');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_delete_schedule');
         const payload = { slug: slug };
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
 
@@ -183,13 +183,13 @@ export const deleteCronSchedule = async ({ slug, fetchScheduleJobs,setDeleting }
 export const runCronJob = async ({ hash, fetchCronJobs }) => {
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_run_cron_job');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_run_cron_job');
         const payload = { hash: hash };
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
 
@@ -207,13 +207,13 @@ export const runCronJob = async ({ hash, fetchCronJobs }) => {
 export const resumeCronJob = async ({ hash, fetchCronJobs }) => {
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_resume_cron_job');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_resume_cron_job');
         const payload = { hash: hash };
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
 
@@ -231,12 +231,12 @@ export const resumeCronJob = async ({ hash, fetchCronJobs }) => {
 export const editCronJob = async ({ payload, fetchCronJobs }) => {
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_edit_cron_job');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_edit_cron_job');
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         
@@ -255,12 +255,12 @@ export const editCronJob = async ({ payload, fetchCronJobs }) => {
 export const createCronJob = async ({ payload, fetchCronJobs }) => {
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_add_cron_job');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_add_cron_job');
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
 
@@ -278,12 +278,12 @@ export const createCronJob = async ({ payload, fetchCronJobs }) => {
 export const createCronSchedules = async ({ payload, fetchCronJobs,onClose }) => {
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_add_schedule');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_add_schedule');
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
 
@@ -302,12 +302,12 @@ export const createCronSchedules = async ({ payload, fetchCronJobs,onClose }) =>
 export const editCronShedule = async ({ payload, fetchCronJobs,onClose }) => {
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_edit_schedule');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_edit_schedule');
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });        
         if (response.data.data.code === 200) {
@@ -326,12 +326,12 @@ export const fetchLogsCron = async ({ setLoading, setLogsData, page = 1, limit =
   setLoading(true);
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_logs_feature');
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_logs_feature');
     formData.append('data', JSON.stringify({ key: "default_cron_jobs", option: "cron_jobs_activity",page,limit }));
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
     if (response.data.success) {
@@ -366,12 +366,12 @@ export const handleDeleteCronLogs = async (deleteData, setIsDeleting, fetchLogsD
   setIsDeleting(true);
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_delete_logs");
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_delete_logs");
     formData.append("data", JSON.stringify({ ids, key: "default_cron_jobs", option: "cron_jobs_activity", is_delete }));
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },

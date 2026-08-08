@@ -2,17 +2,17 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import { CronHealer } from '../../../Components/CroneHealer/CronHealer';
 import { alertService } from "../../../Components/AlertService/AlertService";
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 export const instantScanning = async ({ setScanCompleted, setErrorMessages, fetchLogs }) => {
     try {
         const formData = new FormData();
-        formData.append("action", "wptw_global_ajax_handler");
-        formData.append("action_type", "wptw_start_broken_link_checker");
-        formData.append("nonce", wptw_ajax.nonce);
+        formData.append("action", "tailwatch_global_ajax_handler");
+        formData.append("action_type", "tailwatch_start_broken_link_checker");
+        formData.append("nonce", tailwatch_ajax.nonce);
         formData.append("data", JSON.stringify({ instant_scan: true }));
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
 
@@ -54,11 +54,11 @@ const executeCronIfFailed = async () => {
     try {
         isCronExecuting = true;
         const formData = new FormData();
-        formData.append("action", "wptw_global_ajax_handler");
-        formData.append("action_type", "wptw_broken_links_cron_if_failed");
-        formData.append("nonce", wptw_ajax.nonce);
+        formData.append("action", "tailwatch_global_ajax_handler");
+        formData.append("action_type", "tailwatch_broken_links_cron_if_failed");
+        formData.append("nonce", tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
 
@@ -100,14 +100,14 @@ export const fetchLogs = async (setLogs, setIsCompleted, isFirstExecution = true
 
     try {
         const formData = new FormData();
-        formData.append("action", "wptw_global_ajax_handler");
-        formData.append("action_type", "wptw_broken_link_checker_live_logs");
-        formData.append("nonce", wptw_ajax.nonce);
+        formData.append("action", "tailwatch_global_ajax_handler");
+        formData.append("action_type", "tailwatch_broken_link_checker_live_logs");
+        formData.append("nonce", tailwatch_ajax.nonce);
 
         const lastLogIndex = isFirstExecution ? 0 : isLastLogIndex;
         formData.append("data", JSON.stringify({ last_log_index: lastLogIndex }));
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
 
@@ -185,12 +185,12 @@ export const fetchLogs = async (setLogs, setIsCompleted, isFirstExecution = true
 export const handleBrokenLinkActions = async ({ scan_state, setIsScanInProgress, setIsPaused, setIsCompleted, setLogs, setIsLogsVisible, setErrorMessages }) => {
     try {
         const formData = new FormData();
-        formData.append("action", "wptw_global_ajax_handler");
-        formData.append("action_type", "wptw_cancel_pause_broken_link");
+        formData.append("action", "tailwatch_global_ajax_handler");
+        formData.append("action_type", "tailwatch_cancel_pause_broken_link");
         formData.append("data", JSON.stringify({ scan_state }));
-        formData.append("nonce", wptw_ajax.nonce);
+        formData.append("nonce", tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
 
@@ -217,11 +217,11 @@ export const verifyBrokenLinkStatus = async (setLoading, setVerifyStatus, setPro
         setLoading(true);
 
         const formData = new FormData();
-        formData.append("action", "wptw_global_ajax_handler");
-        formData.append("action_type", "wptw_verify_broken_link_status");
-        formData.append("nonce", wptw_ajax.nonce);
+        formData.append("action", "tailwatch_global_ajax_handler");
+        formData.append("action_type", "tailwatch_verify_broken_link_status");
+        formData.append("nonce", tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
         if (response.data.success === true) {
@@ -256,12 +256,12 @@ export const getBrokenLinkLogs = async ({ setLinkLogs, setLoading, page = 1, lim
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_get_broken_links_logs');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_get_broken_links_logs');
         formData.append('data', JSON.stringify({ page: page, limit: limit }));
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
 
@@ -296,12 +296,12 @@ export const handleDeleteLogs = async (deleteData, setIsDeleting, fetchBrokenLin
     setIsDeleting(true);
     try {
         const formData = new FormData();
-        formData.append("action", "wptw_global_ajax_handler");
-        formData.append("action_type", "wptw_delete_entries_and_logs");
+        formData.append("action", "tailwatch_global_ajax_handler");
+        formData.append("action_type", "tailwatch_delete_entries_and_logs");
         formData.append("data", JSON.stringify({ ids, key: "default_broken_link_logs", is_delete }));
-        formData.append("nonce", wptw_ajax.nonce);
+        formData.append("nonce", tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: {
                 "Content-Type": "multipart/form-data",
             },

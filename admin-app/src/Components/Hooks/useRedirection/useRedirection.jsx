@@ -145,13 +145,13 @@ export const useRedirection = (setIsUpdating) => {
                 const parsedValue = JSON.parse(editingRule.value);
 
                 // Extract path from source_url
-                /* global wptw_ajax */
+                /* global tailwatch_ajax */
                 let pathOnly = parsedValue.source_url;
 
                 // If it's a full URL, extract the path after base_url
-                if (typeof wptw_ajax !== 'undefined' && wptw_ajax.base_url) {
-                    if (pathOnly.startsWith(wptw_ajax.base_url)) {
-                        pathOnly = pathOnly.substring(wptw_ajax.base_url.length);
+                if (typeof tailwatch_ajax !== 'undefined' && tailwatch_ajax.base_url) {
+                    if (pathOnly.startsWith(tailwatch_ajax.base_url)) {
+                        pathOnly = pathOnly.substring(tailwatch_ajax.base_url.length);
                     }
                 }
 
@@ -214,7 +214,7 @@ export const useRedirection = (setIsUpdating) => {
     useEffect(() => {
         if (showModal && sourceUrl && sourceUrl !== prevSourceUrlRef.current && !editingRule && !isInitializedRef.current) {
             try {
-                /* global wptw_ajax */
+                /* global tailwatch_ajax */
                 let urlToSet = '';
 
                 if (sourceUrl.value) {
@@ -229,9 +229,9 @@ export const useRedirection = (setIsUpdating) => {
                 // Extract path from the URL
                 if (urlToSet) {
                     // If it's a full URL, extract the path after base_url
-                    if (typeof wptw_ajax !== 'undefined' && wptw_ajax.base_url) {
-                        if (urlToSet.startsWith(wptw_ajax.base_url)) {
-                            urlToSet = urlToSet.substring(wptw_ajax.base_url.length);
+                    if (typeof tailwatch_ajax !== 'undefined' && tailwatch_ajax.base_url) {
+                        if (urlToSet.startsWith(tailwatch_ajax.base_url)) {
+                            urlToSet = urlToSet.substring(tailwatch_ajax.base_url.length);
                         }
                     }
 

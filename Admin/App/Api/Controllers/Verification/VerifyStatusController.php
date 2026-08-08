@@ -31,7 +31,7 @@ class VerifyStatusController {
 	private $key    = 'plugin_activation';
 	private $option = 'site_settings';
 
-	const VERIFY_CACHE_KEY = 'wptw_license_verification_cache';
+	const VERIFY_CACHE_KEY = 'tailwatch_license_verification_cache';
 	const VERIFY_CACHE_TTL = 15 * MINUTE_IN_SECONDS;
 
 	public function get_plugin_activation_status() {
@@ -61,7 +61,7 @@ class VerifyStatusController {
 		}
 	}
 
-	public function wptw_update_plugin_activation( $post_data ) {
+	public function tailwatch_update_plugin_activation( $post_data ) {
 		try {
 			$existing_data = $this->get_plugin_activation_status();
 
@@ -248,16 +248,16 @@ class VerifyStatusController {
 				'role'                 => $role,
 				'connected_at'         => current_time( 'mysql' ),
 				'connected_from_ip'    => isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : 'unknown',
-				'site_url'             => WPTW_GET_SITE_URL,
-				'plugin_version'       => defined( 'WPTW_VERSION' ) ? WPTW_VERSION : '1.0.0',
+				'site_url'             => TAILWATCH_GET_SITE_URL,
+				'plugin_version'       => defined( 'TAILWATCH_VERSION' ) ? TAILWATCH_VERSION : '1.0.0',
 				'connection_hash'      => hash( 'sha256', $data['userId'] . $data['licenseKey'] . wp_generate_password( 32, true, true ) . time() ),
 				// Issued by the central API at license-issue time. Sent as
-				// X-WPTW-Header-Key on outbound calls to the central API so
+				// X-Tailwatch-Header-Key on outbound calls to the central API so
 				// it can authenticate requests from this plugin instance.
 				// Wiped automatically on disconnect when extended_connected
 				// is removed.
 				'header_key'           => sanitize_text_field( $data['headerKey'] ),
-				// Per-site route tokens (sent as X-WPTW-Route to the relay); wiped on disconnect.
+				// Per-site route tokens (sent as X-Tailwatch-Route to the relay); wiped on disconnect.
 				'route_tokens'         => array(
 					'push_notification' => isset( $data['route_tokens']['push_notification'] ) ? sanitize_text_field( $data['route_tokens']['push_notification'] ) : '',
 					'get_user_external' => isset( $data['route_tokens']['get_user_external'] ) ? sanitize_text_field( $data['route_tokens']['get_user_external'] ) : '',
@@ -281,11 +281,11 @@ class VerifyStatusController {
 			if ( $result ) {
 				// Clear any existing license verification cache
 				delete_transient( self::VERIFY_CACHE_KEY );
-				delete_option( 'wptw_last_license_check' );
+				delete_option( 'tailwatch_last_license_check' );
 
 				// Trigger immediate license verification
 				$verify_controller   = new VerifyStatusController();
-				$verification_result = $verify_controller->wptw_verify_license(true);
+				$verification_result = $verify_controller->tailwatch_verify_license(true);
 
 				$connected = $existing_data['extended_connected'] ?? array();
 				$response = array(
@@ -320,7 +320,7 @@ class VerifyStatusController {
 		}
 	}
 
-	public function wptw_get_plugin_activation() {
+	public function tailwatch_get_plugin_activation() {
 		try {
 			$license_data = $this->get_plugin_activation_status();
 
@@ -466,7 +466,7 @@ class VerifyStatusController {
 
 	/**
 	 * Stored shared secret issued by the central API at license-connect
-	 * time. Sent as the X-WPTW-Header-Key header on every outbound call
+	 * time. Sent as the X-Tailwatch-Header-Key header on every outbound call
 	 * to the central API. Returns '' when no license is connected —
 	 * callers should skip sending the header in that case rather than
 	 * sending an empty value.
@@ -488,8 +488,8 @@ class VerifyStatusController {
 
 	/**
 	 * Route capability token issued by the central API at license-connect time.
-	 * Sent as the X-WPTW-Route header to select the operation on the relay
-	 * endpoint (WPTW_RELAY). Returns '' when no license is connected or the
+	 * Sent as the X-Tailwatch-Route header to select the operation on the relay
+	 * endpoint (TAILWATCH_RELAY). Returns '' when no license is connected or the
 	 * named token is absent — callers should skip the call in that case.
 	 *
 	 * @param string $name Route name, e.g. 'push_notification' or 'get_user_external'.
@@ -582,7 +582,7 @@ class VerifyStatusController {
 		return array( 'valid' => true );
 	}
 
-	public function wptw_update_site_settings( $existing_value ) {
+	public function tailwatch_update_site_settings( $existing_value ) {
 		$db_model = new DBModel();
 
 		$db_data = array(
@@ -597,7 +597,7 @@ class VerifyStatusController {
 		return $db_model->update_rows( $db_data, $where );
 	}
 
-	public function wptw_delete_plugin_activation_data( $post_data ) {
+	public function tailwatch_delete_plugin_activation_data( $post_data ) {
 		$delete_key = null;
 
 		try {
@@ -630,7 +630,7 @@ class VerifyStatusController {
 
 			// Remove stale verification metadata that would otherwise leak
 			// the last-known plan/user info even after the license is gone.
-			delete_option( 'wptw_last_license_check' );
+			delete_option( 'tailwatch_last_license_check' );
 
 			// Invalidate the verify-result transient so the next call hits a
 			// fresh "no license" early-return path instead of returning a
@@ -640,7 +640,7 @@ class VerifyStatusController {
 			// Also clear pro's failure-grace window option. If a reconnect
 			// happens later, the new attempt should start from a clean state
 			// rather than inherit a half-counted grace window from before.
-			delete_option( 'wptw_license_failure_window' );
+			delete_option( 'tailwatch_license_failure_window' );
 
 			$existing_data = $db_model->get_value( $option, $key );
 
@@ -654,7 +654,7 @@ class VerifyStatusController {
 				if ( isset( $existing_value[ $delete_key ] ) ) {
 					unset( $existing_value[ $delete_key ] );
 
-					$result = $this->wptw_update_site_settings( $existing_value );
+					$result = $this->tailwatch_update_site_settings( $existing_value );
 
 					if ( $result ) {
 						// $force = true bypasses the pro-side throttle — disconnect
@@ -662,10 +662,10 @@ class VerifyStatusController {
 						// Guard so the action only fires for the license key, not
 						// for any other unrelated keys this method might delete.
 						if ( 'extended_connected' === $delete_key ) {
-							do_action( 'wptw_license_disconnected', true );
+							do_action( 'tailwatch_license_disconnected', true );
 
 							try {
-								( new SecurityFeaturesVerifyController() )->wptw_start_security_features_process();
+								( new SecurityFeaturesVerifyController() )->tailwatch_start_security_features_process();
 							} catch ( \Throwable $e ) {
 								Log::error(
 									'Failed to re-run security verification after license disconnect: ' . $e->getMessage(),
@@ -794,7 +794,7 @@ class VerifyStatusController {
 	 * @return array
 	 */
 	public function get_cached_license_status() {
-		$pro_active      = (bool) apply_filters( 'wptw_is_premium_plugin_active', false );
+		$pro_active      = (bool) apply_filters( 'tailwatch_is_premium_plugin_active', false );
 		$activation_data = $this->get_plugin_activation_status();
 
 		if ( empty( $activation_data['extended_connected'] ) || empty( $activation_data['extended_connected']['user_id'] ) ) {
@@ -814,7 +814,7 @@ class VerifyStatusController {
 		// returned (e.g. to substitute a "limited" view of its own
 		// derivation). When no listener hooks in, return the raw
 		// cached values unchanged.
-		$override = apply_filters( 'wptw_cached_license_status_override', null, $connected, $pro_active );
+		$override = apply_filters( 'tailwatch_cached_license_status_override', null, $connected, $pro_active );
 		if ( is_array( $override ) ) {
 			return $override;
 		}
@@ -851,7 +851,7 @@ class VerifyStatusController {
 	 *                                     request body from the router.
 	 * @return array
 	 */
-	public function wptw_verify_license( $post_data = false ) {
+	public function tailwatch_verify_license( $post_data = false ) {
 		if ( is_bool( $post_data ) ) {
 			$force_refresh = $post_data;
 		} else {
@@ -893,7 +893,7 @@ class VerifyStatusController {
 		try {
 			// Compute before any early return so pro_plugin_active is
 			// always accurate regardless of license state.
-			$pro_active = apply_filters( 'wptw_is_premium_plugin_active', false );
+			$pro_active = apply_filters( 'tailwatch_is_premium_plugin_active', false );
 
 			$get_extended_data = $this->get_plugin_activation_status();
 
@@ -904,7 +904,7 @@ class VerifyStatusController {
 				// premium feature without knowing the license was gone). $force
 				// is false here so pro's throttle absorbs repeat dashboard hits;
 				// real kill paths pass $force = true.
-				do_action( 'wptw_license_disconnected', false );
+				do_action( 'tailwatch_license_disconnected', false );
 
 				return array(
 					'data'    => array(
@@ -921,12 +921,12 @@ class VerifyStatusController {
 
 			// When pro is active it owns the entire verification via this
 			// filter — independent API call, never trusts stored DB data.
-			$pro_result = apply_filters( 'wptw_perform_license_verification', null, $user_id, $get_extended_data );
+			$pro_result = apply_filters( 'tailwatch_perform_license_verification', null, $user_id, $get_extended_data );
 			if ( null !== $pro_result ) {
 				return $pro_result;
 			}
 
-			return $this->wptw_run_free_verification( $user_id, $get_extended_data );
+			return $this->tailwatch_run_free_verification( $user_id, $get_extended_data );
 		} catch ( \Throwable $e ) {
 			return array(
 				'data'    => array(),
@@ -938,10 +938,10 @@ class VerifyStatusController {
 
 	/**
 	 * Free-side fallback license verify. Pro intercepts the
-	 * wptw_perform_license_verification filter and owns the verify when
+	 * tailwatch_perform_license_verification filter and owns the verify when
 	 * active; this runs only when no pro listener answered.
 	 */
-	private function wptw_run_free_verification( $user_id, $get_extended_data ) {
+	private function tailwatch_run_free_verification( $user_id, $get_extended_data ) {
 		$header_key = $get_extended_data['extended_connected']['header_key'] ?? '';
 		if ( '' === $header_key ) {
 			// header_key is a required field at license-connect time. Missing
@@ -982,15 +982,15 @@ class VerifyStatusController {
 			);
 		}
 
-		$check_connected_url = WPTW_RELAY . '?userId=' . urlencode( $user_id ) . '&website=' . urlencode( WPTW_GET_SITE_URL );
+		$check_connected_url = TAILWATCH_RELAY . '?userId=' . urlencode( $user_id ) . '&website=' . urlencode( TAILWATCH_GET_SITE_URL );
 
 		$response = wp_remote_get(
 			$check_connected_url,
 			array(
 				'headers' => array(
 					'Accept'            => 'application/json',
-					'X-WPTW-Header-Key' => $header_key,
-					'X-WPTW-Route'      => $route_token,
+					'X-Tailwatch-Header-Key' => $header_key,
+					'X-Tailwatch-Route'      => $route_token,
 				),
 				'timeout' => 15,
 			)
@@ -1013,10 +1013,10 @@ class VerifyStatusController {
 		$body      = wp_remote_retrieve_body( $response );
 
 		$plan_json = json_decode( $body, true );
-		return $this->wptw_process_license_activation( $httpCode, $plan_json, $user_id, $get_extended_data );
+		return $this->tailwatch_process_license_activation( $httpCode, $plan_json, $user_id, $get_extended_data );
 	}
 
-	private function wptw_process_license_activation( $httpCode, $plan_json, $user_id, $get_extended_data ) {
+	private function tailwatch_process_license_activation( $httpCode, $plan_json, $user_id, $get_extended_data ) {
 		if ( $httpCode === 200 && is_array( $plan_json ) ) {
 
 			$plan_name = self::normalize_plan_name(
@@ -1025,14 +1025,14 @@ class VerifyStatusController {
 
 			$valid_plans = array( 'Basic', 'Business', 'Agency' );
 			if ( ! in_array( $plan_name, $valid_plans, true ) ) {
-				return $this->wptw_handle_suspended_license( $user_id, $plan_name, 'invalid_plan' );
+				return $this->tailwatch_handle_suspended_license( $user_id, $plan_name, 'invalid_plan' );
 			}
 
 			$notification_credit      = $plan_json['User']['plan']['plan']['plan_features']['notification_credit'] ?? 0;
 			$notification_credit_left = $plan_json['User']['plan']['available_limit']['notification_credit'] ?? 0;
 
 			update_option(
-				'wptw_last_license_check',
+				'tailwatch_last_license_check',
 				array(
 					'timestamp'         => time(),
 					'user_id'           => $user_id,
@@ -1046,7 +1046,7 @@ class VerifyStatusController {
 
 			if ( $get_extended_data['extended_connected']['plan_name'] !== $plan_name ) {
 				$get_extended_data['extended_connected']['plan_name'] = $plan_name;
-				$this->wptw_update_site_settings( $get_extended_data );
+				$this->tailwatch_update_site_settings( $get_extended_data );
 			}
 
 
@@ -1058,21 +1058,21 @@ class VerifyStatusController {
 
 			if ( ( $get_extended_data['extended_connected']['devices'] ?? null ) !== $api_devices ) {
 				$get_extended_data['extended_connected']['devices'] = $api_devices;
-				$this->wptw_update_site_settings( $get_extended_data );
+				$this->tailwatch_update_site_settings( $get_extended_data );
 			}
 
 			$api_start_date = $plan_json['User']['plan']['start_date'] ?? null;
 
 			if ( $api_start_date && $get_extended_data['extended_connected']['start_date'] !== $api_start_date ) {
 				$get_extended_data['extended_connected']['start_date'] = $api_start_date;
-				$this->wptw_update_site_settings( $get_extended_data );
+				$this->tailwatch_update_site_settings( $get_extended_data );
 			}
 
 			$api_end_date = $plan_json['User']['plan']['end_date'] ?? null;
 
 			if ( $api_end_date && $get_extended_data['extended_connected']['end_date'] !== $api_end_date ) {
 				$get_extended_data['extended_connected']['end_date'] = $api_end_date;
-				$this->wptw_update_site_settings( $get_extended_data );
+				$this->tailwatch_update_site_settings( $get_extended_data );
 			}
 
 			// Only persist role when normalize_role returns a canonical value
@@ -1082,19 +1082,19 @@ class VerifyStatusController {
 
 			if ( '' !== $api_role && ( $get_extended_data['extended_connected']['role'] ?? null ) !== $api_role ) {
 				$get_extended_data['extended_connected']['role'] = $api_role;
-				$this->wptw_update_site_settings( $get_extended_data );
+				$this->tailwatch_update_site_settings( $get_extended_data );
 			}
 
 			// Suspended account: keep showing the real plan name with
 			// planStatus='suspended' so UI renders "Agency (suspended)".
-			// Distinct from wptw_handle_suspended_license which downgrades
+			// Distinct from tailwatch_handle_suspended_license which downgrades
 			// planName to 'Basic'.
 			$effective_role = '' !== $api_role
 				? $api_role
 				: ( $get_extended_data['extended_connected']['role'] ?? '' );
 
 			if ( 'suspended' === $effective_role ) {
-				return $this->wptw_handle_role_suspended_license( $user_id, $plan_name, $get_extended_data );
+				return $this->tailwatch_handle_role_suspended_license( $user_id, $plan_name, $get_extended_data );
 			}
 
 			$start_date = $get_extended_data['extended_connected']['start_date'] ?? '';
@@ -1124,7 +1124,7 @@ class VerifyStatusController {
 		}
 
 		if ( in_array( $httpCode, array( 400, 401, 403, 418, 419 ), true ) ) {
-			return $this->wptw_handle_connection_killed();
+			return $this->tailwatch_handle_connection_killed();
 		}
 
 		return array(
@@ -1139,11 +1139,11 @@ class VerifyStatusController {
 		);
 	}
 
-	private function wptw_handle_connection_killed( $pro_active = false ) {
-		// Removing extended_connected fires wptw_license_disconnected(true)
-		// inside wptw_delete_plugin_activation_data, locking premium features
+	private function tailwatch_handle_connection_killed( $pro_active = false ) {
+		// Removing extended_connected fires tailwatch_license_disconnected(true)
+		// inside tailwatch_delete_plugin_activation_data, locking premium features
 		// before we return.
-		$this->wptw_delete_plugin_activation_data( 'extended_connected' );
+		$this->tailwatch_delete_plugin_activation_data( 'extended_connected' );
 
 		return array(
 			'data'    => array(
@@ -1156,7 +1156,7 @@ class VerifyStatusController {
 		);
 	}
 
-	private function wptw_handle_suspended_license( $user_id, $plan_name, $plan_status ) {
+	private function tailwatch_handle_suspended_license( $user_id, $plan_name, $plan_status ) {
 		$suspension_messages = array(
 			'suspended' => 'Your license has been suspended. You still have access to Basic plan features.',
 			'expired'   => 'Your license has expired. You still have access to Basic plan features.',
@@ -1167,7 +1167,7 @@ class VerifyStatusController {
 		$suspension_message = $suspension_messages[ strtolower( $plan_status ) ] ?? 'Your license is not active. Basic plan features are still available.';
 
 		update_option(
-			'wptw_last_license_check',
+			'tailwatch_last_license_check',
 			array(
 				'timestamp'     => time(),
 				'user_id'       => $user_id,
@@ -1203,13 +1203,13 @@ class VerifyStatusController {
 	 * plan name in `planName` (so UI can render "Agency (suspended)") while
 	 * functionally treating the user as Basic via plan_tier=1.
 	 *
-	 * wptw_handle_suspended_license is the sibling for the other suspension
+	 * tailwatch_handle_suspended_license is the sibling for the other suspension
 	 * causes (HTTP 401/403/418/419, invalid plan name); that one downgrades
 	 * `planName` to 'Basic' in display.
 	 */
-	private function wptw_handle_role_suspended_license( $user_id, $plan_name, $get_extended_data ) {
+	private function tailwatch_handle_role_suspended_license( $user_id, $plan_name, $get_extended_data ) {
 		update_option(
-			'wptw_last_license_check',
+			'tailwatch_last_license_check',
 			array(
 				'timestamp'         => time(),
 				'user_id'           => $user_id,

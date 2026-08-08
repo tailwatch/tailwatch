@@ -2,15 +2,15 @@ import React from 'react'
 import axios from "axios";
 import {toast} from 'react-toastify';
 
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 export const fetchNotificationStatus = async ({ onStatusChange }) => {
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_get_push_notification');
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData);
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_get_push_notification');
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData);
         
         if (response.data.data.code === 200) {            
             const notificationData = {
@@ -38,8 +38,8 @@ export const fetchNotificationStatus = async ({ onStatusChange }) => {
 export const handleToggleNotification = async ({ isEnabled, severitySettings, loadNotificationStatus, mobileNotification }) => {
     try {
         const formData = new FormData();
-        formData.append("action", "wptw_global_ajax_handler");
-        formData.append("action_type", "wptw_enable_disable_push_notification");
+        formData.append("action", "tailwatch_global_ajax_handler");
+        formData.append("action_type", "tailwatch_enable_disable_push_notification");
 
         const payload = { 
             push_notification: isEnabled,
@@ -50,9 +50,9 @@ export const handleToggleNotification = async ({ isEnabled, severitySettings, lo
         }
 
         formData.append("data", JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData);
 
         if (response.data.data.code === 200) {
             if (response.data.data.message === "Please connect the license to update push notification.") {
@@ -76,10 +76,10 @@ export const handleToggleNotification = async ({ isEnabled, severitySettings, lo
 export const processMoniteringStatus = async () => {
     try {
         const formData = new FormData();
-        formData.append("action", "wptw_global_ajax_handler");
-        formData.append("action_type", "wptw_get_process_monitoring_status");
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData);
+        formData.append("action", "tailwatch_global_ajax_handler");
+        formData.append("action_type", "tailwatch_get_process_monitoring_status");
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData);
         const payload = response?.data?.data;
         if (payload?.code === 200) {
             return payload;

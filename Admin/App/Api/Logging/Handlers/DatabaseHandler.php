@@ -260,17 +260,17 @@ class DatabaseHandler implements LogHandlerInterface {
 
 		try {
 			// Validate constant exists.
-			if ( ! defined( 'WPTW_DB_LOGS_TABLE_NAME' ) ) {
+			if ( ! defined( 'TAILWATCH_DB_LOGS_TABLE_NAME' ) ) {
 				// Only log if WP_DEBUG_LOG is enabled (WordPress recommendation).
 				if ( $this->is_wp_error_log_enabled() ) {
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Critical fallback logging when database handler fails
-					error_log( 'DatabaseHandler: WPTW_DB_LOGS_TABLE_NAME constant not defined' );
+					error_log( 'DatabaseHandler: TAILWATCH_DB_LOGS_TABLE_NAME constant not defined' );
 				}
 				return;
 			}
 
 			global $wpdb;
-			$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+			$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 
 			// Bulk insert: build a row-placeholder fragment per batch entry
 			// (each is a code-literal '(%d, %d, %s, ...)' string) and bind every
@@ -315,7 +315,7 @@ class DatabaseHandler implements LogHandlerInterface {
 				// Try individual inserts as fallback.
 				$db_data_format = array( '%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d' );
 				foreach ( $this->batch as $data ) {
-					$this->db_model->insert_row( $data, $db_data_format, WPTW_DB_LOGS_TABLE_NAME );
+					$this->db_model->insert_row( $data, $db_data_format, TAILWATCH_DB_LOGS_TABLE_NAME );
 				}
 			}
 		} catch ( \Exception $e ) {

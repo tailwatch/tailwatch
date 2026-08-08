@@ -26,7 +26,7 @@ class ThrottlingService {
 	}
 
 	public function is_throttled( $ip ) {
-		$cache_key     = 'login_defender_throttle_' . md5( $ip );
+		$cache_key     = 'tailwatch_login_defender_throttle_' . md5( $ip );
 		$throttle_data = get_transient( $cache_key );
 		if ( $throttle_data === false || ! is_array( $throttle_data ) || ! isset( $throttle_data['expires'] ) ) {
 			return false;
@@ -42,7 +42,7 @@ class ThrottlingService {
 	}
 
 	public function increment_throttle( $ip ) {
-		$cache_key         = 'login_defender_throttle_' . md5( $ip );
+		$cache_key         = 'tailwatch_login_defender_throttle_' . md5( $ip );
 		$throttle_data     = get_transient( $cache_key );
 		$current_timestamp = strtotime( current_time( 'mysql' ) );
 
@@ -73,7 +73,7 @@ class ThrottlingService {
 	}
 
 	public function get_remaining_time( $ip ) {
-		$cache_key     = 'login_defender_throttle_' . md5( $ip );
+		$cache_key     = 'tailwatch_login_defender_throttle_' . md5( $ip );
 		$throttle_data = get_transient( $cache_key );
 		if ( $throttle_data === false || ! is_array( $throttle_data ) || ! isset( $throttle_data['expires'] ) ) {
 			return 0;

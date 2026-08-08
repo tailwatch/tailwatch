@@ -3,16 +3,16 @@ import { updateLocalStorage, getLocalStorage } from '../../../Components/Utils/H
 import { toast } from 'react-toastify';
 import { CronHealer } from '../../../Components/CroneHealer/CronHealer';
 import { alertService } from "../../../Components/AlertService/AlertService";
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 export const getTables = async () => {
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_get_all_table_names');
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_get_all_table_names');
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
@@ -32,9 +32,9 @@ export const getTables = async () => {
 export const startSearchReplace = async (data, setScanCompleted, fetchLogs) => {
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_start_search_replace');
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_start_search_replace');
+        formData.append('nonce', tailwatch_ajax.nonce);
 
         const payload = {
             search: data.search,
@@ -46,7 +46,7 @@ export const startSearchReplace = async (data, setScanCompleted, fetchLogs) => {
         };
         formData.append('data', JSON.stringify(payload));
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
@@ -89,11 +89,11 @@ const executeCronIfFailed = async () => {
         isCronExecuting = true;
 
         const formData = new FormData();
-        formData.append("action", "wptw_global_ajax_handler");
-        formData.append("action_type", "wptw_search_replace_cron_if_failed");
-        formData.append("nonce", wptw_ajax.nonce);
+        formData.append("action", "tailwatch_global_ajax_handler");
+        formData.append("action_type", "tailwatch_search_replace_cron_if_failed");
+        formData.append("nonce", tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
 
@@ -155,14 +155,14 @@ export const fetchLogs = async (
         const dryRunValue = getLocalStorage('Search&Replace', 'dryRun');
 
         const formData = new FormData();
-        formData.append("action", "wptw_global_ajax_handler");
-        formData.append("action_type", "wptw_live_search_replace_logs");
-        formData.append("nonce", wptw_ajax.nonce);
+        formData.append("action", "tailwatch_global_ajax_handler");
+        formData.append("action_type", "tailwatch_live_search_replace_logs");
+        formData.append("nonce", tailwatch_ajax.nonce);
 
         const lastLogIndex = isFirstExecution ? 0 : isLastLogIndex;
         formData.append("data", JSON.stringify({ last_log_index: lastLogIndex }));
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
 
@@ -289,11 +289,11 @@ export const fetchLogs = async (
 export const verifySearchReplaceStatus = async ({ setSearchText, setReplaceText, setDryRun, setReplaceGuids, setCaseInsensitive, setSelectedTables, setProgress, setScanState, setIsScanInProgress, setIsLogsVisible, setIsLoadingVisible, setVerifyStatus, setIsStatusChecked, setFeatureEnable, setParentEnable }) => {
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_verify_search_replace_status');
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_verify_search_replace_status');
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
@@ -336,12 +336,12 @@ export const verifySearchReplaceStatus = async ({ setSearchText, setReplaceText,
 export const seartchActions = async ({ scan_state, setIsScanInProgress, setIsPaused, setLogs, setIsLogsVisible, setIsDryRun }) => {
     try {
         const formData = new FormData();
-        formData.append("action", "wptw_global_ajax_handler");
-        formData.append("action_type", "wptw_cancel_pause_search_replace");
+        formData.append("action", "tailwatch_global_ajax_handler");
+        formData.append("action_type", "tailwatch_cancel_pause_search_replace");
         formData.append("data", JSON.stringify({ scan_state }));
-        formData.append("nonce", wptw_ajax.nonce);
+        formData.append("nonce", tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
 

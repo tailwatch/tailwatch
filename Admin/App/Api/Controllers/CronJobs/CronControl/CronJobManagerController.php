@@ -34,7 +34,7 @@ class CronJobManagerController {
 
 	/**
 	 * Canonical list of cron hooks owned by this plugin (and by Pro / other
-	 * extensions via the `wptw_register_cron_hooks` filter). Sourced from
+	 * extensions via the `tailwatch_register_cron_hooks` filter). Sourced from
 	 * CronJobManager::get_all_cron_hooks() so the list stays in sync
 	 * automatically when a new feature ships a new cron — no manual list to
 	 * maintain in this controller.
@@ -68,7 +68,7 @@ class CronJobManagerController {
 	}
 
 	private function get_created_registry() {
-		$created = get_option( 'wptw_created_cron_jobs', array() );
+		$created = get_option( 'tailwatch_created_cron_jobs', array() );
 		if ( ! is_array( $created ) ) {
 			$created = array();
 		}
@@ -86,10 +86,10 @@ class CronJobManagerController {
 			return;
 		}
 		$created[ $signature ] = 1;
-		if ( false === get_option( 'wptw_created_cron_jobs', false ) ) {
-			add_option( 'wptw_created_cron_jobs', $created, '', false );
+		if ( false === get_option( 'tailwatch_created_cron_jobs', false ) ) {
+			add_option( 'tailwatch_created_cron_jobs', $created, '', false );
 		} else {
-			update_option( 'wptw_created_cron_jobs', $created );
+			update_option( 'tailwatch_created_cron_jobs', $created );
 		}
 	}
 
@@ -99,7 +99,7 @@ class CronJobManagerController {
 			return;
 		}
 		unset( $created[ $signature ] );
-		update_option( 'wptw_created_cron_jobs', $created );
+		update_option( 'tailwatch_created_cron_jobs', $created );
 	}
 
 	private function get_event_by_hash( $hash ) {
@@ -107,7 +107,7 @@ class CronJobManagerController {
 		if ( empty( $crons ) ) {
 			$crons = array();
 		}
-		$paused_jobs = get_option( 'wptw_paused_cron_jobs', array() );
+		$paused_jobs = get_option( 'tailwatch_paused_cron_jobs', array() );
 
 		foreach ( $crons as $timestamp => $hooks ) {
 			foreach ( $hooks as $hook => $events ) {
@@ -204,10 +204,10 @@ class CronJobManagerController {
 		return array( 'success' => true );
 	}
 
-	public function wptw_run_cron_job( $post_data ) {
+	public function tailwatch_run_cron_job( $post_data ) {
 		try {
 			$cron_job_status = new GetCronJobDetailsController();
-			$is_enabled      = $cron_job_status->wptw_cron_job_feature_enable();
+			$is_enabled      = $cron_job_status->tailwatch_cron_job_feature_enable();
 			if ( ! $is_enabled['feature_enable'] ) {
 				Log::error(
 					'Cron Job feature is not enabled',
@@ -388,7 +388,7 @@ class CronJobManagerController {
 			);
 		} catch ( \Throwable $e ) {
 			Log::error(
-				'Exception in wptw_run_cron_job: ' . $e->getMessage(),
+				'Exception in tailwatch_run_cron_job: ' . $e->getMessage(),
 				array(
 					'feature'   => 'cron_jobs',
 					'action'    => 'cron_job_run_failed',
@@ -411,10 +411,10 @@ class CronJobManagerController {
 		}
 	}
 
-	public function wptw_pause_cron_job( $post_data ) {
+	public function tailwatch_pause_cron_job( $post_data ) {
 		try {
 			$cron_job_status = new GetCronJobDetailsController();
-			$is_enabled      = $cron_job_status->wptw_cron_job_feature_enable();
+			$is_enabled      = $cron_job_status->tailwatch_cron_job_feature_enable();
 			if ( ! $is_enabled['feature_enable'] ) {
 				Log::error(
 					'Cron Job feature is not enabled',
@@ -572,7 +572,7 @@ class CronJobManagerController {
 				);
 			}
 
-			$paused_jobs          = get_option( 'wptw_paused_cron_jobs', array() );
+			$paused_jobs          = get_option( 'tailwatch_paused_cron_jobs', array() );
 			$paused_jobs[ $hash ] = array(
 				'hook'      => $event['hook'],
 				'timestamp' => $event['timestamp'],
@@ -581,7 +581,7 @@ class CronJobManagerController {
 				'interval'  => $event['interval'],
 				'key'       => $event['key'],
 			);
-			update_option( 'wptw_paused_cron_jobs', $paused_jobs );
+			update_option( 'tailwatch_paused_cron_jobs', $paused_jobs );
 
 			Log::info(
 				"Cron job {$event['hook']} paused successfully.",
@@ -618,10 +618,10 @@ class CronJobManagerController {
 		}
 	}
 
-	public function wptw_resume_cron_job( $post_data ) {
+	public function tailwatch_resume_cron_job( $post_data ) {
 		try {
 			$cron_job_status = new GetCronJobDetailsController();
-			$is_enabled      = $cron_job_status->wptw_cron_job_feature_enable();
+			$is_enabled      = $cron_job_status->tailwatch_cron_job_feature_enable();
 			if ( ! $is_enabled['feature_enable'] ) {
 				Log::error(
 					'Cron Job feature is not enabled',
@@ -683,7 +683,7 @@ class CronJobManagerController {
 				);
 			}
 
-			$paused_jobs = get_option( 'wptw_paused_cron_jobs', array() );
+			$paused_jobs = get_option( 'tailwatch_paused_cron_jobs', array() );
 			if ( ! isset( $paused_jobs[ $hash ] ) ) {
 				Log::error(
 					'Paused cron job not found.',
@@ -706,7 +706,7 @@ class CronJobManagerController {
 			$job = $paused_jobs[ $hash ];
 			if ( empty( $job['hook'] ) || empty( $job['schedule'] ) ) {
 				unset( $paused_jobs[ $hash ] );
-				update_option( 'wptw_paused_cron_jobs', $paused_jobs );
+				update_option( 'tailwatch_paused_cron_jobs', $paused_jobs );
 				Log::error(
 					'Invalid paused job data.',
 					array(
@@ -759,7 +759,7 @@ class CronJobManagerController {
 			// Remove from paused BEFORE scheduling so the pre_schedule_event
 			// filter does not block our own resume attempt.
 			unset( $paused_jobs[ $hash ] );
-			update_option( 'wptw_paused_cron_jobs', $paused_jobs );
+			update_option( 'tailwatch_paused_cron_jobs', $paused_jobs );
 
 			if ( $job['schedule'] === '__single_run' ) {
 				$result = wp_schedule_single_event( $new_time, $job['hook'], $job['args'], true );
@@ -770,7 +770,7 @@ class CronJobManagerController {
 			if ( is_wp_error( $result ) ) {
 				// Restore the paused job — scheduling failed.
 				$paused_jobs[ $hash ] = $job;
-				update_option( 'wptw_paused_cron_jobs', $paused_jobs );
+				update_option( 'tailwatch_paused_cron_jobs', $paused_jobs );
 
 				$error_msg = $result->get_error_message();
 				Log::error(
@@ -826,10 +826,10 @@ class CronJobManagerController {
 		}
 	}
 
-	public function wptw_delete_cron_job( $post_data ) {
+	public function tailwatch_delete_cron_job( $post_data ) {
 		try {
 			$cron_job_status = new GetCronJobDetailsController();
-			$is_enabled      = $cron_job_status->wptw_cron_job_feature_enable();
+			$is_enabled      = $cron_job_status->tailwatch_cron_job_feature_enable();
 			if ( ! $is_enabled['feature_enable'] ) {
 				Log::error(
 					'Cron Job feature is not enabled',
@@ -955,9 +955,9 @@ class CronJobManagerController {
 			}
 
 			if ( $event['is_paused'] ) {
-				$paused_jobs = get_option( 'wptw_paused_cron_jobs', array() );
+				$paused_jobs = get_option( 'tailwatch_paused_cron_jobs', array() );
 				unset( $paused_jobs[ $hash ] );
-				update_option( 'wptw_paused_cron_jobs', $paused_jobs );
+				update_option( 'tailwatch_paused_cron_jobs', $paused_jobs );
 			} else {
 				$unscheduled = wp_unschedule_event( $event['timestamp'], $event['hook'], $event['args'], true );
 				if ( is_wp_error( $unscheduled ) ) {
@@ -1017,10 +1017,10 @@ class CronJobManagerController {
 		}
 	}
 
-	public function wptw_add_cron_job( $post_data ) {
+	public function tailwatch_add_cron_job( $post_data ) {
 		try {
 			$cron_job_status = new GetCronJobDetailsController();
-			$is_enabled      = $cron_job_status->wptw_cron_job_feature_enable();
+			$is_enabled      = $cron_job_status->tailwatch_cron_job_feature_enable();
 			if ( ! $is_enabled['feature_enable'] ) {
 				Log::error(
 					'Cron Job feature is not enabled',
@@ -1103,7 +1103,7 @@ class CronJobManagerController {
 			$args                      = $args_result['data'];
 			$schedules                 = wp_get_schedules();
 			$schedules['__single_run'] = array( 'display' => 'Non-repeating' );
-			$custom_schedules          = get_option( 'wptw_custom_schedules', array() );
+			$custom_schedules          = get_option( 'tailwatch_custom_schedules', array() );
 			foreach ( $custom_schedules as $slug => $custom ) {
 				$schedules[ $slug ] = $custom;
 			}
@@ -1317,10 +1317,10 @@ class CronJobManagerController {
 		}
 	}
 
-	public function wptw_edit_cron_job( $post_data ) {
+	public function tailwatch_edit_cron_job( $post_data ) {
 		try {
 			$cron_job_status = new GetCronJobDetailsController();
-			$is_enabled      = $cron_job_status->wptw_cron_job_feature_enable();
+			$is_enabled      = $cron_job_status->tailwatch_cron_job_feature_enable();
 			if ( ! $is_enabled['feature_enable'] ) {
 				Log::error(
 					'Cron Job feature is not enabled',
@@ -1410,7 +1410,7 @@ class CronJobManagerController {
 
 			$schedules                 = wp_get_schedules();
 			$schedules['__single_run'] = array( 'display' => 'Non-repeating' );
-			$custom_schedules          = get_option( 'wptw_custom_schedules', array() );
+			$custom_schedules          = get_option( 'tailwatch_custom_schedules', array() );
 			foreach ( $custom_schedules as $slug => $custom ) {
 				$schedules[ $slug ] = $custom;
 			}
@@ -1513,9 +1513,9 @@ class CronJobManagerController {
 
 			// Remove old event after validation passes.
 			if ( $event['is_paused'] ) {
-				$paused_jobs = get_option( 'wptw_paused_cron_jobs', array() );
+				$paused_jobs = get_option( 'tailwatch_paused_cron_jobs', array() );
 				unset( $paused_jobs[ $hash ] );
-				update_option( 'wptw_paused_cron_jobs', $paused_jobs );
+				update_option( 'tailwatch_paused_cron_jobs', $paused_jobs );
 			} else {
 				$unscheduled = wp_unschedule_event( $event['timestamp'], $event['hook'], $event['args'], true );
 				if ( is_wp_error( $unscheduled ) ) {
@@ -1547,7 +1547,7 @@ class CronJobManagerController {
 			if ( is_wp_error( $result ) ) {
 				// Restore the old event to prevent data loss.
 				if ( $event['is_paused'] ) {
-					$paused_jobs          = get_option( 'wptw_paused_cron_jobs', array() );
+					$paused_jobs          = get_option( 'tailwatch_paused_cron_jobs', array() );
 					$paused_jobs[ $hash ] = array(
 						'hook'      => $event['hook'],
 						'timestamp' => $event['timestamp'],
@@ -1556,7 +1556,7 @@ class CronJobManagerController {
 						'interval'  => $event['interval'],
 						'key'       => $event['key'],
 					);
-					update_option( 'wptw_paused_cron_jobs', $paused_jobs );
+					update_option( 'tailwatch_paused_cron_jobs', $paused_jobs );
 				} else {
 					if ( $event['schedule'] === '__single_run' ) {
 						wp_schedule_single_event( $event['timestamp'], $event['hook'], $event['args'], true );
@@ -1636,10 +1636,10 @@ class CronJobManagerController {
 		}
 	}
 
-	public function wptw_bulk_cron_action( $post_data ) {
+	public function tailwatch_bulk_cron_action( $post_data ) {
 		try {
 			$cron_job_status = new GetCronJobDetailsController();
-			$is_enabled      = $cron_job_status->wptw_cron_job_feature_enable();
+			$is_enabled      = $cron_job_status->tailwatch_cron_job_feature_enable();
 			if ( ! $is_enabled['feature_enable'] ) {
 				Log::error(
 					'Cron Job feature is not enabled',
@@ -1716,16 +1716,16 @@ class CronJobManagerController {
 				$encode_data = wp_json_encode( $post_data );
 				switch ( $action ) {
 					case 'run':
-						$result = $this->wptw_run_cron_job( $encode_data );
+						$result = $this->tailwatch_run_cron_job( $encode_data );
 						break;
 					case 'pause':
-						$result = $this->wptw_pause_cron_job( $encode_data );
+						$result = $this->tailwatch_pause_cron_job( $encode_data );
 						break;
 					case 'resume':
-						$result = $this->wptw_resume_cron_job( $encode_data );
+						$result = $this->tailwatch_resume_cron_job( $encode_data );
 						break;
 					case 'delete':
-						$result = $this->wptw_delete_cron_job( $encode_data );
+						$result = $this->tailwatch_delete_cron_job( $encode_data );
 						break;
 				}
 				$results[ $hash ] = $result;
@@ -1776,10 +1776,10 @@ class CronJobManagerController {
 		}
 	}
 
-	public function wptw_add_schedule( $post_data ) {
+	public function tailwatch_add_schedule( $post_data ) {
 		try {
 			$cron_job_status = new GetCronJobDetailsController();
-			$is_enabled      = $cron_job_status->wptw_cron_job_feature_enable();
+			$is_enabled      = $cron_job_status->tailwatch_cron_job_feature_enable();
 			if ( ! $is_enabled['feature_enable'] ) {
 				Log::error(
 					'Cron Job feature is not enabled',
@@ -1866,7 +1866,7 @@ class CronJobManagerController {
 			}
 
 			$schedules        = wp_get_schedules();
-			$custom_schedules = get_option( 'wptw_custom_schedules', array() );
+			$custom_schedules = get_option( 'tailwatch_custom_schedules', array() );
 
 			if ( isset( $schedules[ $slug ] ) || isset( $custom_schedules[ $slug ] ) ) {
 				Log::error(
@@ -1893,7 +1893,7 @@ class CronJobManagerController {
 				'interval'   => $interval,
 				'created_at' => time(),
 			);
-			update_option( 'wptw_custom_schedules', $custom_schedules );
+			update_option( 'tailwatch_custom_schedules', $custom_schedules );
 			Log::info(
 				"Schedule '$name' added successfully.",
 				array(
@@ -1933,10 +1933,10 @@ class CronJobManagerController {
 		}
 	}
 
-	public function wptw_edit_schedule( $post_data ) {
+	public function tailwatch_edit_schedule( $post_data ) {
 		try {
 			$cron_job_status = new GetCronJobDetailsController();
-			$is_enabled      = $cron_job_status->wptw_cron_job_feature_enable();
+			$is_enabled      = $cron_job_status->tailwatch_cron_job_feature_enable();
 			if ( ! $is_enabled['feature_enable'] ) {
 				Log::error(
 					'Cron Job feature is not enabled',
@@ -2021,7 +2021,7 @@ class CronJobManagerController {
 				);
 			}
 
-			$custom_schedules = get_option( 'wptw_custom_schedules', array() );
+			$custom_schedules = get_option( 'tailwatch_custom_schedules', array() );
 			if ( ! isset( $custom_schedules[ $slug ] ) ) {
 				Log::error(
 					"Schedule with slug '$slug' does not exist.",
@@ -2068,7 +2068,7 @@ class CronJobManagerController {
 				'interval'   => $interval,
 				'created_at' => $custom_schedules[ $slug ]['created_at'] ?? time(),
 			);
-			update_option( 'wptw_custom_schedules', $custom_schedules );
+			update_option( 'tailwatch_custom_schedules', $custom_schedules );
 			Log::info(
 				"Schedule '$name' updated successfully.",
 				array(
@@ -2108,10 +2108,10 @@ class CronJobManagerController {
 		}
 	}
 
-	public function wptw_delete_schedule( $post_data ) {
+	public function tailwatch_delete_schedule( $post_data ) {
 		try {
 			$cron_job_status = new GetCronJobDetailsController();
-			$is_enabled      = $cron_job_status->wptw_cron_job_feature_enable();
+			$is_enabled      = $cron_job_status->tailwatch_cron_job_feature_enable();
 			if ( ! $is_enabled['feature_enable'] ) {
 				Log::error(
 					'Cron Job feature is not enabled',
@@ -2136,7 +2136,7 @@ class CronJobManagerController {
 			$slug             = isset( $data['slug'] ) ? sanitize_text_field( $data['slug'] ) : '';
 			$slug             = sanitize_title_with_dashes( $slug );
 			$slug             = str_replace( '-', '_', $slug );
-			$custom_schedules = get_option( 'wptw_custom_schedules', array() );
+			$custom_schedules = get_option( 'tailwatch_custom_schedules', array() );
 			if ( ! isset( $custom_schedules[ $slug ] ) ) {
 				Log::error(
 					"Schedule with slug '$slug' does not exist.",
@@ -2190,7 +2190,7 @@ class CronJobManagerController {
 
 			// Check paused jobs for schedule usage — deleting the schedule
 			// would make these jobs unresumable.
-			$paused_jobs = get_option( 'wptw_paused_cron_jobs', array() );
+			$paused_jobs = get_option( 'tailwatch_paused_cron_jobs', array() );
 			foreach ( $paused_jobs as $job ) {
 				if ( isset( $job['schedule'] ) && $job['schedule'] === $slug ) {
 					Log::error(
@@ -2214,7 +2214,7 @@ class CronJobManagerController {
 			}
 
 			unset( $custom_schedules[ $slug ] );
-			update_option( 'wptw_custom_schedules', $custom_schedules );
+			update_option( 'tailwatch_custom_schedules', $custom_schedules );
 			Log::info(
 				"Schedule '$slug' deleted successfully.",
 				array(
@@ -2250,9 +2250,9 @@ class CronJobManagerController {
 		}
 	}
 
-	public function wptw_cleanup_paused_jobs() {
+	public function tailwatch_cleanup_paused_jobs() {
 		try {
-			$paused_jobs  = get_option( 'wptw_paused_cron_jobs', array() );
+			$paused_jobs  = get_option( 'tailwatch_paused_cron_jobs', array() );
 			$cleaned_jobs = array();
 			foreach ( $paused_jobs as $hash => $job ) {
 				if ( ! empty( $job['hook'] ) && ! empty( $job['timestamp'] ) && ! empty( $job['schedule'] ) ) {
@@ -2260,7 +2260,7 @@ class CronJobManagerController {
 				}
 			}
 			if ( count( $cleaned_jobs ) !== count( $paused_jobs ) ) {
-				update_option( 'wptw_paused_cron_jobs', $cleaned_jobs );
+				update_option( 'tailwatch_paused_cron_jobs', $cleaned_jobs );
 			}
 			Log::info(
 				'Paused jobs cleaned up successfully.',

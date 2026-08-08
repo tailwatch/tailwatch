@@ -24,11 +24,11 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class CountryWhiteListController extends BaseController {
 
-	protected $wptw_feature_check_exemptions = array();
+	protected $tailwatch_feature_check_exemptions = array();
 
-	protected function wptw_get_feature_status() {
+	protected function tailwatch_get_feature_status() {
 		$controller = new IpManagementController();
-		$status     = $controller->wptw_ips_managment_is_enabled();
+		$status     = $controller->tailwatch_ips_managment_is_enabled();
 		return array(
 			'feature_enable' => $status['whitelist_feature'],
 			'parent_enable'  => $status['parent_enable'],
@@ -44,15 +44,15 @@ class CountryWhiteListController extends BaseController {
 		$this->whitelist_model = new WhitelistModel();
 	}
 
-	public function wptw_handle_add_country_whitelist( $postData ) {
+	public function tailwatch_handle_add_country_whitelist( $postData ) {
 		try {
-			$validation = FieldsValidationController::wptw_validate_json_and_fields( $postData, array( 'country_codes', 'exemption' ) );
+			$validation = FieldsValidationController::tailwatch_validate_json_and_fields( $postData, array( 'country_codes', 'exemption' ) );
 			if ( ! $validation['success'] ) {
 				Log::error(
 					'Country whitelist addition validation failed',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_add_country_whitelist',
+						'action'  => 'tailwatch_handle_add_country_whitelist',
 						'title'  => 'IP Management',
 						'detail'  => $validation['message'],
 					)
@@ -67,7 +67,7 @@ class CountryWhiteListController extends BaseController {
 					'Invalid exemption type for country whitelist',
 					array(
 						'feature'   => 'ip_management',
-						'action'    => 'wptw_handle_add_country_whitelist',
+						'action'    => 'tailwatch_handle_add_country_whitelist',
 						'title'  => 'IP Management',
 						'exemption' => $exemption,
 					)
@@ -82,7 +82,7 @@ class CountryWhiteListController extends BaseController {
 					'No country codes provided for whitelist',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_add_country_whitelist',
+						'action'  => 'tailwatch_handle_add_country_whitelist',
 						'title'  => 'IP Management',
 					)
 				);
@@ -102,7 +102,7 @@ class CountryWhiteListController extends BaseController {
 					'Invalid country codes for whitelist',
 					array(
 						'feature'       => 'ip_management',
-						'action'        => 'wptw_handle_add_country_whitelist',
+						'action'        => 'tailwatch_handle_add_country_whitelist',
 						'title'  => 'IP Management',
 						'invalid_codes' => implode( ', ', $invalid_codes ),
 					)
@@ -128,7 +128,7 @@ class CountryWhiteListController extends BaseController {
 					'Country whitelist addition failed',
 					array(
 						'feature'       => 'ip_management',
-						'action'        => 'wptw_handle_add_country_whitelist',
+						'action'        => 'tailwatch_handle_add_country_whitelist',
 						'title'  => 'IP Management',
 						'country_codes' => implode( ', ', $country_codes ),
 					)
@@ -143,7 +143,7 @@ class CountryWhiteListController extends BaseController {
 				'Country whitelist created',
 				array(
 					'feature'       => 'ip_management',
-					'action'        => 'wptw_handle_add_country_whitelist',
+					'action'        => 'tailwatch_handle_add_country_whitelist',
 					'title'  => 'IP Management',
 					'country_codes' => implode( ', ', $country_codes ),
 					'exemption'     => $exemption,
@@ -159,7 +159,7 @@ class CountryWhiteListController extends BaseController {
 				'Country whitelist addition exception',
 				array(
 					'feature'   => 'ip_management',
-					'action'    => 'wptw_handle_add_country_whitelist',
+					'action'    => 'tailwatch_handle_add_country_whitelist',
 					'title'  => 'IP Management',
 					'exception' => $e,
 				)
@@ -171,15 +171,15 @@ class CountryWhiteListController extends BaseController {
 		}
 	}
 
-	public function wptw_handle_update_country_whitelist( $postData ) {
+	public function tailwatch_handle_update_country_whitelist( $postData ) {
 		try {
-			$validation = FieldsValidationController::wptw_validate_json_and_fields( $postData, array( 'country_codes', 'exemption' ) );
+			$validation = FieldsValidationController::tailwatch_validate_json_and_fields( $postData, array( 'country_codes', 'exemption' ) );
 			if ( ! $validation['success'] ) {
 				Log::error(
 					'Country whitelist update validation failed',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_update_country_whitelist',
+						'action'  => 'tailwatch_handle_update_country_whitelist',
 						'title'  => 'IP Management',
 						'detail'  => $validation['message'],
 					)
@@ -196,7 +196,7 @@ class CountryWhiteListController extends BaseController {
 					'Invalid exemption type for country whitelist update',
 					array(
 						'feature'   => 'ip_management',
-						'action'    => 'wptw_handle_update_country_whitelist',
+						'action'    => 'tailwatch_handle_update_country_whitelist',
 						'title'  => 'IP Management',
 						'exemption' => $exemption,
 					)
@@ -212,7 +212,7 @@ class CountryWhiteListController extends BaseController {
 					'No country codes provided for whitelist update',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_update_country_whitelist',
+						'action'  => 'tailwatch_handle_update_country_whitelist',
 						'title'  => 'IP Management',
 					)
 				);
@@ -233,7 +233,7 @@ class CountryWhiteListController extends BaseController {
 					'Invalid country codes for whitelist update',
 					array(
 						'feature'       => 'ip_management',
-						'action'        => 'wptw_handle_update_country_whitelist',
+						'action'        => 'tailwatch_handle_update_country_whitelist',
 						'title'  => 'IP Management',
 						'invalid_codes' => implode( ', ', $invalid_codes ),
 					)
@@ -250,7 +250,7 @@ class CountryWhiteListController extends BaseController {
 					'Country whitelist update failed',
 					array(
 						'feature'       => 'ip_management',
-						'action'        => 'wptw_handle_update_country_whitelist',
+						'action'        => 'tailwatch_handle_update_country_whitelist',
 						'title'  => 'IP Management',
 						'country_codes' => implode( ', ', $country_codes ),
 					)
@@ -265,7 +265,7 @@ class CountryWhiteListController extends BaseController {
 				'Country whitelist updated',
 				array(
 					'feature'       => 'ip_management',
-					'action'        => 'wptw_handle_update_country_whitelist',
+					'action'        => 'tailwatch_handle_update_country_whitelist',
 					'title'  => 'IP Management',
 					'country_codes' => implode( ', ', $country_codes ),
 					'exemption'     => $exemption,
@@ -282,7 +282,7 @@ class CountryWhiteListController extends BaseController {
 				'Country whitelist update exception',
 				array(
 					'feature'   => 'ip_management',
-					'action'    => 'wptw_handle_update_country_whitelist',
+					'action'    => 'tailwatch_handle_update_country_whitelist',
 					'title'  => 'IP Management',
 					'exception' => $e,
 				)
@@ -294,15 +294,15 @@ class CountryWhiteListController extends BaseController {
 		}
 	}
 
-	public function wptw_handle_delete_country_whitelist( $postData ) {
+	public function tailwatch_handle_delete_country_whitelist( $postData ) {
 		try {
-			$validation = FieldsValidationController::wptw_validate_json_and_fields( $postData, array( 'is_delete' ) );
+			$validation = FieldsValidationController::tailwatch_validate_json_and_fields( $postData, array( 'is_delete' ) );
 			if ( ! $validation['success'] ) {
 				Log::error(
 					'Country whitelist deletion validation failed',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_delete_country_whitelist',
+						'action'  => 'tailwatch_handle_delete_country_whitelist',
 						'title'  => 'IP Management',
 						'detail'  => $validation['message'],
 					)
@@ -320,7 +320,7 @@ class CountryWhiteListController extends BaseController {
 						'No country codes provided for whitelist deletion',
 						array(
 							'feature' => 'ip_management',
-							'action'  => 'wptw_handle_delete_country_whitelist',
+							'action'  => 'tailwatch_handle_delete_country_whitelist',
 							'title'  => 'IP Management',
 						)
 					);
@@ -341,7 +341,7 @@ class CountryWhiteListController extends BaseController {
 						'Invalid country codes for whitelist deletion',
 						array(
 							'feature'       => 'ip_management',
-							'action'        => 'wptw_handle_delete_country_whitelist',
+							'action'        => 'tailwatch_handle_delete_country_whitelist',
 							'title'  => 'IP Management',
 							'invalid_codes' => implode( ', ', $invalid_codes ),
 						)
@@ -359,7 +359,7 @@ class CountryWhiteListController extends BaseController {
 					'Country whitelist deletion failed',
 					array(
 						'feature'   => 'ip_management',
-						'action'    => 'wptw_handle_delete_country_whitelist',
+						'action'    => 'tailwatch_handle_delete_country_whitelist',
 						'title'  => 'IP Management',
 						'is_delete' => $is_delete,
 					)
@@ -374,7 +374,7 @@ class CountryWhiteListController extends BaseController {
 				'Country whitelist deleted',
 				array(
 					'feature'       => 'ip_management',
-					'action'        => 'wptw_handle_delete_country_whitelist',
+					'action'        => 'tailwatch_handle_delete_country_whitelist',
 					'title'  => 'IP Management',
 					'is_delete'     => $is_delete,
 					'country_codes' => $is_delete ? 'all' : implode( ', ', $country_codes ),
@@ -389,7 +389,7 @@ class CountryWhiteListController extends BaseController {
 				'Country whitelist deletion exception',
 				array(
 					'feature'   => 'ip_management',
-					'action'    => 'wptw_handle_delete_country_whitelist',
+					'action'    => 'tailwatch_handle_delete_country_whitelist',
 					'title'  => 'IP Management',
 					'exception' => $e,
 				)
@@ -401,15 +401,15 @@ class CountryWhiteListController extends BaseController {
 		}
 	}
 
-	public function wptw_handle_get_country_whitelists( $postData ) {
+	public function tailwatch_handle_get_country_whitelists( $postData ) {
 		try {
-			$validation = FieldsValidationController::wptw_validate_json_and_fields( $postData, array() );
+			$validation = FieldsValidationController::tailwatch_validate_json_and_fields( $postData, array() );
 			if ( ! $validation['success'] ) {
 				Log::error(
 					'Country whitelist retrieval validation failed',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_get_country_whitelists',
+						'action'  => 'tailwatch_handle_get_country_whitelists',
 						'title'  => 'IP Management',
 						'detail'  => $validation['message'],
 					)
@@ -427,7 +427,7 @@ class CountryWhiteListController extends BaseController {
 				'Country whitelist retrieved',
 				array(
 					'feature' => 'ip_management',
-					'action'  => 'wptw_handle_get_country_whitelists',
+					'action'  => 'tailwatch_handle_get_country_whitelists',
 					'title'  => 'IP Management',
 					'limit'   => $limit ?? 'all',
 					'page'    => $page ?? 1,
@@ -449,7 +449,7 @@ class CountryWhiteListController extends BaseController {
 				'Country whitelist retrieval exception',
 				array(
 					'feature'   => 'ip_management',
-					'action'    => 'wptw_handle_get_country_whitelists',
+					'action'    => 'tailwatch_handle_get_country_whitelists',
 					'title'  => 'IP Management',
 					'exception' => $e,
 				)

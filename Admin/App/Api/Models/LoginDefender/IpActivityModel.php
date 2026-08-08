@@ -29,7 +29,7 @@ class IpActivityModel {
 			return false;
 		}
 
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 		$activity   = $this->get_activity( $ip );
 
 		$data              = $activity ? json_decode( $activity->value, true ) : $this->get_default_activity( $ip );
@@ -235,7 +235,7 @@ class IpActivityModel {
 			)
 		);
 
-		$cache_key = 'login_defender_ip_activity_' . md5( $ip );
+		$cache_key = 'tailwatch_login_defender_ip_activity_' . md5( $ip );
 		set_transient( $cache_key, $data, HOUR_IN_SECONDS );
 		return array(
 			'is_blocked'           => isset( $data['lock_type'] ) && $data['lock_type'] !== 'none',
@@ -274,7 +274,7 @@ class IpActivityModel {
 			$data['attempt_timestamps']    = array();
 
 			global $wpdb;
-			$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+			$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 			$existing   = $wpdb->get_row( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 				$wpdb->prepare(
 					'SELECT id FROM %i WHERE `key` = %s AND `option` = %s',
@@ -316,7 +316,7 @@ class IpActivityModel {
 					array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d' )
 				);
 			}
-			$cache_key = 'login_defender_ip_activity_' . md5( $ip );
+			$cache_key = 'tailwatch_login_defender_ip_activity_' . md5( $ip );
 			set_transient( $cache_key, $data, HOUR_IN_SECONDS );
 		}
 	}
@@ -332,7 +332,7 @@ class IpActivityModel {
 			return null;
 		}
 
-		$cache_key         = 'login_defender_ip_activity_' . md5( $ip );
+		$cache_key         = 'tailwatch_login_defender_ip_activity_' . md5( $ip );
 		$cached            = get_transient( $cache_key );
 		$current_timestamp = strtotime( current_time( 'mysql' ) );
 
@@ -349,7 +349,7 @@ class IpActivityModel {
 				$cached['remaining_attempts']    = $this->settings['failed_attempt_threshold'] ?? 3;
 				$cached['attempt_timestamps']    = array();
 				// Update DB and cache
-				$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+				$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 				$existing   = $wpdb->get_row( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 					$wpdb->prepare(
 						'SELECT id FROM %i WHERE `key` = %s AND `option` = %s',
@@ -401,7 +401,7 @@ class IpActivityModel {
 			);
 		}
 
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 		$activity   = $wpdb->get_row( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$wpdb->prepare(
 				'SELECT * FROM %i WHERE `key` = %s AND `option` = %s AND is_active = %d',
@@ -495,10 +495,10 @@ class IpActivityModel {
 		self::$reset_in_progress[ $ip ] = true;
 
 		try {
-			$cache_key = 'login_defender_ip_activity_' . md5( $ip );
+			$cache_key = 'tailwatch_login_defender_ip_activity_' . md5( $ip );
 			delete_transient( $cache_key );
 
-			$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+			$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 			$activity   = $wpdb->get_row( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 				$wpdb->prepare(
 					'SELECT * FROM %i WHERE `key` = %s AND `option` = %s AND is_active = %d',
@@ -608,7 +608,7 @@ class IpActivityModel {
 
 		// A manual unblock should always be a full reset, clearing everything
 		$this->reset_attempts_blocked( $ip, true );
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 		$result     = $wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$table_name,
 			array(
@@ -628,7 +628,7 @@ class IpActivityModel {
 			return false;
 		}
 
-		$cache_key = 'login_defender_ip_activity_' . md5( $ip );
+		$cache_key = 'tailwatch_login_defender_ip_activity_' . md5( $ip );
 		delete_transient( $cache_key );
 		return true;
 	}
@@ -636,7 +636,7 @@ class IpActivityModel {
 	public function get_all_ip_activities( $limit = null, $page = null ) {
 		global $wpdb;
 
-		$table_name        = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name        = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 		$current_timestamp = strtotime( current_time( 'mysql' ) );
 
 		// Query using ROW_NUMBER to get the latest record per IP
@@ -751,7 +751,7 @@ class IpActivityModel {
 	public function get_ip_activity_count() {
 		global $wpdb;
 
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 
 		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$count = $wpdb->get_var(
@@ -772,7 +772,7 @@ class IpActivityModel {
 			return array();
 		}
 
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 		$sql        = $wpdb->prepare(
 			'SELECT * FROM %i WHERE `key` = %s AND `option` = %s ORDER BY date_created DESC',
 			$table_name,
@@ -837,7 +837,7 @@ class IpActivityModel {
 
 	public function delete_ip_activity( $ips = array(), $delete_all = false ) {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 		$results    = array(
 			'success' => true,
 			'failed'  => array(),
@@ -860,8 +860,8 @@ class IpActivityModel {
 				}
 			}
 			// Clear all relevant transients
-			$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_login_defender_ip_activity_%'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-			$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_timeout_login_defender_ip_activity_%'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_tailwatch_login_defender_ip_activity_%'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_timeout_tailwatch_login_defender_ip_activity_%'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 
 		} else {
 			$ips = (array) $ips;
@@ -891,7 +891,7 @@ class IpActivityModel {
 					$results['deleted'][] = "$key:$ip";
 				}
 
-				$cache_key = 'login_defender_ip_activity_' . md5( $ip );
+				$cache_key = 'tailwatch_login_defender_ip_activity_' . md5( $ip );
 				delete_transient( $cache_key );
 			}
 
@@ -907,7 +907,7 @@ class IpActivityModel {
 
 	public function log_history_event( $ip, $event_type, $details ) {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 		$now        = current_time( 'mysql' );
 
 		$result = $wpdb->insert( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching

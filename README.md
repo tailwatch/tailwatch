@@ -164,7 +164,7 @@ wp-content/plugins/tailwatch/
                                                                                                │
   Admin/View/Controller/InterfaceController.php renders <div id="root"> and enqueues           │
   everything it finds (glob) in Admin/View/Static/{js,css}. The React app (HashRouter) ◀───────┘
-  mounts into #root and reads runtime data from the wptw_ajax object the PHP injects.
+  mounts into #root and reads runtime data from the tailwatch_ajax object the PHP injects.
 ```
 
 

@@ -18,7 +18,7 @@ class UserRetrievalController {
 	 * @param string $post_data JSON string containing limit and page parameters
 	 * @return array Response with users data and pagination info
 	 */
-	public function wptw_get_user_status( $post_data ) {
+	public function tailwatch_get_user_status( $post_data ) {
 		try {
 			// Defense-in-depth: both routers gate this upstream (nonce+manage_options
 			// / JWT), but this endpoint returns full user PII, so re-check at the
@@ -51,11 +51,11 @@ class UserRetrievalController {
 				'meta_query'  => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Admin-only listing endpoint; bounded result set.
 					'relation' => 'OR',
 					array(
-						'key'     => '_wptw_user_status',
+						'key'     => '_tailwatch_user_status',
 						'compare' => 'NOT EXISTS',
 					),
 					array(
-						'key'     => '_wptw_user_status',
+						'key'     => '_tailwatch_user_status',
 						'value'   => 'without_password',
 						'compare' => '!=',
 					),
@@ -97,11 +97,11 @@ class UserRetrievalController {
 					'description'           => $user->description,
 					'website'               => $user->user_url,
 					'registered_date'       => $user->user_registered,
-					'wptw_user_status'      => get_user_meta( $user->ID, '_wptw_user_status', true ) ?: '',
-					'user_status'           => $this->wptw_user_block_status( $user->ID ),
-					'two_step_verification' => $this->wptw_two_fa_status( $user->ID ),
-					'user_expiry_status'    => $this->wptw_user_expiry_status( $user->ID ),
-					'login_as_another'      => $this->wptw_login_as_another_user( $user->ID ),
+					'tailwatch_user_status'      => get_user_meta( $user->ID, '_tailwatch_user_status', true ) ?: '',
+					'user_status'           => $this->tailwatch_user_block_status( $user->ID ),
+					'two_step_verification' => $this->tailwatch_two_fa_status( $user->ID ),
+					'user_expiry_status'    => $this->tailwatch_user_expiry_status( $user->ID ),
+					'login_as_another'      => $this->tailwatch_login_as_another_user( $user->ID ),
 				);
 			}
 
@@ -147,7 +147,7 @@ class UserRetrievalController {
 	 * @param string $post_data JSON string containing user_id
 	 * @return array Response with user details
 	 */
-	public function wptw_get_user_by_id( $post_data ) {
+	public function tailwatch_get_user_by_id( $post_data ) {
 		try {
 			if ( ! $this->is_authorized_request() ) {
 				return $this->unauthorized_response();
@@ -190,11 +190,11 @@ class UserRetrievalController {
 				'website'               => $user->user_url,
 				'roles'                 => $user->roles,
 				'registered_date'       => $user->user_registered,
-				'wptw_user_status'      => get_user_meta( $user->ID, '_wptw_user_status', true ) ?: '',
-				'user_status'           => $this->wptw_user_block_status( $user->ID ),
-				'two_step_verification' => $this->wptw_two_fa_status( $user->ID ),
-				'user_expiry_status'    => $this->wptw_user_expiry_status( $user->ID ),
-				'login_as_another'      => $this->wptw_login_as_another_user( $user->ID ),
+				'tailwatch_user_status'      => get_user_meta( $user->ID, '_tailwatch_user_status', true ) ?: '',
+				'user_status'           => $this->tailwatch_user_block_status( $user->ID ),
+				'two_step_verification' => $this->tailwatch_two_fa_status( $user->ID ),
+				'user_expiry_status'    => $this->tailwatch_user_expiry_status( $user->ID ),
+				'login_as_another'      => $this->tailwatch_login_as_another_user( $user->ID ),
 			);
 
 			return array(
@@ -228,7 +228,7 @@ class UserRetrievalController {
 	 *
 	 * @return array Response with all WordPress roles
 	 */
-	public function wptw_get_all_roles() {
+	public function tailwatch_get_all_roles() {
 		try {
 			if ( ! $this->is_authorized_request() ) {
 				return $this->unauthorized_response();
@@ -240,7 +240,7 @@ class UserRetrievalController {
 			// Descriptions for the five WordPress built-in roles.
 			// WordPress stores no description natively — this is the correct approach.
 			// Third-party plugins that register custom roles can provide descriptions
-			// by hooking 'wptw_role_descriptions' and adding their role slug => text.
+			// by hooking 'tailwatch_role_descriptions' and adding their role slug => text.
 			$built_in_descriptions = array(
 				'administrator' => __( 'Has access to all the administration features within a single site.', 'tailwatch' ),
 				'editor'        => __( 'Can publish and manage posts including the posts of other users.', 'tailwatch' ),
@@ -248,7 +248,7 @@ class UserRetrievalController {
 				'contributor'   => __( 'Can write and manage their own posts but cannot publish them.', 'tailwatch' ),
 				'subscriber'    => __( 'Can only manage their profile.', 'tailwatch' ),
 			);
-			$role_descriptions = apply_filters( 'wptw_role_descriptions', $built_in_descriptions );
+			$role_descriptions = apply_filters( 'tailwatch_role_descriptions', $built_in_descriptions );
 
 			// Count users per role in one query instead of per-role queries.
 			$user_counts = count_users();
@@ -299,15 +299,15 @@ class UserRetrievalController {
 	 * `is_upgrade_feature` marker lets the frontend render the same
 	 * "Available with an extension" card it uses elsewhere instead
 	 * of an empty cell. Add-ons that implement user-expiry hook
-	 * `wptw_get_user_expiry_status_response` to substitute a real
+	 * `tailwatch_get_user_expiry_status_response` to substitute a real
 	 * payload (typically clearing `is_upgrade_feature`).
 	 *
 	 * @param int $user_id WordPress user ID.
 	 * @return array Payload shape `{ is_upgrade_feature: bool, data: mixed }` after filter.
 	 */
-	public function wptw_user_expiry_status( $user_id ) {
+	public function tailwatch_user_expiry_status( $user_id ) {
 		return apply_filters(
-			'wptw_get_user_expiry_status_response',
+			'tailwatch_get_user_expiry_status_response',
 			array(
 				'is_upgrade_feature' => true,
 				'data'               => null,
@@ -323,15 +323,15 @@ class UserRetrievalController {
 	 * the default `{ is_upgrade_feature: true, data: null }`. The
 	 * `is_upgrade_feature` marker drives the frontend's "Available
 	 * with an extension" card. Add-ons may hook
-	 * `wptw_get_login_as_another_user_response` to substitute a real
+	 * `tailwatch_get_login_as_another_user_response` to substitute a real
 	 * payload for the requesting admin.
 	 *
 	 * @param int $user_id WordPress user ID.
 	 * @return array Payload shape `{ is_upgrade_feature: bool, data: mixed }` after filter.
 	 */
-	public function wptw_login_as_another_user( $user_id ) {
+	public function tailwatch_login_as_another_user( $user_id ) {
 		return apply_filters(
-			'wptw_get_login_as_another_user_response',
+			'tailwatch_get_login_as_another_user_response',
 			array(
 				'is_upgrade_feature' => true,
 				'data'               => null,
@@ -347,15 +347,15 @@ class UserRetrievalController {
 	 * default `{ is_upgrade_feature: true, data: null }`. The
 	 * `is_upgrade_feature` marker lets the frontend render its
 	 * uniform "Available with an extension" card. Add-ons hook
-	 * `wptw_get_user_two_fa_status_response` to surface real 2FA
+	 * `tailwatch_get_user_two_fa_status_response` to surface real 2FA
 	 * state (typically clearing `is_upgrade_feature`).
 	 *
 	 * @param int $user_id WordPress user ID.
 	 * @return array Payload shape `{ is_upgrade_feature: bool, data: mixed }` after filter.
 	 */
-	public function wptw_two_fa_status( $user_id ) {
+	public function tailwatch_two_fa_status( $user_id ) {
 		return apply_filters(
-			'wptw_get_user_two_fa_status_response',
+			'tailwatch_get_user_two_fa_status_response',
 			array(
 				'is_upgrade_feature' => true,
 				'data'               => null,
@@ -369,15 +369,15 @@ class UserRetrievalController {
 	 *
 	 * The free plugin ships no user-block feature, so it returns the default
 	 * `{ is_upgrade_feature: true, data: null }`. Pro hooks
-	 * `wptw_get_user_block_status_response` to surface the real block state —
-	 * same per-user-status pattern as 2FA (`wptw_two_fa_status`) and expiry.
+	 * `tailwatch_get_user_block_status_response` to surface the real block state —
+	 * same per-user-status pattern as 2FA (`tailwatch_two_fa_status`) and expiry.
 	 *
 	 * @param int $user_id WordPress user ID.
 	 * @return array Payload shape `{ is_upgrade_feature: bool, data: mixed }` after filter.
 	 */
-	public function wptw_user_block_status( $user_id ) {
+	public function tailwatch_user_block_status( $user_id ) {
 		return apply_filters(
-			'wptw_get_user_block_status_response',
+			'tailwatch_get_user_block_status_response',
 			array(
 				'is_upgrade_feature' => true,
 				'data'               => null,

@@ -167,7 +167,7 @@ class Logger {
 	     *
 		 * @param array $handlers Array of log handlers.
 		 */
-		$this->handlers = apply_filters( 'wptw_log_handlers', $this->handlers );
+		$this->handlers = apply_filters( 'tailwatch_log_handlers', $this->handlers );
 	}
 
 	/**
@@ -185,7 +185,7 @@ class Logger {
 	     *
 		 * @param array $processors Array of log processors.
 		 */
-		$this->processors = apply_filters( 'wptw_log_processors', $this->processors );
+		$this->processors = apply_filters( 'tailwatch_log_processors', $this->processors );
 	}
 
 	/**
@@ -561,8 +561,8 @@ class Logger {
 					}
 				}
 
-				// Use correct notification method (wptw_trigger_notification supports mobile push).
-				$push_notification->wptw_trigger_notification( $severity, $title, $error_detail, $meta_data );
+				// Use correct notification method (tailwatch_trigger_notification supports mobile push).
+				$push_notification->tailwatch_trigger_notification( $severity, $title, $error_detail, $meta_data );
 
 				self::$is_notifying = false;
 			}

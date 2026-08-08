@@ -1,16 +1,16 @@
 import axios from "axios";
 import { toast } from 'react-toastify';
 import { alertService } from "../../../Components/AlertService/AlertService";
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 export const getUserRoles = async ({ setUserRoles, setLoading }) => {
   setLoading(true);
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_get_user_roles_data');
-    formData.append('nonce', wptw_ajax.nonce);
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_get_user_roles_data');
+    formData.append('nonce', tailwatch_ajax.nonce);
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     if (response.data.data.code === 200) {
@@ -28,12 +28,12 @@ export const getUserRoles = async ({ setUserRoles, setLoading }) => {
 export const getAllRedirectRules = async ({setRedirectRules, setFeatureEnable, setParentEnable,page = 1, limit = 10, setPagination}) => {  
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_get_all_redirect_rules');
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_get_all_redirect_rules');
     formData.append('data', JSON.stringify({page, limit}));
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
 
@@ -62,10 +62,10 @@ export const getAllPostTypes = async ({ setPostTypes, setLoading }) => {
   setLoading(true);
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_get_all_post_types');
-    formData.append('nonce', wptw_ajax.nonce);
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_get_all_post_types');
+    formData.append('nonce', tailwatch_ajax.nonce);
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     if (response.data.data.code === 200) {
@@ -84,11 +84,11 @@ export const createRedirection = async ({ setShowModal, setLoading, payload, fet
   setLoading(true);
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_create_redirection_rules');
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_create_redirection_rules');
     formData.append('data', JSON.stringify(payload));
-    formData.append('nonce', wptw_ajax.nonce);
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    formData.append('nonce', tailwatch_ajax.nonce);
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     if (response.data.data.code === 200) {
@@ -110,9 +110,9 @@ export const updateRedirectRule = async (updateData, setIsUpdating, fetchRedirec
   setIsUpdating(true);
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_update_redirect_rule");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_update_redirect_rule");
+    formData.append("nonce", tailwatch_ajax.nonce);
 
     let payload;
     const isToggleCase = 'enabled' in updateData;
@@ -127,7 +127,7 @@ export const updateRedirectRule = async (updateData, setIsUpdating, fetchRedirec
 
     formData.append("data", JSON.stringify(payload));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },
@@ -162,12 +162,12 @@ export const handleDelete = async (deleteData, setIsDeleting, fetchRedirectRules
   setIsDeleting(true);
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_delete_entries_and_logs");
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_delete_entries_and_logs");
     formData.append("data", JSON.stringify({ ids, is_delete, key: "default_redirection_rules" }));
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },
@@ -192,12 +192,12 @@ export const getRedirectionLogs = async ({ setRedirectLogs, setLoading, page = 1
   // setLoading(true);  
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_get_redirection_logs');
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_get_redirection_logs');
     formData.append('data', JSON.stringify({ page, limit }));
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
 
@@ -227,12 +227,12 @@ export const handleDeleteLogs = async (deleteData, setIsDeleting, fetchRedirecti
   setIsDeleting(true);
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_delete_entries_and_logs");
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_delete_entries_and_logs");
     formData.append("data", JSON.stringify({ ids, is_delete, key: "default_redirection_logs" }));
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },
@@ -257,12 +257,12 @@ export const fetchLogsErrorData = async ({ setLoading, setLogsData, page = 1, li
   setLoading(true);
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_logs_feature');
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_logs_feature');
     formData.append('data', JSON.stringify({ key: "default_feature_logs", option: "default_monitoring_logs", type: "404",page,limit }));
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
     if (response.data.success) {
@@ -298,12 +298,12 @@ export const handleDeleteErrorLogs = async (deleteData, setIsDeleting, fetchLogs
   setIsDeleting(true);
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_delete_logs");
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_delete_logs");
     formData.append("data", JSON.stringify({ ids, key: "default_feature_logs", type: "404_logs", option: "default_monitoring_logs", is_delete }));
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },

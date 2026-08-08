@@ -1,15 +1,15 @@
 import axios from "axios";
 import { toast } from 'react-toastify';
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 export const googleAuthData = async ({ setAuthData, setLoading }) => {
   setLoading(true);
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_get_2fa_qr_code');
-    formData.append('nonce', wptw_ajax.nonce);
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_get_2fa_qr_code');
+    formData.append('nonce', tailwatch_ajax.nonce);
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     if (response.data.data.code === 200) {
@@ -28,10 +28,10 @@ export const getTwoFaStatus = async ({ set2FaStatus, setLoading }) => {
   setLoading(true);
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_get_2fa_status');
-    formData.append('nonce', wptw_ajax.nonce);
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_get_2fa_status');
+    formData.append('nonce', tailwatch_ajax.nonce);
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     if (response.data.data.code === 200) {
@@ -53,14 +53,14 @@ export const verifyTwoFaStatus = async ({ code, set2FaStatus, setLoading }) => {
   setLoading(true);
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_verify_2fa_code');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_verify_2fa_code');
+    formData.append('nonce', tailwatch_ajax.nonce);
     if (!code) {
       throw new Error('The "code" parameter is required and cannot be null or undefined.');
     }
     formData.append('data', JSON.stringify({ "twofa_code": code }));
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
 
@@ -82,10 +82,10 @@ export const disconnectTwoFa = async ({ set2FaStatus, setLoading }) => {
   setLoading(true);
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_disconnect_2fa');
-    formData.append('nonce', wptw_ajax.nonce);
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_disconnect_2fa');
+    formData.append('nonce', tailwatch_ajax.nonce);
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
 
@@ -107,10 +107,10 @@ export const verifyMethod = async ({ setLoading, setIsLicenseConnect, setIsLicen
   setLoading(true);
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_get_two_fa_status');
-    formData.append('nonce', wptw_ajax.nonce);
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_get_two_fa_status');
+    formData.append('nonce', tailwatch_ajax.nonce);
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     if (response.data.data?.code === 200) {
@@ -141,11 +141,11 @@ export const verifyEmailStatus = async ({ setIsVerifyEmail, setEmailId, setLoadi
   setLoading(true);
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_two_fa_status_is');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_two_fa_status_is');
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
 
@@ -167,12 +167,12 @@ export const updateEmailStatus = async ({ id, state, setIsVerifyEmail, setEmailI
   setLoading(true);
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_update_two_fa_status');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_update_two_fa_status');
+    formData.append('nonce', tailwatch_ajax.nonce);
     formData.append('data', JSON.stringify({ id: id, two_step_verification: state }));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

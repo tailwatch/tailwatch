@@ -32,8 +32,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class DatabaseOptimizerController {
 
-	private $log_directory = WPTW_LOGS_DIRECTORY . '/db-optimizer-logs';
-	private $get_live_logs = WPTW_LOGS_DIRECTORY . '/db-optimizer-logs' . '/database-optimize';
+	private $log_directory = TAILWATCH_LOGS_DIRECTORY . '/db-optimizer-logs';
+	private $get_live_logs = TAILWATCH_LOGS_DIRECTORY . '/db-optimizer-logs' . '/database-optimize';
 	private $process_manager;
 	private $current_process_id;
 
@@ -43,15 +43,15 @@ class DatabaseOptimizerController {
 		$this->register_process_monitoring();
 
 		$hook_controller = new HookControllers();
-		$hook_controller->add_action_hook( 'wptw_auto_db_optimize', array( $this, 'wptw_global_db_optimize_with_monitoring' ) );
-		$hook_controller->add_action_hook( 'wptw_delete_optimizer_garbage_data', array( $this, 'wptw_delete_optimizer_garbage_data' ) );
+		$hook_controller->add_action_hook( 'tailwatch_auto_db_optimize', array( $this, 'tailwatch_global_db_optimize_with_monitoring' ) );
+		$hook_controller->add_action_hook( 'tailwatch_delete_optimizer_garbage_data', array( $this, 'tailwatch_delete_optimizer_garbage_data' ) );
 	}
 
 	private function register_process_monitoring() {
 		ProcessManager::register_process(
 			array(
 				'process_type'        => 'db_optimize',
-				'cron_hooks'          => array( 'wptw_auto_db_optimize', 'wptw_start_database_optimization' ),
+				'cron_hooks'          => array( 'tailwatch_auto_db_optimize', 'tailwatch_start_database_optimization' ),
 				'data_source'         => 'wp_tw_settings',
 				'data_key'            => 'default_dboptimize_scan',
 				'data_option'         => 'scan_dbtables',
@@ -83,7 +83,7 @@ class DatabaseOptimizerController {
 		);
 	}
 
-	public function wptw_db_optimize_options() {
+	public function tailwatch_db_optimize_options() {
 		$key                = 'default_feature_settings';
 		$option             = 'default_database_optimizer';
 		$is_active          = true;
@@ -92,8 +92,8 @@ class DatabaseOptimizerController {
 		return $db_data;
 	}
 
-	public function wptw_db_optimizer_feature_enable() {
-		$feature_enable = $this->wptw_db_optimize_options();
+	public function tailwatch_db_optimizer_feature_enable() {
+		$feature_enable = $this->tailwatch_db_optimize_options();
 
 		if ( empty( $feature_enable ) ) {
 			return array(
@@ -122,18 +122,18 @@ class DatabaseOptimizerController {
 		$key               = 'default_feature_settings';
 		$option            = 'default_database_optimizer';
 		$field_name        = 'field_1';
-		return $push_notification->wptw_notification_enable_for_feature( $key, $option, $field_name );
+		return $push_notification->tailwatch_notification_enable_for_feature( $key, $option, $field_name );
 	}
 
-	public function wptw_get_optimization_data() {
-		$wptw_key = 'default_dboptimize_scan';
+	public function tailwatch_get_optimization_data() {
+		$tailwatch_key = 'default_dboptimize_scan';
 		$option   = 'scan_dbtables';
 		$db_model = new DBModel();
-		return $db_model->get_recent_data( $option, $wptw_key );
+		return $db_model->get_recent_data( $option, $tailwatch_key );
 	}
 
 	public function update_db_optimization_data( array $options ) {
-		$wptw_key = 'default_dboptimize_scan';
+		$tailwatch_key = 'default_dboptimize_scan';
 		$option   = 'scan_dbtables';
 
 		$db_data = array(
@@ -141,7 +141,7 @@ class DatabaseOptimizerController {
 		);
 
 		$db_model = new DBModel();
-		$db_model->update_recent_row( $db_data, $wptw_key, $option );
+		$db_model->update_recent_row( $db_data, $tailwatch_key, $option );
 	}
 
 	/**
@@ -150,20 +150,20 @@ class DatabaseOptimizerController {
 	 * Used to "adopt" an already in-progress optimization for a backup that
 	 * was started with optimize-before-backup, instead of inserting a duplicate
 	 * row (which abandons the running optimizer's progress and confuses the
-	 * cron — see wptw_database_optimize_start, which always inserts).
+	 * cron — see tailwatch_database_optimize_start, which always inserts).
 	 *
 	 * Only the process_run field is mutated; all other fields (table progress,
 	 * file_key, etc.) are preserved so the running cron continues from where
 	 * it was. The next time the completion handler at
-	 * wptw_global_db_optimize_with_monitoring() reads the row and checks
+	 * tailwatch_global_db_optimize_with_monitoring() reads the row and checks
 	 * `process_run === 'db_backup'`, it will flip the backup row's
 	 * `optimize_completed` flag and schedule the DB-scan cron.
 	 *
 	 * @return bool True if the row was updated (or already correctly tagged),
 	 *              false if no row existed to update.
 	 */
-	public function wptw_mark_optimizer_for_backup_completion() {
-		$current = $this->wptw_get_optimization_data();
+	public function tailwatch_mark_optimizer_for_backup_completion() {
+		$current = $this->tailwatch_get_optimization_data();
 		if ( empty( $current ) || ! is_array( $current ) ) {
 			return false;
 		}
@@ -177,16 +177,16 @@ class DatabaseOptimizerController {
 		return true;
 	}
 
-	public function wptw_optimization_cancel_pause() {
-		$wptw_key = 'default_dboptimize_scan';
+	public function tailwatch_optimization_cancel_pause() {
+		$tailwatch_key = 'default_dboptimize_scan';
 		$option   = 'dboptimize_cancel_pause';
 
 		$db_model = new DBModel();
-		return $db_model->get_recent_data( $option, $wptw_key );
+		return $db_model->get_recent_data( $option, $tailwatch_key );
 	}
 
 	public function update_db_optimization_cancel_pause( array $options ) {
-		$wptw_key = 'default_dboptimize_scan';
+		$tailwatch_key = 'default_dboptimize_scan';
 		$option   = 'dboptimize_cancel_pause';
 
 		$db_data = array(
@@ -194,17 +194,17 @@ class DatabaseOptimizerController {
 		);
 
 		$db_model = new DBModel();
-		$db_model->update_recent_row( $db_data, $wptw_key, $option );
+		$db_model->update_recent_row( $db_data, $tailwatch_key, $option );
 	}
 
-	public function wptw_get_log_file_path() {
-		$optimize_data = $this->wptw_get_optimization_data();
+	public function tailwatch_get_log_file_path() {
+		$optimize_data = $this->tailwatch_get_optimization_data();
 		return $this->get_live_logs . '_' . $optimize_data['file_key'] . '.json';
 	}
 
-	public function wptw_db_optimization_cron_if_failed() {
+	public function tailwatch_db_optimization_cron_if_failed() {
 		try {
-			$is_enabled = $this->wptw_db_optimizer_feature_enable();
+			$is_enabled = $this->tailwatch_db_optimizer_feature_enable();
 			if ( ! $is_enabled['feature_enable'] ) {
 				Log::error(
 					'Database Optimize feature is not enabled',
@@ -222,10 +222,10 @@ class DatabaseOptimizerController {
 				);
 			}
 
-			$dboptimize_state = $this->wptw_optimization_cancel_pause();
+			$dboptimize_state = $this->tailwatch_optimization_cancel_pause();
 			if ( false === $dboptimize_state['cron_running'] ) {
-				if ( ! wp_next_scheduled( 'wptw_auto_db_optimize' ) ) {
-					$cron_scheduled = wp_schedule_single_event( time() + 5, 'wptw_auto_db_optimize' );
+				if ( ! wp_next_scheduled( 'tailwatch_auto_db_optimize' ) ) {
+					$cron_scheduled = wp_schedule_single_event( time() + 5, 'tailwatch_auto_db_optimize' );
 
 					if ( $cron_scheduled ) {
 						Log::info(
@@ -301,8 +301,8 @@ class DatabaseOptimizerController {
 		}
 	}
 
-	public function wptw_stop_db_optimization_cron() {
-		$dboptimize_state = $this->wptw_optimization_cancel_pause();
+	public function tailwatch_stop_db_optimization_cron() {
+		$dboptimize_state = $this->tailwatch_optimization_cancel_pause();
 
 		if ( ! empty( $dboptimize_state['scan_state'] ) && ( 'pause' === $dboptimize_state['scan_state'] || 'cancel' === $dboptimize_state['scan_state'] ) ) {
 
@@ -317,9 +317,9 @@ class DatabaseOptimizerController {
 				}
 			}
 
-			$timestamp = wp_next_scheduled( 'wptw_auto_db_optimize' );
+			$timestamp = wp_next_scheduled( 'tailwatch_auto_db_optimize' );
 			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'wptw_auto_db_optimize' );
+				wp_unschedule_event( $timestamp, 'tailwatch_auto_db_optimize' );
 			}
 
 			if ( true === $dboptimize_state['cron_running'] ) {
@@ -331,8 +331,8 @@ class DatabaseOptimizerController {
 		}
 	}
 
-	public function wptw_optimize_maintain_data() {
-		$optimize_data = $this->wptw_db_optimize_options();
+	public function tailwatch_optimize_maintain_data() {
+		$optimize_data = $this->tailwatch_db_optimize_options();
 
 		$revisions_maintain = '1 Day';
 		if ( isset( $optimize_data['field_1']['sub_options']['field_16']['options'] ) ) {
@@ -350,7 +350,7 @@ class DatabaseOptimizerController {
 		return $revisions_maintain;
 	}
 
-	public function wptw_db_insert_data( $option, $key ) {
+	public function tailwatch_db_insert_data( $option, $key ) {
 		$db_model      = new DBModel();
 		$json_data     = $db_model->get_recent_data( $option, $key );
 		$selected_data = array();
@@ -415,7 +415,7 @@ class DatabaseOptimizerController {
 		return $selected_data;
 	}
 
-	public function wptw_database_optimize( $post_data ) {
+	public function tailwatch_database_optimize( $post_data ) {
 		try {
 			// Refuse to start if a conflicting process is currently running.
 			$blocked = ( new ProcessGuard() )->ensure_can_start_process( 'db_optimize' );
@@ -423,7 +423,7 @@ class DatabaseOptimizerController {
 				return $blocked;
 			}
 
-			$is_enabled = $this->wptw_db_optimizer_feature_enable();
+			$is_enabled = $this->tailwatch_db_optimizer_feature_enable();
 
 			if ( ! $is_enabled['feature_enable'] ) {
 				Log::error(
@@ -464,7 +464,7 @@ class DatabaseOptimizerController {
 			if ( isset( $data['instant_scan'] ) && true === $data['instant_scan'] ) {
 
 				$cron_status = apply_filters(
-					'wptw_test_http_cron_access_db_optimizer',
+					'tailwatch_test_http_cron_access_db_optimizer',
 					( new CronHealthService() )->test( 'db_optimizer' )
 				);
 				if ( ! is_array( $cron_status ) || empty( $cron_status['success'] ) ) {
@@ -487,7 +487,7 @@ class DatabaseOptimizerController {
 				}
 
 				$scan_type = 'on-demand';
-				return $this->wptw_database_optimize_start( $scan_type );
+				return $this->tailwatch_database_optimize_start( $scan_type );
 			} else {
 				Log::error(
 					'Instant scan not enabled.',
@@ -520,17 +520,17 @@ class DatabaseOptimizerController {
 		}
 	}
 
-	public function wptw_database_optimize_start( $scan_type, $process_run = 'db_optimize' ) {
+	public function tailwatch_database_optimize_start( $scan_type, $process_run = 'db_optimize' ) {
 		try {
 			$key       = 'default_feature_settings';
 			$option    = 'default_database_optimizer';
 			$unique_id = time();
 
-			$selected_data_json                 = $this->wptw_db_insert_data( $option, $key );
+			$selected_data_json                 = $this->tailwatch_db_insert_data( $option, $key );
 			$selected_data_json['process_run']  = $process_run;
 			$selected_data_json['file_key']     = $unique_id;
 
-			$process_id = $this->process_manager->get_or_create_process( 'db_optimize', 'wptw_auto_db_optimize' );
+			$process_id = $this->process_manager->get_or_create_process( 'db_optimize', 'tailwatch_auto_db_optimize' );
 
 			$this->current_process_id = $process_id;
 
@@ -579,17 +579,17 @@ class DatabaseOptimizerController {
 			}
 
 			if ( $result ) {
-				if ( ! wp_next_scheduled( 'wptw_auto_db_optimize' ) ) {
-					$cron_scheduled = wp_schedule_single_event( time(), 'wptw_auto_db_optimize' );
+				if ( ! wp_next_scheduled( 'tailwatch_auto_db_optimize' ) ) {
+					$cron_scheduled = wp_schedule_single_event( time(), 'tailwatch_auto_db_optimize' );
 
-					if ( ! file_exists( WPTW_LOGS_DIRECTORY ) ) {
-						wp_mkdir_p( WPTW_LOGS_DIRECTORY );
+					if ( ! file_exists( TAILWATCH_LOGS_DIRECTORY ) ) {
+						wp_mkdir_p( TAILWATCH_LOGS_DIRECTORY );
 					}
 
 					if ( $cron_scheduled ) {
 						$message   = 'Starting database optimization task';
 						$live_logs = new LiveLogsController();
-						$live_logs->insert_live_logs_records( $message, $this->log_directory, $this->wptw_get_log_file_path() );
+						$live_logs->insert_live_logs_records( $message, $this->log_directory, $this->tailwatch_get_log_file_path() );
 
 						if ( 'db_backup' === $process_run ) {
 							$backup_controller = new BackupController();
@@ -673,8 +673,8 @@ class DatabaseOptimizerController {
 		}
 	}
 
-	public function wptw_global_db_optimize_with_monitoring() {
-		$cancel_pause = $this->wptw_optimization_cancel_pause();
+	public function tailwatch_global_db_optimize_with_monitoring() {
+		$cancel_pause = $this->tailwatch_optimization_cancel_pause();
 		if ( isset( $cancel_pause['scan_state'] ) && ( $cancel_pause['scan_state'] === 'pause' || $cancel_pause['scan_state'] === 'cancel' ) ) {
 			return;
 		}
@@ -686,7 +686,7 @@ class DatabaseOptimizerController {
 		$this->process_manager->update_state( $process_id, 'in_progress' );
 
 		try {
-			$this->wptw_global_db_optimize();
+			$this->tailwatch_global_db_optimize();
 			$this->process_manager->heart_beat( $process_id );
 		} catch ( \Exception $e ) {
 			$this->process_manager->mark_failed( $process_id, $e->getMessage() );
@@ -702,10 +702,10 @@ class DatabaseOptimizerController {
 		}
 	}
 
-	public function wptw_global_db_optimize() {
+	public function tailwatch_global_db_optimize() {
 		try {
-			$json_data    = $this->wptw_get_optimization_data();
-			$cancel_pause = $this->wptw_optimization_cancel_pause();
+			$json_data    = $this->tailwatch_get_optimization_data();
+			$cancel_pause = $this->tailwatch_optimization_cancel_pause();
 
 			if ( false === $cancel_pause['cron_running'] ) {
 				$cancel_pause['cron_running'] = true;
@@ -717,7 +717,7 @@ class DatabaseOptimizerController {
 
 			$backup_controller = new BackupController();
 			if ( 'db_backup' === $json_data['process_run'] ) {
-				$cancel_pause = $backup_controller->wptw_backup_cancel_pause_data();
+				$cancel_pause = $backup_controller->tailwatch_backup_cancel_pause_data();
 
 				if ( false === $cancel_pause['cron_running'] ) {
 					$cancel_pause['cron_running'] = true;
@@ -737,7 +737,7 @@ class DatabaseOptimizerController {
 			}
 
 			// Stop execution if the user cancel or pause the database optimization.
-			$stop_execution = $this->wptw_stop_db_optimization_cron();
+			$stop_execution = $this->tailwatch_stop_db_optimization_cron();
 			if ( true === $stop_execution ) {
 				return;
 			}
@@ -745,62 +745,62 @@ class DatabaseOptimizerController {
 			$optimize_database = new TablesOptimizeController();
 
 			if ( 'spam_comments' === $db_key ) {
-				$optimize_database->wptw_clean_all_spam_comments( $json_data, $number_interval );
-				$this->wptw_render_optimizer_cron();
+				$optimize_database->tailwatch_clean_all_spam_comments( $json_data, $number_interval );
+				$this->tailwatch_render_optimizer_cron();
 				return;
 			} elseif ( 'trashed_posts' === $db_key ) {
-				$optimize_database->wptw_clean_trash_posts( $json_data, $number_interval );
-				$this->wptw_render_optimizer_cron();
+				$optimize_database->tailwatch_clean_trash_posts( $json_data, $number_interval );
+				$this->tailwatch_render_optimizer_cron();
 				return;
 			} elseif ( 'trashed_comments' === $db_key ) {
-				$optimize_database->wptw_clean_trash_comments( $json_data, $number_interval );
-				$this->wptw_render_optimizer_cron();
+				$optimize_database->tailwatch_clean_trash_comments( $json_data, $number_interval );
+				$this->tailwatch_render_optimizer_cron();
 				return;
 			} elseif ( 'trackbacks_pingbacks' === $db_key ) {
-				$optimize_database->wptw_clean_trackback_pingbacks( $json_data, $number_interval );
-				$this->wptw_render_optimizer_cron();
+				$optimize_database->tailwatch_clean_trackback_pingbacks( $json_data, $number_interval );
+				$this->tailwatch_render_optimizer_cron();
 				return;
 			} elseif ( 'orphaned_post_meta' === $db_key ) {
-				$optimize_database->wptw_clean_orphaned_post( $json_data, $number_interval );
-				$this->wptw_render_optimizer_cron();
+				$optimize_database->tailwatch_clean_orphaned_post( $json_data, $number_interval );
+				$this->tailwatch_render_optimizer_cron();
 				return;
 			} elseif ( 'auto_drafts' === $db_key ) {
-				$optimize_database->wptw_clean_auto_drafts( $json_data, $number_interval );
-				$this->wptw_render_optimizer_cron();
+				$optimize_database->tailwatch_clean_auto_drafts( $json_data, $number_interval );
+				$this->tailwatch_render_optimizer_cron();
 				return;
 			} elseif ( 'expired_transients' === $db_key ) {
-				$optimize_database->wptw_clean_expired_transients( $json_data, $number_interval );
-				$this->wptw_render_optimizer_cron();
+				$optimize_database->tailwatch_clean_expired_transients( $json_data, $number_interval );
+				$this->tailwatch_render_optimizer_cron();
 				return;
 			} elseif ( 'logs_activity' === $db_key ) {
-				$optimize_database->wptw_clean_logs_activity( $json_data, $number_interval );
-				$this->wptw_render_optimizer_cron();
+				$optimize_database->tailwatch_clean_logs_activity( $json_data, $number_interval );
+				$this->tailwatch_render_optimizer_cron();
 				return;
 			} elseif ( 'ajax_logs' === $db_key ) {
-				$optimize_database->wptw_clean_ajax_logs( $json_data, $number_interval );
-				$this->wptw_render_optimizer_cron();
+				$optimize_database->tailwatch_clean_ajax_logs( $json_data, $number_interval );
+				$this->tailwatch_render_optimizer_cron();
 				return;
 			} elseif ( 'monitoring_logs' === $db_key ) {
-				$optimize_database->wptw_clean_monitoring_logs( $json_data, $number_interval );
-				$this->wptw_render_optimizer_cron();
+				$optimize_database->tailwatch_clean_monitoring_logs( $json_data, $number_interval );
+				$this->tailwatch_render_optimizer_cron();
 				return;
 			} elseif ( 'email_logs' === $db_key ) {
-				$optimize_database->wptw_clean_email_logs( $json_data, $number_interval );
-				$this->wptw_render_optimizer_cron();
+				$optimize_database->tailwatch_clean_email_logs( $json_data, $number_interval );
+				$this->tailwatch_render_optimizer_cron();
 				return;
 			} elseif ( '' !== $db_key ) {
-				$handled = apply_filters( 'wptw_db_optimize_step_handler', false, $db_key, $json_data, $number_interval, $this );
+				$handled = apply_filters( 'tailwatch_db_optimize_step_handler', false, $db_key, $json_data, $number_interval, $this );
 				if ( ! $handled ) {
 					if ( isset( $json_data[ $db_key ] ) && is_array( $json_data[ $db_key ] ) ) {
 						$json_data[ $db_key ]['is_completed'] = true;
 						$this->update_db_optimization_data( $json_data );
 					}
-					$this->wptw_optimize_logs_records( "Skipping unsupported step: {$db_key}" );
+					$this->tailwatch_optimize_logs_records( "Skipping unsupported step: {$db_key}" );
 				}
-				$this->wptw_render_optimizer_cron();
+				$this->tailwatch_render_optimizer_cron();
 				return;
 			} else {
-				$this->wptw_optimize_logs_records( 'Database optimization completed successfully', 'SUCCESS' );
+				$this->tailwatch_optimize_logs_records( 'Database optimization completed successfully', 'SUCCESS' );
 
 				if ( 'in-progress' === $cancel_pause['scan_state'] ) {
 					$cancel_pause['scan_state'] = 'completed';
@@ -827,23 +827,23 @@ class DatabaseOptimizerController {
 					);
 				}
 				$live_logs = new LiveLogsController();
-				$live_logs->wptw_live_logs_completed( true, $this->wptw_get_log_file_path() );
+				$live_logs->tailwatch_live_logs_completed( true, $this->tailwatch_get_log_file_path() );
 
 				if ( 'db_backup' === $json_data['process_run'] ) {
-					$database_backup = wp_next_scheduled( 'wptw_scan_db_tables_cron' );
+					$database_backup = wp_next_scheduled( 'tailwatch_scan_db_tables_cron' );
 					if ( ! $database_backup ) {
-						$cancel_pause = $backup_controller->wptw_backup_cancel_pause_data();
+						$cancel_pause = $backup_controller->tailwatch_backup_cancel_pause_data();
 
 						if ( true === $cancel_pause['cron_running'] ) {
 							$cancel_pause['cron_running'] = false;
 							$backup_controller->update_backup_cancel_pause( $cancel_pause );
 						}
 
-						$backup_data                       = $backup_controller->wptw_get_scan_backup_data();
+						$backup_data                       = $backup_controller->tailwatch_get_scan_backup_data();
 						$backup_data['optimize_completed'] = true;
 						$backup_controller->update_backup_data( $backup_data );
 
-						wp_schedule_single_event( time() + 5, 'wptw_scan_db_tables_cron' );
+						wp_schedule_single_event( time() + 5, 'tailwatch_scan_db_tables_cron' );
 					}
 				}
 			}
@@ -866,30 +866,30 @@ class DatabaseOptimizerController {
 		}
 	}
 
-	public function wptw_render_optimizer_cron() {
-		$cancel_pause                         = $this->wptw_optimization_cancel_pause();
+	public function tailwatch_render_optimizer_cron() {
+		$cancel_pause                         = $this->tailwatch_optimization_cancel_pause();
 		$cancel_pause['function_completed']   = true;
 		$cancel_pause['function_started']     = false;
 		$cancel_pause['completion_timestamp'] = time();
 		$this->update_db_optimization_cancel_pause( $cancel_pause );
 
-		wp_schedule_single_event( time() + 5, 'wptw_auto_db_optimize' );
+		wp_schedule_single_event( time() + 5, 'tailwatch_auto_db_optimize' );
 	}
 
-	public function wptw_optimize_logs_records( $message, $level = 'INFO' ) {
+	public function tailwatch_optimize_logs_records( $message, $level = 'INFO' ) {
 		$live_logs = new LiveLogsController();
-		$live_logs->update_live_logs_records( $message, $this->wptw_get_log_file_path(), $level );
+		$live_logs->update_live_logs_records( $message, $this->tailwatch_get_log_file_path(), $level );
 
-		$database_optimize = $this->wptw_get_optimization_data();
+		$database_optimize = $this->tailwatch_get_optimization_data();
 		if ( 'db_backup' === $database_optimize['process_run'] ) {
 			$backup_controller = new BackupController();
 			$backup_controller->update_logs_records( $message, $level );
 		}
 	}
 
-	public function wptw_get_optimize_live_logs( $post_data ) {
+	public function tailwatch_get_optimize_live_logs( $post_data ) {
 		try {
-			$is_enabled = $this->wptw_db_optimizer_feature_enable();
+			$is_enabled = $this->tailwatch_db_optimizer_feature_enable();
 			if ( ! $is_enabled['feature_enable'] ) {
 				Log::error(
 					'Database Optimizer feature is not enabled',
@@ -907,7 +907,7 @@ class DatabaseOptimizerController {
 				);
 			}
 
-			$optimize_data = $this->wptw_optimization_cancel_pause();
+			$optimize_data = $this->tailwatch_optimization_cancel_pause();
 			$feature_type  = 'database_optimizer';
 
 			$params = array(
@@ -915,7 +915,7 @@ class DatabaseOptimizerController {
 			);
 
 			$livelogs = new LiveLogsController();
-			return $livelogs->wptw_import_live_logs( $post_data, $this->wptw_get_log_file_path(), $optimize_data, $feature_type, $params );
+			return $livelogs->tailwatch_import_live_logs( $post_data, $this->tailwatch_get_log_file_path(), $optimize_data, $feature_type, $params );
 		} catch ( \Throwable $e ) {
 			Log::error(
 				$e->getMessage(),
@@ -933,9 +933,9 @@ class DatabaseOptimizerController {
 		}
 	}
 
-	public function wptw_pause_db_optimize( $post_data ) {
+	public function tailwatch_pause_db_optimize( $post_data ) {
 		try {
-			$is_enabled = $this->wptw_db_optimizer_feature_enable();
+			$is_enabled = $this->tailwatch_db_optimizer_feature_enable();
 			if ( ! $is_enabled['feature_enable'] ) {
 				Log::error(
 					'Database Optimizer feature is not enabled',
@@ -971,7 +971,7 @@ class DatabaseOptimizerController {
 				);
 			}
 
-			$existing_data = $this->wptw_optimization_cancel_pause();
+			$existing_data = $this->tailwatch_optimization_cancel_pause();
 
 			$scan_state = isset( $data['scan_state'] ) ? sanitize_text_field( $data['scan_state'] ) : '';
 			if ( in_array( $scan_state, array( 'pause', 'cancel' ), true ) ) {
@@ -979,9 +979,9 @@ class DatabaseOptimizerController {
 				$existing_data['scan_state'] = $scan_state;
 				$this->update_db_optimization_cancel_pause( $existing_data );
 
-				$timestamp = wp_next_scheduled( 'wptw_auto_db_optimize' );
+				$timestamp = wp_next_scheduled( 'tailwatch_auto_db_optimize' );
 				if ( $timestamp ) {
-					wp_unschedule_event( $timestamp, 'wptw_auto_db_optimize' );
+					wp_unschedule_event( $timestamp, 'tailwatch_auto_db_optimize' );
 
 					// Handle process state based on cancel/pause.
 					$process_id = isset( $existing_data['process_id'] ) ? $existing_data['process_id'] : null;
@@ -1090,14 +1090,14 @@ class DatabaseOptimizerController {
 		}
 	}
 
-	public function wptw_delete_optimizer_garbage_data(): void {
+	public function tailwatch_delete_optimizer_garbage_data(): void {
 		try {
-			$wptw_key             = 'default_dboptimize_scan';
+			$tailwatch_key             = 'default_dboptimize_scan';
 			$cancel_pause_option  = 'dboptimize_cancel_pause';
 			$scan_dbtables_option = 'scan_dbtables';
 
 			$db_model             = new DBModel();
-			$cancel_pause_entries = $db_model->get_log_value( $wptw_key, $cancel_pause_option );
+			$cancel_pause_entries = $db_model->get_log_value( $tailwatch_key, $cancel_pause_option );
 
 			foreach ( $cancel_pause_entries as $entry ) {
 				$child_of = $entry['child_of'];
@@ -1132,7 +1132,7 @@ class DatabaseOptimizerController {
 
 				$where = array(
 					'child_of' => $child_of,
-					'key'      => $wptw_key,
+					'key'      => $tailwatch_key,
 				);
 
 				$db_model = new DBModel();
@@ -1141,7 +1141,7 @@ class DatabaseOptimizerController {
 				$file_path = $this->get_live_logs . '_' . $child_of . '.json';
 
 				if ( file_exists( $file_path ) ) {
-					$this->wptw_delete_optimizer_logs_file( $file_path );
+					$this->tailwatch_delete_optimizer_logs_file( $file_path );
 				}
 			}
 
@@ -1164,9 +1164,9 @@ class DatabaseOptimizerController {
 		}
 	}
 
-	public function wptw_verify_db_optimize_status() {
+	public function tailwatch_verify_db_optimize_status() {
 		try {
-			$is_enabled = $this->wptw_db_optimizer_feature_enable();
+			$is_enabled = $this->tailwatch_db_optimizer_feature_enable();
 			if ( ! $is_enabled['feature_enable'] ) {
 				Log::error(
 					'Database Optimizer feature is not enabled',
@@ -1185,8 +1185,8 @@ class DatabaseOptimizerController {
 				);
 			}
 
-			$existing_data = $this->wptw_optimization_cancel_pause();
-			$optimize_data = $this->wptw_get_optimization_data();
+			$existing_data = $this->tailwatch_optimization_cancel_pause();
+			$optimize_data = $this->tailwatch_get_optimization_data();
 
 			if ( ! empty( $existing_data ) ) {
 
@@ -1250,9 +1250,9 @@ class DatabaseOptimizerController {
 		}
 	}
 
-	public function wptw_resume_db_optimize() {
+	public function tailwatch_resume_db_optimize() {
 		try {
-			$is_enabled = $this->wptw_db_optimizer_feature_enable();
+			$is_enabled = $this->tailwatch_db_optimizer_feature_enable();
 			if ( ! $is_enabled['feature_enable'] ) {
 				Log::error(
 					'Database Optimizer feature is not enabled',
@@ -1271,10 +1271,10 @@ class DatabaseOptimizerController {
 				);
 			}
 
-			$existing_data = $this->wptw_optimization_cancel_pause();
+			$existing_data = $this->tailwatch_optimization_cancel_pause();
 
 			if ( ! empty( $existing_data ) && ! empty( $existing_data['scan_state'] ) && 'pause' === $existing_data['scan_state'] ) {
-				wp_schedule_single_event( time() + 10, 'wptw_auto_db_optimize' );
+				wp_schedule_single_event( time() + 10, 'tailwatch_auto_db_optimize' );
 
 				$existing_data['scan_state'] = 'in-progress';
 				$this->update_db_optimization_cancel_pause( $existing_data );
@@ -1330,7 +1330,7 @@ class DatabaseOptimizerController {
 		}
 	}
 
-	public function wptw_delete_optimizer_logs_file( $file_path ) {
+	public function tailwatch_delete_optimizer_logs_file( $file_path ) {
 		if ( file_exists( $file_path ) ) {
 			wp_delete_file( $file_path );
 		}

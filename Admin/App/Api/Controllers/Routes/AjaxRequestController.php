@@ -57,7 +57,6 @@ use Tailwatch\Admin\App\Api\Controllers\IpManagement\WhiteList\CountryWhiteListC
 use Tailwatch\Admin\App\Api\Controllers\LoginDefender\IpProtections\IpProtectionController;
 use Tailwatch\Admin\App\Api\Controllers\Logs\FeatureCounts\IpManagementLogCount;
 use Tailwatch\Admin\App\Api\Controllers\Logs\FeatureCounts\LoginDefenderLogCount;
-use Tailwatch\Admin\App\Api\Controllers\Media\MediaController;
 
 /**
  * Class AjaxRequestController
@@ -66,19 +65,19 @@ use Tailwatch\Admin\App\Api\Controllers\Media\MediaController;
  *
  * Every AJAX-driven feature in the Tailwatch plugin (~968 distinct action types)
  * is dispatched through this one class. The constructor registers a single
- * WordPress AJAX hook (`wp_ajax_wptw_global_ajax_handler`) — there are NO
+ * WordPress AJAX hook (`wp_ajax_tailwatch_global_ajax_handler`) — there are NO
  * `wp_ajax_nopriv_*` registrations anywhere in the plugin, so anonymous AJAX
  * is impossible by construction.
  *
  * ## Centralized nonce + capability gate
  *
- * The single entry point `wptw_global_ajax_handler()` enforces — BEFORE any
+ * The single entry point `tailwatch_global_ajax_handler()` enforces — BEFORE any
  * downstream controller method is invoked — the following gate (see the very
  * first lines of that method below):
  *
- *   1. wp_verify_nonce( $_POST['nonce'], 'wp_ajax_nonce' ). Reject the request
+ *   1. wp_verify_nonce( $_POST['nonce'], 'tailwatch_ajax_nonce' ). Reject the request
  *      with a JSON error if the nonce is missing or invalid. The nonce is
- *      minted server-side via wp_create_nonce('wp_ajax_nonce') and emitted to
+ *      minted server-side via wp_create_nonce('tailwatch_ajax_nonce') and emitted to
  *      the admin UI via wp_localize_script() (see InterfaceController).
  *      Anonymous, cross-origin, and replayed requests fail at this gate.
  *
@@ -108,7 +107,7 @@ class AjaxRequestController {
 	 */
 	public function __construct() {
 		$hook_controllers = new HookControllers();
-		$hook_controllers->add_action_hook( 'wp_ajax_wptw_global_ajax_handler', array( $this, 'wptw_global_ajax_handler' ) );
+		$hook_controllers->add_action_hook( 'wp_ajax_tailwatch_global_ajax_handler', array( $this, 'tailwatch_global_ajax_handler' ) );
 		// Intentionally NOT registering wp_ajax_nopriv_* — every plugin route requires an authenticated admin session.
 	}
 
@@ -120,11 +119,11 @@ class AjaxRequestController {
 	 *
 	 * @return void
 	 */
-	public function wptw_global_ajax_handler() {
+	public function tailwatch_global_ajax_handler() {
 		try {
 			// Verify nonce for security.
 			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified in next line
-			if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['nonce'] ) ), 'wp_ajax_nonce' ) ) {
+			if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['nonce'] ) ), 'tailwatch_ajax_nonce' ) ) {
 				wp_send_json_error( __( 'Invalid nonce', 'tailwatch' ) );
 				return;
 			}
@@ -145,19 +144,20 @@ class AjaxRequestController {
 			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above
 			$action_type = sanitize_text_field( wp_unslash( $_POST['action_type'] ) );
 
-			// $post_data is intentionally not blanket-sanitized here. The frontend sends a JSON
-			// string in $_POST['data']; each downstream controller json_decode()s it and then
-			// applies the correct sanitizer per field (sanitize_email for email, absint for IDs,
-			// sanitize_textarea_field for descriptions, esc_url_raw for URLs, etc.). A blanket
-			// sanitize_text_field across the whole JSON string would strip HTML from legitimate
-			// content fields BEFORE json_decode runs.
-			// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- See deferred-sanitization rationale above; nonce verified earlier in this method; per-field sanitization is performed by each controller after json_decode().
-			$post_data = isset( $_POST['data'] ) ? wp_unslash( $_POST['data'] ) : null;
+			// $_POST['data'] is a JSON payload. Following the WordPress "sanitizing array input
+			// data" guidance, structured input is sanitized element-by-element after decoding —
+			// not by blanket-sanitizing the raw JSON string, which would corrupt URLs, credentials
+			// and percent-encoded values. tailwatch_sanitize_request_payload() decodes the payload,
+			// sanitizes every value with the function that matches its type, and re-encodes it, so
+			// the premium filter and each controller receive already-sanitized data. Controllers
+			// then re-sanitize per field as a second layer.
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Nonce verified earlier in this method; $_POST['data'] is unslashed and immediately passed to tailwatch_sanitize_request_payload(), which decodes the JSON and sanitizes every value element-by-element with a context-appropriate function. A JSON string cannot be blanket-sanitized inline (e.g. sanitize_text_field) without corrupting URLs, credentials and percent-encoded values, so a custom sanitizer is used here; PHPCS cannot recognise it, hence this annotation.
+			$post_data = $this->tailwatch_sanitize_request_payload( isset( $_POST['data'] ) ? wp_unslash( $_POST['data'] ) : null );
 
 			// Allow the pro plugin to verify plan access before executing any route.
 			// Pro plugin hooks in via LicenseFeatureController and uses CallAccessVerifyController.
 			// Default null = allow. Array with status => false = deny with 402.
-			$access_check = apply_filters( 'wptw_verify_ajax_action', null, $action_type );
+			$access_check = apply_filters( 'tailwatch_verify_ajax_action', null, $action_type );
 			if ( is_array( $access_check ) && false === ( $access_check['status'] ?? true ) ) {
 				// Derive the suggested frontend action from the specific reason
 				// code returned by the access check. Suspended licenses must NOT
@@ -196,7 +196,7 @@ class AjaxRequestController {
 
 			if ( null === $route ) {
 				// Allow the premium plugin to handle routes it owns before returning an error.
-				$premium_response = apply_filters( 'wptw_handle_premium_ajax_routes', null, $action_type, $post_data );
+				$premium_response = apply_filters( 'tailwatch_handle_premium_ajax_routes', null, $action_type, $post_data );
 
 				if ( null !== $premium_response ) {
 					if ( isset( $premium_response['code'] ) && 200 === $premium_response['code'] ) {
@@ -210,7 +210,7 @@ class AjaxRequestController {
 				// Pro plugin is installed but did not claim this action — it is truly unknown.
 				// If pro is NOT installed, the action may be a premium feature; return an upgrade
 				// prompt instead of a misleading "invalid action" error.
-				if ( ! apply_filters( 'wptw_is_premium_plugin_active', false ) ) {
+				if ( ! apply_filters( 'tailwatch_is_premium_plugin_active', false ) ) {
 					wp_send_json_error(
 						array(
 							'code'    => 402,
@@ -241,8 +241,8 @@ class AjaxRequestController {
 			}
 
 			// Global Feature Check: If controller implements feature checking.
-			if ( method_exists( $controller, 'wptw_check_feature_enabled' ) ) {
-				$feature_status = $controller->wptw_check_feature_enabled( $method );
+			if ( method_exists( $controller, 'tailwatch_check_feature_enabled' ) ) {
+				$feature_status = $controller->tailwatch_check_feature_enabled( $method );
 
 				if ( isset( $feature_status['feature_enable'] ) && false === $feature_status['feature_enable'] ) {
 					wp_send_json_error(
@@ -277,6 +277,115 @@ class AjaxRequestController {
 	}
 
 	/**
+	 * Sanitize the raw AJAX request payload at the entry point.
+	 *
+	 * The payload is normally a JSON-encoded object. It is decoded and every value
+	 * is sanitized with the function appropriate to its type (WordPress "sanitizing
+	 * array input data" guidance), then re-encoded so the premium filter and each
+	 * controller receive already-sanitized data and re-sanitize per field as a
+	 * second layer. A non-JSON scalar payload (for example a bare action keyword)
+	 * is sanitized as plain text.
+	 *
+	 * @param string|null $raw Unslashed raw request body.
+	 * @return string|null Sanitized payload, or null when nothing was provided.
+	 */
+	private function tailwatch_sanitize_request_payload( $raw ) {
+		if ( ! is_string( $raw ) || '' === $raw ) {
+			return null;
+		}
+
+		$decoded = json_decode( $raw, true );
+		if ( is_array( $decoded ) ) {
+			return wp_json_encode(
+				$this->tailwatch_sanitize_entry_value( $decoded ),
+				JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+			);
+		}
+
+		// Not a JSON object/array — a bare scalar route (e.g. 'extended_connected').
+		return sanitize_text_field( $raw );
+	}
+
+	/**
+	 * Recursively sanitize a decoded request value, selecting the sanitizer that
+	 * matches each field's type.
+	 *
+	 * Credentials/secrets are preserved byte-exact (they are hashed or encrypted
+	 * downstream); URLs use esc_url_raw() so valid percent-encoding and relative
+	 * paths survive; e-mail values use sanitize_email(); rich-text message fields
+	 * allow safe HTML via wp_kses_post(); everything else uses
+	 * sanitize_textarea_field() (which preserves newlines). Non-string scalars
+	 * (int/float/bool/null) are left intact.
+	 *
+	 * @param mixed  $value Decoded value.
+	 * @param string $key   Key the value was stored under (drives sanitizer choice).
+	 * @return mixed Sanitized value.
+	 */
+	private function tailwatch_sanitize_entry_value( $value, $key = '' ) {
+		if ( is_array( $value ) ) {
+			// Feature settings travel as sub-option objects shaped like
+			// { "id": "custom_password", "value": <secret>, "selected": true }, where the
+			// value's real type is named by its sibling "id"/"key"/"register" — not by the
+			// literal key "value". Classify the "value" element by that sibling so password,
+			// URL and e-mail sub-options are handled correctly (a password sub-option must
+			// reach the controller byte-exact for encryption, never blanket-sanitized here).
+			$sibling_type_key = '';
+			if ( array_key_exists( 'value', $value ) ) {
+				foreach ( array( 'id', 'key', 'register' ) as $sibling ) {
+					if ( isset( $value[ $sibling ] ) && is_string( $value[ $sibling ] ) && '' !== $value[ $sibling ] ) {
+						$sibling_type_key = $value[ $sibling ];
+						break;
+					}
+				}
+			}
+
+			$clean = array();
+			foreach ( $value as $inner_key => $inner_value ) {
+				$clean_key     = is_string( $inner_key ) ? sanitize_text_field( $inner_key ) : $inner_key;
+				$effective_key = ( 'value' === $inner_key && '' !== $sibling_type_key ) ? $sibling_type_key : (string) $inner_key;
+				$clean[ $clean_key ] = $this->tailwatch_sanitize_entry_value( $inner_value, $effective_key );
+			}
+			return $clean;
+		}
+
+		if ( ! is_string( $value ) ) {
+			return $value;
+		}
+
+		$field = strtolower( $key );
+
+		// Credentials / secrets: must reach the controller byte-exact for hashing/encryption.
+		// Kept deliberately broad — treating a non-secret field as a secret only means it
+		// is sanitized by its controller instead of here (safe), whereas missing a real
+		// secret would corrupt it before hashing/encryption.
+		if ( preg_match( '/(pass|pwd|secret|token|key$|credential|refresh|private|salt|signature|client[_-]?id|oauth|bearer|jwt|passphrase)/', $field ) ) {
+			return $value;
+		}
+
+		// URLs (by key suffix or value shape), excluding data: URIs so inline base64
+		// survives below. esc_url_raw() keeps valid percent-encoding and relative paths.
+		if ( 0 !== stripos( ltrim( $value ), 'data:' )
+			&& ( preg_match( '/(_url$|^url$|^website$)/', $field )
+				|| preg_match( '#^\s*https?://#i', $value ) )
+		) {
+			return esc_url_raw( trim( $value ) );
+		}
+
+		// E-mail values.
+		if ( is_email( $value ) ) {
+			return sanitize_email( $value );
+		}
+
+		// Rich-text message fields rendered with wp_kses_post downstream: keep safe HTML.
+		if ( preg_match( '/(message|template|heading|content|body|description)/', $field ) ) {
+			return wp_kses_post( $value );
+		}
+
+		// Default: multi-line-safe text (keeps newlines, strips tags).
+		return sanitize_textarea_field( $value );
+	}
+
+	/**
 	 * Get route (controller and method) for a given action type.
 	 *
 	 * Maps action types to their corresponding controllers and methods.
@@ -289,655 +398,630 @@ class AjaxRequestController {
 		// Define all routes in a structured way.
 		$routes = array(
 			// Features Controller.
-			'wptw_get_feature'                          => array(
+			'tailwatch_get_feature'                          => array(
 				'controller' => new FeaturesController(),
-				'method'     => 'wptw_get_feature',
+				'method'     => 'tailwatch_get_feature',
 			),
-			'wptw_update_feature_status'                => array(
+			'tailwatch_update_feature_status'                => array(
 				'controller' => new FeaturesController(),
-				'method'     => 'wptw_update_feature_status',
+				'method'     => 'tailwatch_update_feature_status',
 			),
-			'wptw_update_inner_feature'                 => array(
+			'tailwatch_update_inner_feature'                 => array(
 				'controller' => new FeaturesController(),
-				'method'     => 'wptw_update_inner_feature',
+				'method'     => 'tailwatch_update_inner_feature',
 			),
-			'wptw_update_push_notification_value'       => array(
+			'tailwatch_update_push_notification_value'       => array(
 				'controller' => new FeaturesController(),
-				'method'     => 'wptw_update_push_notification_value',
+				'method'     => 'tailwatch_update_push_notification_value',
 			),
 
 			// Push Notification Controller.
-			'wptw_push_notification_activity'           => array(
+			'tailwatch_enable_disable_push_notification'     => array(
 				'controller' => new PushNotificationController(),
-				'method'     => 'wptw_push_notification_activity',
+				'method'     => 'tailwatch_enable_disable_push_notification',
 			),
-			'wptw_enable_disable_push_notification'     => array(
+			'tailwatch_get_push_notification'                => array(
 				'controller' => new PushNotificationController(),
-				'method'     => 'wptw_enable_disable_push_notification',
-			),
-			'wptw_get_push_notification'                => array(
-				'controller' => new PushNotificationController(),
-				'method'     => 'wptw_get_push_notification',
+				'method'     => 'tailwatch_get_push_notification',
 			),
 
 			// Settings Controller.
-			'wptw_update_plugin_activation'             => array(
+			'tailwatch_update_plugin_activation'             => array(
 				'controller' => new VerifyStatusController(),
-				'method'     => 'wptw_update_plugin_activation',
+				'method'     => 'tailwatch_update_plugin_activation',
 			),
-			'wptw_get_plugin_activation'                => array(
+			'tailwatch_get_plugin_activation'                => array(
 				'controller' => new VerifyStatusController(),
-				'method'     => 'wptw_get_plugin_activation',
+				'method'     => 'tailwatch_get_plugin_activation',
 			),
-			'wptw_delete_plugin_activation_data'        => array(
+			'tailwatch_delete_plugin_activation_data'        => array(
 				'controller' => new VerifyStatusController(),
-				'method'     => 'wptw_delete_plugin_activation_data',
+				'method'     => 'tailwatch_delete_plugin_activation_data',
 			),
-			'wptw_verify_license'                       => array(
+			'tailwatch_verify_license'                       => array(
 				'controller' => new VerifyStatusController(),
-				'method'     => 'wptw_verify_license',
+				'method'     => 'tailwatch_verify_license',
 			),
-			'wptw_get_user_info'                        => array(
+			'tailwatch_get_user_info'                        => array(
 				'controller' => new SettingsController(),
-				'method'     => 'wptw_get_user_info',
+				'method'     => 'tailwatch_get_user_info',
 			),
 			// Logs Controllers.
-			'wptw_logs_feature'                         => array(
+			'tailwatch_logs_feature'                         => array(
 				'controller' => new GetLogs(),
-				'method'     => 'wptw_logs_feature',
+				'method'     => 'tailwatch_logs_feature',
 			),
-			'wptw_logs_filter_options'                  => array(
+			'tailwatch_logs_filter_options'                  => array(
 				'controller' => new GetLogs(),
-				'method'     => 'wptw_logs_filter_options',
+				'method'     => 'tailwatch_logs_filter_options',
 			),
-			'wptw_get_log_by_id'                        => array(
+			'tailwatch_get_log_by_id'                        => array(
 				'controller' => new GetLogs(),
-				'method'     => 'wptw_get_log_by_id',
+				'method'     => 'tailwatch_get_log_by_id',
 			),
-			'wptw_delete_logs'                          => array(
+			'tailwatch_delete_logs'                          => array(
 				'controller' => new DeleteLogs(),
-				'method'     => 'wptw_delete_logs',
+				'method'     => 'tailwatch_delete_logs',
 			),
-			'wptw_delete_entries_and_logs'              => array(
+			'tailwatch_delete_entries_and_logs'              => array(
 				'controller' => new DeleteLogs(),
-				'method'     => 'wptw_delete_entries_and_logs',
+				'method'     => 'tailwatch_delete_entries_and_logs',
 			),
 
 			// Visit Controller.
-			'wptw_verify_visit_progress'                => array(
+			'tailwatch_verify_visit_progress'                => array(
 				'controller' => new VisitController(),
-				'method'     => 'wptw_verify_visit_progress',
+				'method'     => 'tailwatch_verify_visit_progress',
 			),
-			'wptw_check_php_version'                    => array(
+			'tailwatch_check_php_version'                    => array(
 				'controller' => new VisitController(),
-				'method'     => 'wptw_check_php_version',
+				'method'     => 'tailwatch_check_php_version',
 			),
-			'wptw_check_wordpress_version'              => array(
+			'tailwatch_check_wordpress_version'              => array(
 				'controller' => new VisitController(),
-				'method'     => 'wptw_check_wordpress_version',
+				'method'     => 'tailwatch_check_wordpress_version',
 			),
-			'check_wptw_table'                          => array(
+			'check_tailwatch_table'                          => array(
 				'controller' => new VisitController(),
-				'method'     => 'check_wptw_table',
+				'method'     => 'check_tailwatch_table',
 			),
-			'wptw_check_cron_status'                    => array(
+			'tailwatch_check_cron_status'                    => array(
 				'controller' => new VisitController(),
-				'method'     => 'wptw_check_cron_status',
+				'method'     => 'tailwatch_check_cron_status',
 			),
-			'wptw_check_http_request'                   => array(
+			'tailwatch_verify_initialize_completed'          => array(
 				'controller' => new VisitController(),
-				'method'     => 'wptw_check_http_request',
-			),
-			'wptw_verify_initialize_completed'          => array(
-				'controller' => new VisitController(),
-				'method'     => 'wptw_verify_initialize_completed',
+				'method'     => 'tailwatch_verify_initialize_completed',
 			),
 
 			// Dashboard Controller.
-			'wptw_dashboard_logs_count'                 => array(
+			'tailwatch_dashboard_logs_count'                 => array(
 				'controller' => new DashboardController(),
-				'method'     => 'wptw_dashboard_logs_count',
+				'method'     => 'tailwatch_dashboard_logs_count',
 			),
-			'wptw_dashboard_features'                   => array(
+			'tailwatch_dashboard_features'                   => array(
 				'controller' => new DashboardController(),
-				'method'     => 'wptw_dashboard_features',
+				'method'     => 'tailwatch_dashboard_features',
 			),
-			'wptw_scanning_feature_detail'              => array(
+			'tailwatch_scanning_feature_detail'              => array(
 				'controller' => new DashboardController(),
-				'method'     => 'wptw_scanning_feature_detail',
+				'method'     => 'tailwatch_scanning_feature_detail',
 			),
 
 			// Recommended Features Controller.
-			'wptw_start_features_implementation'        => array(
+			'tailwatch_start_features_implementation'        => array(
 				'controller' => new RecommendedFeaturesController(),
-				'method'     => 'wptw_start_features_implementation',
+				'method'     => 'tailwatch_start_features_implementation',
 			),
-			'wptw_recommended_features_process'         => array(
+			'tailwatch_recommended_features_process'         => array(
 				'controller' => new RecommendedFeaturesController(),
-				'method'     => 'wptw_recommended_features_process',
+				'method'     => 'tailwatch_recommended_features_process',
 			),
-			'wptw_get_recommended_features'             => array(
+			'tailwatch_run_feature_implement_cron_if_failed' => array(
 				'controller' => new RecommendedFeaturesController(),
-				'method'     => 'wptw_get_recommended_features',
-			),
-			'wptw_run_feature_implement_cron_if_failed' => array(
-				'controller' => new RecommendedFeaturesController(),
-				'method'     => 'wptw_run_feature_implement_cron_if_failed',
+				'method'     => 'tailwatch_run_feature_implement_cron_if_failed',
 			),
 
 			// SSL Verification Controller.
-			'wptw_return_ssl_verify_status'             => array(
+			'tailwatch_return_ssl_verify_status'             => array(
 				'controller' => new SslVerificationController(),
-				'method'     => 'wptw_return_ssl_verify_status',
+				'method'     => 'tailwatch_return_ssl_verify_status',
 			),
-			'wptw_verify_ssl_connection'                => array(
+			'tailwatch_verify_ssl_connection'                => array(
 				'controller' => new SslVerificationController(),
-				'method'     => 'wptw_verify_ssl_connection',
+				'method'     => 'tailwatch_verify_ssl_connection',
 			),
 
 			// Disk Space Controller.
-			'wptw_disk_and_db_usage'                    => array(
+			'tailwatch_disk_and_db_usage'                    => array(
 				'controller' => new DiskSpaceController(),
-				'method'     => 'wptw_disk_and_db_usage',
+				'method'     => 'tailwatch_disk_and_db_usage',
 			),
 
 			// Website Stats Controller.
-			'wptw_get_formatted_website_stats'          => array(
+			'tailwatch_get_formatted_website_stats'          => array(
 				'controller' => new WebsiteStatsController(),
-				'method'     => 'wptw_get_formatted_website_stats',
+				'method'     => 'tailwatch_get_formatted_website_stats',
 			),
 
 			// Feature Reset Controller.
-			'wptw_reset_feature_by_option'              => array(
+			'tailwatch_reset_feature_by_option'              => array(
 				'controller' => new ResetByFeatureOptionController(),
-				'method'     => 'wptw_reset_feature_by_option',
+				'method'     => 'tailwatch_reset_feature_by_option',
 			),
-			'wptw_start_reset_all_settings'             => array(
+			'tailwatch_start_reset_all_settings'             => array(
 				'controller' => new ResetAllFeatureController(),
-				'method'     => 'wptw_start_reset_all_settings',
+				'method'     => 'tailwatch_start_reset_all_settings',
 			),
-			'wptw_reset_all_settings_status'            => array(
+			'tailwatch_reset_all_settings_status'            => array(
 				'controller' => new ResetAllFeatureController(),
-				'method'     => 'wptw_reset_all_settings_status',
+				'method'     => 'tailwatch_reset_all_settings_status',
 			),
-			'wptw_reset_cron_if_failed'                 => array(
+			'tailwatch_reset_cron_if_failed'                 => array(
 				'controller' => new ResetAllFeatureController(),
-				'method'     => 'wptw_reset_cron_if_failed',
+				'method'     => 'tailwatch_reset_cron_if_failed',
 			),
 
-			'wptw_verify_import_and_reset_status'       => array(
+			'tailwatch_verify_import_and_reset_status'       => array(
 				'controller' => new SettingsController(),
-				'method'     => 'wptw_verify_import_and_reset_status',
+				'method'     => 'tailwatch_verify_import_and_reset_status',
 			),
 
 			// Backup.
-			'wptw_instant_backup_scanner'               => array(
+			'tailwatch_instant_backup_scanner'               => array(
 				'controller' => new BackupController(),
-				'method'     => 'wptw_instant_backup_scanner',
+				'method'     => 'tailwatch_instant_backup_scanner',
 			),
-			'wptw_get_live_logs'                        => array(
+			'tailwatch_get_live_logs'                        => array(
 				'controller' => new BackupController(),
-				'method'     => 'wptw_get_live_logs',
+				'method'     => 'tailwatch_get_live_logs',
 			),
-			'wptw_get_backup_folders_info'              => array(
+			'tailwatch_get_backup_folders_info'              => array(
 				'controller' => new BackupController(),
-				'method'     => 'wptw_get_backup_folders_info',
+				'method'     => 'tailwatch_get_backup_folders_info',
 			),
-			'wptw_get_backup_folder_files'              => array(
+			'tailwatch_get_backup_folder_files'              => array(
 				'controller' => new BackupController(),
-				'method'     => 'wptw_get_backup_folder_files',
+				'method'     => 'tailwatch_get_backup_folder_files',
 			),
-			'wptw_resume_backup'                        => array(
+			'tailwatch_resume_backup'                        => array(
 				'controller' => new BackupController(),
-				'method'     => 'wptw_resume_backup',
+				'method'     => 'tailwatch_resume_backup',
 			),
-			'wptw_pause_backup_creation'                => array(
+			'tailwatch_pause_backup_creation'                => array(
 				'controller' => new BackupController(),
-				'method'     => 'wptw_pause_backup_creation',
+				'method'     => 'tailwatch_pause_backup_creation',
 			),
-			'wptw_verify_backup_status'                 => array(
+			'tailwatch_verify_backup_status'                 => array(
 				'controller' => new BackupController(),
-				'method'     => 'wptw_verify_backup_status',
+				'method'     => 'tailwatch_verify_backup_status',
 			),
-			'wptw_execute_cron_if_failed'               => array(
+			'tailwatch_execute_cron_if_failed'               => array(
 				'controller' => new BackupController(),
-				'method'     => 'wptw_execute_cron_if_failed',
+				'method'     => 'tailwatch_execute_cron_if_failed',
 			),
-			'wptw_start_backup_with_optimize_or_not'    => array(
+			'tailwatch_start_backup_with_optimize_or_not'    => array(
 				'controller' => new BackupController(),
-				'method'     => 'wptw_start_backup_with_optimize_or_not',
+				'method'     => 'tailwatch_start_backup_with_optimize_or_not',
 			),
-			'wptw_delete_backup_folder'                 => array(
+			'tailwatch_delete_backup_folder'                 => array(
 				'controller' => new BackupMaintainController(),
-				'method'     => 'wptw_delete_backup_folder',
+				'method'     => 'tailwatch_delete_backup_folder',
 			),
-			'wptw_get_backup_status'                    => array(
+			'tailwatch_get_backup_status'                    => array(
 				'controller' => new BackupMaintainController(),
-				'method'     => 'wptw_get_backup_status',
+				'method'     => 'tailwatch_get_backup_status',
 			),
 
 			// Database Optimizer.
-			'wptw_database_optimize'                    => array(
+			'tailwatch_database_optimize'                    => array(
 				'controller' => new DatabaseOptimizerController(),
-				'method'     => 'wptw_database_optimize',
+				'method'     => 'tailwatch_database_optimize',
 			),
-			'wptw_get_optimize_live_logs'               => array(
+			'tailwatch_get_optimize_live_logs'               => array(
 				'controller' => new DatabaseOptimizerController(),
-				'method'     => 'wptw_get_optimize_live_logs',
+				'method'     => 'tailwatch_get_optimize_live_logs',
 			),
-			'wptw_resume_db_optimize'                   => array(
+			'tailwatch_resume_db_optimize'                   => array(
 				'controller' => new DatabaseOptimizerController(),
-				'method'     => 'wptw_resume_db_optimize',
+				'method'     => 'tailwatch_resume_db_optimize',
 			),
-			'wptw_verify_db_optimize_status'            => array(
+			'tailwatch_verify_db_optimize_status'            => array(
 				'controller' => new DatabaseOptimizerController(),
-				'method'     => 'wptw_verify_db_optimize_status',
+				'method'     => 'tailwatch_verify_db_optimize_status',
 			),
-			'wptw_pause_db_optimize'                    => array(
+			'tailwatch_pause_db_optimize'                    => array(
 				'controller' => new DatabaseOptimizerController(),
-				'method'     => 'wptw_pause_db_optimize',
+				'method'     => 'tailwatch_pause_db_optimize',
 			),
-			'wptw_db_optimization_cron_if_failed'       => array(
+			'tailwatch_db_optimization_cron_if_failed'       => array(
 				'controller' => new DatabaseOptimizerController(),
-				'method'     => 'wptw_db_optimization_cron_if_failed',
+				'method'     => 'tailwatch_db_optimization_cron_if_failed',
 			),
-			'wptw_check_db_optimization_status'         => array(
+			'tailwatch_check_db_optimization_status'         => array(
 				'controller' => new GetTablesOptimizerController(),
-				'method'     => 'wptw_check_db_optimization_status',
+				'method'     => 'tailwatch_check_db_optimization_status',
 			),
-			'wptw_get_db_optimizer_status'              => array(
+			'tailwatch_get_db_optimizer_status'              => array(
 				'controller' => new GetTablesOptimizerController(),
-				'method'     => 'wptw_get_db_optimizer_status',
+				'method'     => 'tailwatch_get_db_optimizer_status',
 			),
 
 			// Search Replace.
-			'wptw_get_all_table_names'                  => array(
+			'tailwatch_get_all_table_names'                  => array(
 				'controller' => new SearchReplaceController(),
-				'method'     => 'wptw_get_all_table_names',
+				'method'     => 'tailwatch_get_all_table_names',
 			),
-			'wptw_start_search_replace'                 => array(
+			'tailwatch_start_search_replace'                 => array(
 				'controller' => new SearchReplaceController(),
-				'method'     => 'wptw_start_search_replace',
+				'method'     => 'tailwatch_start_search_replace',
 			),
-			'wptw_live_search_replace_logs'             => array(
+			'tailwatch_live_search_replace_logs'             => array(
 				'controller' => new SearchReplaceController(),
-				'method'     => 'wptw_live_search_replace_logs',
+				'method'     => 'tailwatch_live_search_replace_logs',
 			),
-			'wptw_resume_search_replace'                => array(
+			'tailwatch_resume_search_replace'                => array(
 				'controller' => new SearchReplaceController(),
-				'method'     => 'wptw_resume_search_replace',
+				'method'     => 'tailwatch_resume_search_replace',
 			),
-			'wptw_cancel_pause_search_replace'          => array(
+			'tailwatch_cancel_pause_search_replace'          => array(
 				'controller' => new SearchReplaceController(),
-				'method'     => 'wptw_cancel_pause_search_replace',
+				'method'     => 'tailwatch_cancel_pause_search_replace',
 			),
-			'wptw_verify_search_replace_status'         => array(
+			'tailwatch_verify_search_replace_status'         => array(
 				'controller' => new SearchReplaceController(),
-				'method'     => 'wptw_verify_search_replace_status',
+				'method'     => 'tailwatch_verify_search_replace_status',
 			),
-			'wptw_search_replace_cron_if_failed'        => array(
+			'tailwatch_search_replace_cron_if_failed'        => array(
 				'controller' => new SearchReplaceController(),
-				'method'     => 'wptw_search_replace_cron_if_failed',
+				'method'     => 'tailwatch_search_replace_cron_if_failed',
 			),
 
 			// User Controllers.
-			'wptw_get_user_roles_data'                  => array(
+			'tailwatch_get_user_roles_data'                  => array(
 				'controller' => new UserRolesController(),
-				'method'     => 'wptw_get_user_roles_data',
+				'method'     => 'tailwatch_get_user_roles_data',
 			),
-			'wptw_get_user_status'                      => array(
+			'tailwatch_get_user_status'                      => array(
 				'controller' => new UserRetrievalController(),
-				'method'     => 'wptw_get_user_status',
+				'method'     => 'tailwatch_get_user_status',
 			),
-			'wptw_get_user_by_id'                       => array(
+			'tailwatch_get_user_by_id'                       => array(
 				'controller' => new UserRetrievalController(),
-				'method'     => 'wptw_get_user_by_id',
+				'method'     => 'tailwatch_get_user_by_id',
 			),
-			'wptw_update_user_status'                   => array(
+			'tailwatch_update_user_status'                   => array(
 				'controller' => new UserModificationController(),
-				'method'     => 'wptw_update_user_status',
+				'method'     => 'tailwatch_update_user_status',
 			),
-			'wptw_get_all_roles'                        => array(
+			'tailwatch_get_all_roles'                        => array(
 				'controller' => new UserRetrievalController(),
-				'method'     => 'wptw_get_all_roles',
+				'method'     => 'tailwatch_get_all_roles',
 			),
-			'wptw_change_user_role'                     => array(
+			'tailwatch_change_user_role'                     => array(
 				'controller' => new UserModificationController(),
-				'method'     => 'wptw_change_user_role',
+				'method'     => 'tailwatch_change_user_role',
 			),
-			'wptw_create_user'                          => array(
+			'tailwatch_create_user'                          => array(
 				'controller' => new UserModificationController(),
-				'method'     => 'wptw_create_user',
+				'method'     => 'tailwatch_create_user',
 			),
-			'wptw_update_user'                          => array(
+			'tailwatch_update_user'                          => array(
 				'controller' => new UserModificationController(),
-				'method'     => 'wptw_update_user',
+				'method'     => 'tailwatch_update_user',
 			),
-			'wptw_get_user_content_summary'             => array(
+			'tailwatch_get_user_content_summary'             => array(
 				'controller' => new UserDeletionController(),
-				'method'     => 'wptw_get_user_content_summary',
+				'method'     => 'tailwatch_get_user_content_summary',
 			),
-			'wptw_delete_user'                          => array(
+			'tailwatch_delete_user'                          => array(
 				'controller' => new UserDeletionController(),
-				'method'     => 'wptw_delete_user',
+				'method'     => 'tailwatch_delete_user',
 			),
-			'wptw_bulk_delete_users'                    => array(
+			'tailwatch_bulk_delete_users'                    => array(
 				'controller' => new UserDeletionController(),
-				'method'     => 'wptw_bulk_delete_users',
+				'method'     => 'tailwatch_bulk_delete_users',
 			),
 
 			// Files Integration Controller.
-			'wptw_instant_files_integrity_check'        => array(
+			'tailwatch_instant_files_integrity_check'        => array(
 				'controller' => new IntegrityWatchController(),
-				'method'     => 'wptw_instant_files_integrity_check',
+				'method'     => 'tailwatch_instant_files_integrity_check',
 			),
-			'wptw_verify_integrity_current_status'      => array(
+			'tailwatch_verify_integrity_current_status'      => array(
 				'controller' => new IntegrityWatchController(),
-				'method'     => 'wptw_verify_integrity_current_status',
+				'method'     => 'tailwatch_verify_integrity_current_status',
 			),
-			'wptw_files_integrity_comparison_logs'      => array(
+			'tailwatch_files_integrity_comparison_logs'      => array(
 				'controller' => new IntegrityWatchController(),
-				'method'     => 'wptw_files_integrity_comparison_logs',
+				'method'     => 'tailwatch_files_integrity_comparison_logs',
 			),
-			'wptw_cancel_pause_integrity'               => array(
+			'tailwatch_cancel_pause_integrity'               => array(
 				'controller' => new IntegrityWatchController(),
-				'method'     => 'wptw_cancel_pause_integrity',
+				'method'     => 'tailwatch_cancel_pause_integrity',
 			),
-			'wptw_files_integrity_cron_if_failed'       => array(
+			'tailwatch_files_integrity_cron_if_failed'       => array(
 				'controller' => new IntegrityWatchController(),
-				'method'     => 'wptw_files_integrity_cron_if_failed',
+				'method'     => 'tailwatch_files_integrity_cron_if_failed',
 			),
-			'wptw_resume_files_integrity'               => array(
+			'tailwatch_resume_files_integrity'               => array(
 				'controller' => new IntegrityWatchController(),
-				'method'     => 'wptw_resume_files_integrity',
+				'method'     => 'tailwatch_resume_files_integrity',
 			),
-			'wptw_get_file_logs_data'                   => array(
+			'tailwatch_get_file_logs_data'                   => array(
 				'controller' => new IntegrityWatchController(),
-				'method'     => 'wptw_get_file_logs_data',
+				'method'     => 'tailwatch_get_file_logs_data',
 			),
-			'wptw_delete_comparison_by_id'              => array(
+			'tailwatch_delete_comparison_by_id'              => array(
 				'controller' => new IntegrityWatchController(),
-				'method'     => 'wptw_delete_comparison_by_id',
+				'method'     => 'tailwatch_delete_comparison_by_id',
 			),
-			'wptw_get_files_log_by_id'                  => array(
+			'tailwatch_get_files_log_by_id'                  => array(
 				'controller' => new IntegrityWatchController(),
-				'method'     => 'wptw_get_files_log_by_id',
+				'method'     => 'tailwatch_get_files_log_by_id',
 			),
-			'wptw_get_file_integrity_status'            => array(
+			'tailwatch_get_file_integrity_status'            => array(
 				'controller' => new IntegrityWatchController(),
-				'method'     => 'wptw_get_file_integrity_status',
+				'method'     => 'tailwatch_get_file_integrity_status',
 			),
 
 			// Hardening Audit
-			'wptw_start_hardening_audit'                => array(
+			'tailwatch_start_hardening_audit'                => array(
 				'controller' => new HardeningAuditController(),
-				'method'     => 'wptw_start_hardening_audit',
+				'method'     => 'tailwatch_start_hardening_audit',
 			),
-			'wptw_verify_hardening_audit_status'        => array(
+			'tailwatch_verify_hardening_audit_status'        => array(
 				'controller' => new HardeningAuditController(),
-				'method'     => 'wptw_verify_hardening_audit_status',
+				'method'     => 'tailwatch_verify_hardening_audit_status',
 			),
-			'wptw_resume_hardening_audit'               => array(
+			'tailwatch_resume_hardening_audit'               => array(
 				'controller' => new HardeningAuditController(),
-				'method'     => 'wptw_resume_hardening_audit',
+				'method'     => 'tailwatch_resume_hardening_audit',
 			),
-			'wptw_cancel_pause_hardening_audit'         => array(
+			'tailwatch_cancel_pause_hardening_audit'         => array(
 				'controller' => new HardeningAuditController(),
-				'method'     => 'wptw_cancel_pause_hardening_audit',
+				'method'     => 'tailwatch_cancel_pause_hardening_audit',
 			),
-			'wptw_list_hardening_audit_reports'         => array(
+			'tailwatch_list_hardening_audit_reports'         => array(
 				'controller' => new HardeningAuditController(),
-				'method'     => 'wptw_list_hardening_audit_reports',
+				'method'     => 'tailwatch_list_hardening_audit_reports',
 			),
-			'wptw_get_hardening_audit_report_by_id'     => array(
+			'tailwatch_get_hardening_audit_report_by_id'     => array(
 				'controller' => new HardeningAuditController(),
-				'method'     => 'wptw_get_hardening_audit_report_by_id',
+				'method'     => 'tailwatch_get_hardening_audit_report_by_id',
 			),
-			'wptw_delete_hardening_audit_report_by_id'  => array(
+			'tailwatch_delete_hardening_audit_report_by_id'  => array(
 				'controller' => new HardeningAuditController(),
-				'method'     => 'wptw_delete_hardening_audit_report_by_id',
+				'method'     => 'tailwatch_delete_hardening_audit_report_by_id',
 			),
-			'wptw_get_hardening_audit_live_logs'        => array(
+			'tailwatch_get_hardening_audit_live_logs'        => array(
 				'controller' => new HardeningAuditController(),
-				'method'     => 'wptw_get_hardening_audit_live_logs',
+				'method'     => 'tailwatch_get_hardening_audit_live_logs',
 			),
-			'wptw_hardening_audit_cron_if_failed'       => array(
+			'tailwatch_hardening_audit_cron_if_failed'       => array(
 				'controller' => new HardeningAuditController(),
-				'method'     => 'wptw_hardening_audit_cron_if_failed',
+				'method'     => 'tailwatch_hardening_audit_cron_if_failed',
 			),
 
-			'wptw_features_calculate_score'             => array(
+			'tailwatch_features_calculate_score'             => array(
 				'controller' => new SecurityFeaturesVerifyController(),
-				'method'     => 'wptw_features_calculate_score',
+				'method'     => 'tailwatch_features_calculate_score',
 			),
-			'wptw_start_security_features_process'      => array(
+			'tailwatch_start_security_features_process'      => array(
 				'controller' => new SecurityFeaturesVerifyController(),
-				'method'     => 'wptw_start_security_features_process',
+				'method'     => 'tailwatch_start_security_features_process',
 			),
-			'wptw_execute_security_features_cron_if_failed' => array(
+			'tailwatch_execute_security_features_cron_if_failed' => array(
 				'controller' => new SecurityFeaturesVerifyController(),
-				'method'     => 'wptw_execute_security_features_cron_if_failed',
+				'method'     => 'tailwatch_execute_security_features_cron_if_failed',
 			),
 
 			// Redirection Rules
-			'wptw_create_redirection_rules'             => array(
+			'tailwatch_create_redirection_rules'             => array(
 				'controller' => new RedirectionsManager(),
-				'method'     => 'wptw_create_redirection_rules',
+				'method'     => 'tailwatch_create_redirection_rules',
 			),
-			'wptw_get_all_post_types'                   => array(
+			'tailwatch_get_all_post_types'                   => array(
 				'controller' => new RedirectionsManager(),
-				'method'     => 'wptw_get_all_post_types',
+				'method'     => 'tailwatch_get_all_post_types',
 			),
-			'wptw_get_posts_by_post_type'               => array(
+			'tailwatch_get_posts_by_post_type'               => array(
 				'controller' => new RedirectionsManager(),
-				'method'     => 'wptw_get_posts_by_post_type',
+				'method'     => 'tailwatch_get_posts_by_post_type',
 			),
-			'wptw_update_redirect_rule'                 => array(
+			'tailwatch_update_redirect_rule'                 => array(
 				'controller' => new RedirectionsManager(),
-				'method'     => 'wptw_update_redirect_rule',
+				'method'     => 'tailwatch_update_redirect_rule',
 			),
-			'wptw_get_all_redirect_rules'               => array(
+			'tailwatch_get_all_redirect_rules'               => array(
 				'controller' => new RedirectionsManager(),
-				'method'     => 'wptw_get_all_redirect_rules',
+				'method'     => 'tailwatch_get_all_redirect_rules',
 			),
 
 			// Broken Link Checker
-			'wptw_start_broken_link_checker'            => array(
+			'tailwatch_start_broken_link_checker'            => array(
 				'controller' => new BrokenLinkChecker(),
-				'method'     => 'wptw_start_broken_link_checker',
+				'method'     => 'tailwatch_start_broken_link_checker',
 			),
-			'wptw_broken_link_checker_live_logs'        => array(
+			'tailwatch_broken_link_checker_live_logs'        => array(
 				'controller' => new BrokenLinkStatus(),
-				'method'     => 'wptw_broken_link_checker_live_logs',
+				'method'     => 'tailwatch_broken_link_checker_live_logs',
 			),
-			'wptw_resume_broken_link_checker'           => array(
+			'tailwatch_resume_broken_link_checker'           => array(
 				'controller' => new BrokenLinkStatus(),
-				'method'     => 'wptw_resume_broken_link_checker',
+				'method'     => 'tailwatch_resume_broken_link_checker',
 			),
-			'wptw_cancel_pause_broken_link'             => array(
+			'tailwatch_cancel_pause_broken_link'             => array(
 				'controller' => new BrokenLinkStatus(),
-				'method'     => 'wptw_cancel_pause_broken_link',
+				'method'     => 'tailwatch_cancel_pause_broken_link',
 			),
-			'wptw_broken_links_cron_if_failed'          => array(
+			'tailwatch_broken_links_cron_if_failed'          => array(
 				'controller' => new BrokenLinkStatus(),
-				'method'     => 'wptw_broken_links_cron_if_failed',
+				'method'     => 'tailwatch_broken_links_cron_if_failed',
 			),
-			'wptw_verify_broken_link_status'            => array(
+			'tailwatch_verify_broken_link_status'            => array(
 				'controller' => new BrokenLinkStatus(),
-				'method'     => 'wptw_verify_broken_link_status',
+				'method'     => 'tailwatch_verify_broken_link_status',
 			),
-			'wptw_get_broken_links_logs'                => array(
+			'tailwatch_get_broken_links_logs'                => array(
 				'controller' => new BrokenLinkStatus(),
-				'method'     => 'wptw_get_broken_links_logs',
+				'method'     => 'tailwatch_get_broken_links_logs',
 			),
 
 			// Cron Jobs Routes
-			'wptw_get_cron_jobs_with_source'            => array(
+			'tailwatch_get_cron_jobs_with_source'            => array(
 				'controller' => new GetCronJobDetailsController(),
-				'method'     => 'wptw_get_cron_jobs_with_source',
+				'method'     => 'tailwatch_get_cron_jobs_with_source',
 			),
-			'wptw_get_schedules'                        => array(
+			'tailwatch_get_schedules'                        => array(
 				'controller' => new GetCronJobDetailsController(),
-				'method'     => 'wptw_get_schedules',
+				'method'     => 'tailwatch_get_schedules',
 			),
-			'wptw_run_cron_job'                         => array(
+			'tailwatch_run_cron_job'                         => array(
 				'controller' => new CronJobManagerController(),
-				'method'     => 'wptw_run_cron_job',
+				'method'     => 'tailwatch_run_cron_job',
 			),
-			'wptw_pause_cron_job'                       => array(
+			'tailwatch_pause_cron_job'                       => array(
 				'controller' => new CronJobManagerController(),
-				'method'     => 'wptw_pause_cron_job',
+				'method'     => 'tailwatch_pause_cron_job',
 			),
-			'wptw_resume_cron_job'                      => array(
+			'tailwatch_resume_cron_job'                      => array(
 				'controller' => new CronJobManagerController(),
-				'method'     => 'wptw_resume_cron_job',
+				'method'     => 'tailwatch_resume_cron_job',
 			),
-			'wptw_delete_cron_job'                      => array(
+			'tailwatch_delete_cron_job'                      => array(
 				'controller' => new CronJobManagerController(),
-				'method'     => 'wptw_delete_cron_job',
+				'method'     => 'tailwatch_delete_cron_job',
 			),
-			'wptw_add_cron_job'                         => array(
+			'tailwatch_add_cron_job'                         => array(
 				'controller' => new CronJobManagerController(),
-				'method'     => 'wptw_add_cron_job',
+				'method'     => 'tailwatch_add_cron_job',
 			),
-			'wptw_edit_cron_job'                        => array(
+			'tailwatch_edit_cron_job'                        => array(
 				'controller' => new CronJobManagerController(),
-				'method'     => 'wptw_edit_cron_job',
+				'method'     => 'tailwatch_edit_cron_job',
 			),
-			'wptw_bulk_cron_action'                     => array(
+			'tailwatch_bulk_cron_action'                     => array(
 				'controller' => new CronJobManagerController(),
-				'method'     => 'wptw_bulk_cron_action',
+				'method'     => 'tailwatch_bulk_cron_action',
 			),
-			'wptw_add_schedule'                         => array(
+			'tailwatch_add_schedule'                         => array(
 				'controller' => new CronJobManagerController(),
-				'method'     => 'wptw_add_schedule',
+				'method'     => 'tailwatch_add_schedule',
 			),
-			'wptw_edit_schedule'                        => array(
+			'tailwatch_edit_schedule'                        => array(
 				'controller' => new CronJobManagerController(),
-				'method'     => 'wptw_edit_schedule',
+				'method'     => 'tailwatch_edit_schedule',
 			),
-			'wptw_delete_schedule'                      => array(
+			'tailwatch_delete_schedule'                      => array(
 				'controller' => new CronJobManagerController(),
-				'method'     => 'wptw_delete_schedule',
+				'method'     => 'tailwatch_delete_schedule',
 			),
 
-			'wptw_get_process_monitoring_status'        => array(
+			'tailwatch_get_process_monitoring_status'        => array(
 				'controller' => new ProcessMonitoringController(),
-				'method'     => 'wptw_get_process_monitoring_status',
+				'method'     => 'tailwatch_get_process_monitoring_status',
 			),
 
-			'wptw_cron_healer'                          => array(
+			'tailwatch_cron_healer'                          => array(
 				'controller' => new CronHealer(),
-				'method'     => 'wptw_cron_healer',
+				'method'     => 'tailwatch_cron_healer',
 			),
 
 			// Bulk Feature Activation
-			'wptw_activate_features_bulk'               => array(
+			'tailwatch_activate_features_bulk'               => array(
 				'controller' => new BulkFeatureActivationController(),
-				'method'     => 'wptw_activate_features_bulk',
+				'method'     => 'tailwatch_activate_features_bulk',
 			),
 
 			// IP Management (Blacklist)
-			'wptw_handle_get_blocked_ip_ranges'         => array(
+			'tailwatch_handle_get_blocked_ip_ranges'         => array(
 				'controller' => new IpBlackListController(),
-				'method'     => 'wptw_handle_get_blocked_ip_ranges',
+				'method'     => 'tailwatch_handle_get_blocked_ip_ranges',
 			),
-			'wptw_handle_add_ip_rule'                   => array(
+			'tailwatch_handle_add_ip_rule'                   => array(
 				'controller' => new IpBlackListController(),
-				'method'     => 'wptw_handle_add_ip_rule',
+				'method'     => 'tailwatch_handle_add_ip_rule',
 			),
-			'wptw_handle_unblock_ip_range'              => array(
+			'tailwatch_handle_unblock_ip_range'              => array(
 				'controller' => new IpBlackListController(),
-				'method'     => 'wptw_handle_unblock_ip_range',
+				'method'     => 'tailwatch_handle_unblock_ip_range',
 			),
-			'wptw_handle_delete_ip_rule'                => array(
+			'tailwatch_handle_delete_ip_rule'                => array(
 				'controller' => new IpBlackListController(),
-				'method'     => 'wptw_handle_delete_ip_rule',
+				'method'     => 'tailwatch_handle_delete_ip_rule',
 			),
-			'wptw_handle_update_ip_rule'                => array(
+			'tailwatch_handle_update_ip_rule'                => array(
 				'controller' => new IpBlackListController(),
-				'method'     => 'wptw_handle_update_ip_rule',
+				'method'     => 'tailwatch_handle_update_ip_rule',
 			),
-			'wptw_preview_block_page'                   => array(
+			'tailwatch_preview_block_page'                   => array(
 				'controller' => new IpManagementController(),
-				'method'     => 'wptw_preview_block_page',
+				'method'     => 'tailwatch_preview_block_page',
 			),
 
 			// IP Management (Whitelist)
-			'wptw_handle_add_ip_whitelist'              => array(
+			'tailwatch_handle_add_ip_whitelist'              => array(
 				'controller' => new IpWhiteListController(),
-				'method'     => 'wptw_handle_add_ip_whitelist',
+				'method'     => 'tailwatch_handle_add_ip_whitelist',
 			),
-			'wptw_handle_update_ip_whitelist'           => array(
+			'tailwatch_handle_update_ip_whitelist'           => array(
 				'controller' => new IpWhiteListController(),
-				'method'     => 'wptw_handle_update_ip_whitelist',
+				'method'     => 'tailwatch_handle_update_ip_whitelist',
 			),
-			'wptw_handle_get_ip_whitelists'             => array(
+			'tailwatch_handle_get_ip_whitelists'             => array(
 				'controller' => new IpWhiteListController(),
-				'method'     => 'wptw_handle_get_ip_whitelists',
+				'method'     => 'tailwatch_handle_get_ip_whitelists',
 			),
-			'wptw_handle_delete_ip_whitelist'           => array(
+			'tailwatch_handle_delete_ip_whitelist'           => array(
 				'controller' => new IpWhiteListController(),
-				'method'     => 'wptw_handle_delete_ip_whitelist',
+				'method'     => 'tailwatch_handle_delete_ip_whitelist',
 			),
-			'wptw_handle_update_country_whitelist'      => array(
+			'tailwatch_handle_update_country_whitelist'      => array(
 				'controller' => new CountryWhiteListController(),
-				'method'     => 'wptw_handle_update_country_whitelist',
+				'method'     => 'tailwatch_handle_update_country_whitelist',
 			),
-			'wptw_handle_add_country_whitelist'         => array(
+			'tailwatch_handle_add_country_whitelist'         => array(
 				'controller' => new CountryWhiteListController(),
-				'method'     => 'wptw_handle_add_country_whitelist',
+				'method'     => 'tailwatch_handle_add_country_whitelist',
 			),
-			'wptw_handle_delete_country_whitelist'      => array(
+			'tailwatch_handle_delete_country_whitelist'      => array(
 				'controller' => new CountryWhiteListController(),
-				'method'     => 'wptw_handle_delete_country_whitelist',
+				'method'     => 'tailwatch_handle_delete_country_whitelist',
 			),
-			'wptw_handle_get_country_whitelists'        => array(
+			'tailwatch_handle_get_country_whitelists'        => array(
 				'controller' => new CountryWhiteListController(),
-				'method'     => 'wptw_handle_get_country_whitelists',
+				'method'     => 'tailwatch_handle_get_country_whitelists',
 			),
 
 			// Login Defender (IP Protection)
-			'wptw_handle_get_ip_activity_history'       => array(
+			'tailwatch_handle_get_ip_activity_history'       => array(
 				'controller' => new IpProtectionController(),
-				'method'     => 'wptw_handle_get_ip_activity_history',
+				'method'     => 'tailwatch_handle_get_ip_activity_history',
 			),
-			'wptw_handle_get_all_ip_activities'         => array(
+			'tailwatch_handle_get_all_ip_activities'         => array(
 				'controller' => new IpProtectionController(),
-				'method'     => 'wptw_handle_get_all_ip_activities',
+				'method'     => 'tailwatch_handle_get_all_ip_activities',
 			),
-			'wptw_handle_delete_ip_activity'            => array(
+			'tailwatch_handle_delete_ip_activity'            => array(
 				'controller' => new IpProtectionController(),
-				'method'     => 'wptw_handle_delete_ip_activity',
+				'method'     => 'tailwatch_handle_delete_ip_activity',
 			),
-			'wptw_handle_unblock_ip'                    => array(
+			'tailwatch_handle_unblock_ip'                    => array(
 				'controller' => new IpProtectionController(),
-				'method'     => 'wptw_handle_unblock_ip',
+				'method'     => 'tailwatch_handle_unblock_ip',
 			),
 
 			// Feature log counts
-			'wptw_login_defender_log_count'             => array(
+			'tailwatch_login_defender_log_count'             => array(
 				'controller' => new LoginDefenderLogCount(),
-				'method'     => 'wptw_login_defender_log_count',
+				'method'     => 'tailwatch_login_defender_log_count',
 			),
-			'wptw_ip_management_log_count'              => array(
+			'tailwatch_ip_management_log_count'              => array(
 				'controller' => new IpManagementLogCount(),
-				'method'     => 'wptw_ip_management_log_count',
+				'method'     => 'tailwatch_ip_management_log_count',
 			),
 
-			// Media Routes.
-			'wptw_get_wp_media'                      => array(
-				'controller' => new MediaController(),
-				'method'     => 'wptw_get_wp_media',
-			),
-			'wptw_upload_wp_media'                   => array(
-				'controller' => new MediaController(),
-				'method'     => 'wptw_upload_wp_media',
-			),
-			'wptw_delete_wp_media'                   => array(
-				'controller' => new MediaController(),
-				'method'     => 'wptw_delete_wp_media',
-			),
 		);
 
 		return isset( $routes[ $action_type ] ) ? $routes[ $action_type ] : null;

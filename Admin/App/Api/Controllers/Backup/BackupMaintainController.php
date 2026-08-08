@@ -54,7 +54,7 @@ class BackupMaintainController {
 		return $options_controller->get_features_options( $key, $option, $is_active );
 	}
 
-	public function wptw_get_backup_settings() {
+	public function tailwatch_get_backup_settings() {
 		$existing_settings = $this->get_features_options();
 
 		if ( $existing_settings ) {
@@ -148,7 +148,7 @@ class BackupMaintainController {
 			}
 		}
 
-		$get_backup_setting = $this->wptw_get_backup_settings();
+		$get_backup_setting = $this->tailwatch_get_backup_settings();
 		$user_backup_limit  = isset( $get_backup_setting['backupMaintain'] ) ? (int) $get_backup_setting['backupMaintain'] : 2;
 
 		$this->prune_backup_pool( $user_pool, $user_backup_limit, $feature_controller );
@@ -187,7 +187,7 @@ class BackupMaintainController {
 			$backup_data = json_decode( $backup['value'], true );
 			$folder_name = $backup_data['folderDate'] ?? '';
 
-			$delete_folder = WPTW_BACKUP_DIR . '/files/' . $folder_name . '/';
+			$delete_folder = TAILWATCH_BACKUP_DIR . '/files/' . $folder_name . '/';
 
 			$backup_controller  = new BackupController();
 			$delete_backup_file = $backup_controller->delete_folder_and_files( $delete_folder );
@@ -225,7 +225,7 @@ class BackupMaintainController {
 		}
 	}
 
-	public function wptw_delete_backup_folder( $post_data ) {
+	public function tailwatch_delete_backup_folder( $post_data ) {
 		try {
 			// Block while any consumer of the backup artifacts is mid-flight:
 			// a running backup writes to a folder we might rmdir; download /
@@ -272,10 +272,10 @@ class BackupMaintainController {
 			$failed_messages    = array();
 
 			if ( isset( $data['is_delete'] ) && true === $data['is_delete'] ) {
-				$wptw_key = 'default_backup_scan';
+				$tailwatch_key = 'default_backup_scan';
 				$option   = 'scan_backp';
 
-				$all_backups_raw = $feature_controller->get_log_value( $wptw_key, $option );
+				$all_backups_raw = $feature_controller->get_log_value( $tailwatch_key, $option );
 				$all_backups     = is_array( $all_backups_raw ) ? $all_backups_raw : array();
 				if ( empty( $all_backups ) ) {
 					Log::error(
@@ -346,8 +346,8 @@ class BackupMaintainController {
 					continue;
 				}
 
-				$backup_directory    = WPTW_BACKUP_DIR . '/files/' . $folder_date . '/';
-				$backup_directory_db = WPTW_BACKUP_DIR . '/database/' . $folder_date . '/';
+				$backup_directory    = TAILWATCH_BACKUP_DIR . '/files/' . $folder_date . '/';
+				$backup_directory_db = TAILWATCH_BACKUP_DIR . '/database/' . $folder_date . '/';
 				$backup_controller   = new BackupController();
 
 				$delete_backup_file = $backup_controller->delete_backup_folder( $backup_directory );
@@ -471,7 +471,7 @@ class BackupMaintainController {
 		}
 	}
 
-	public function wptw_get_backup_status() {
+	public function tailwatch_get_backup_status() {
 		try {
 			$backup_controller = new BackupController();
 			$is_backup_enable  = $backup_controller->get_backup_feature_data();
@@ -485,7 +485,7 @@ class BackupMaintainController {
 				);
 			}
 
-			$get_backup_option = $this->wptw_get_backup_settings();
+			$get_backup_option = $this->tailwatch_get_backup_settings();
 
 			$started_key        = 'default_backup_scan';
 			$started_option     = 'scan_backp';
@@ -501,7 +501,7 @@ class BackupMaintainController {
 			$backup_interval = $get_backup_option['backupInterval'] ?? 'N/A';
 			$backup_maintain = $get_backup_option['backupMaintain'] ?? 'N/A';
 
-			$next_scheduled          = wp_next_scheduled( 'wptw_backup_schedule_run' );
+			$next_scheduled          = wp_next_scheduled( 'tailwatch_backup_schedule_run' );
 			$current_time            = time();
 			$next_schedule_formatted = $next_scheduled ? gmdate( 'Y-m-d H:i:s', $next_scheduled ) : 'Not Scheduled'; // phpcs:ignore WordPress.DateTime.RestrictedFunctions.date_gmdate
 

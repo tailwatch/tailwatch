@@ -1,12 +1,12 @@
 /*
  * Tailwatch Toast — small in-house toast component.
- * Exposes window.wptwToast.{warning, error, success, info}(message).
+ * Exposes window.tailwatchToast.{warning, error, success, info}(message).
  * Pure vanilla JS; no jQuery, no external lib.
  */
 (function () {
 	'use strict';
 
-	var CONTAINER_ID = 'wptw-toast-container';
+	var CONTAINER_ID = 'tailwatch-toast-container';
 	var DISMISS_AFTER_MS = 5000;
 	var FADE_OUT_MS = 300;
 
@@ -15,7 +15,7 @@
 		if ( ! c ) {
 			c = document.createElement( 'div' );
 			c.id = CONTAINER_ID;
-			c.className = 'wptw-toast-container';
+			c.className = 'tailwatch-toast-container';
 			document.body.appendChild( c );
 		}
 		return c;
@@ -26,7 +26,7 @@
 			return;
 		}
 		var toast = document.createElement( 'div' );
-		toast.className = 'wptw-toast wptw-toast--' + ( level || 'info' );
+		toast.className = 'tailwatch-toast tailwatch-toast--' + ( level || 'info' );
 		toast.textContent = String( message );
 		getContainer().appendChild( toast );
 
@@ -45,7 +45,7 @@
 		}, DISMISS_AFTER_MS );
 	}
 
-	window.wptwToast = {
+	window.tailwatchToast = {
 		warning: function ( msg ) { show( msg, 'warning' ); },
 		error:   function ( msg ) { show( msg, 'error' ); },
 		success: function ( msg ) { show( msg, 'success' ); },

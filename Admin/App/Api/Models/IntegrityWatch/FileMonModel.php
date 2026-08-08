@@ -39,7 +39,7 @@ class FileMonModel {
 	 */
 	private function table( $which = 'baseline' ) {
 		global $wpdb;
-		$name = ( 'scans' === $which ) ? WPTW_DB_FILEMON_SCANS_TABLE : WPTW_DB_FILEMON_BASELINE_TABLE;
+		$name = ( 'scans' === $which ) ? TAILWATCH_DB_FILEMON_SCANS_TABLE : TAILWATCH_DB_FILEMON_BASELINE_TABLE;
 		return $wpdb->prefix . $name;
 	}
 
@@ -604,7 +604,7 @@ class FileMonModel {
 	 * @return string
 	 */
 	private function sidecar_dir() {
-		$dir = WPTW_LOGS_DIRECTORY . '/file-monitoring-log/folder_files';
+		$dir = TAILWATCH_LOGS_DIRECTORY . '/file-monitoring-log/folder_files';
 		if ( ! is_dir( $dir ) ) {
 			wp_mkdir_p( $dir );
 		}

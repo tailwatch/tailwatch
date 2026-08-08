@@ -14,7 +14,7 @@ use Tailwatch\Admin\App\Api\Services\GeoIp2\GeoIPService;
 use Tailwatch\Admin\App\Api\Models\LoginDefender\IpActivityModel;
 use Tailwatch\Admin\App\Api\Models\IpManagement\WhitelistModel;
 use Tailwatch\Admin\App\Api\Models\IpManagement\RuleModel;
-// IpProtectionController import removed — wptw_login_defender_settings() now uses $this->settings.
+// IpProtectionController import removed — tailwatch_login_defender_settings() now uses $this->settings.
 use Tailwatch\Admin\App\Api\Controllers\IpManagement\IpManagementController;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -53,7 +53,7 @@ class IpAccessService {
 		$this->block_reason    = '';
 	}
 
-	private function wptw_ip_managment_settings() {
+	private function tailwatch_ip_managment_settings() {
 		// Cache per request: check_access() can run several times per request and
 		// across several IpAccessService instances. Building IpManagementController
 		// each time is wasteful (it also re-registers its template_redirect hook),
@@ -63,11 +63,11 @@ class IpAccessService {
 			return $cached;
 		}
 		$controller = new IpManagementController();
-		$cached     = $controller->wptw_ips_managment_is_enabled();
+		$cached     = $controller->tailwatch_ips_managment_is_enabled();
 		return $cached;
 	}
 
-	private function wptw_login_defender_settings() {
+	private function tailwatch_login_defender_settings() {
 		// Use the settings already injected via the constructor.
 		// Previously this created a new IpProtectionController which itself
 		// instantiated another IpAccessService — a wasteful circular chain.
@@ -75,8 +75,8 @@ class IpAccessService {
 	}
 
 	public function check_access( $ip ) {
-		$login_defender_settings  = $this->wptw_login_defender_settings();
-		$ip_managment_settings = $this->wptw_ip_managment_settings();
+		$login_defender_settings  = $this->tailwatch_login_defender_settings();
+		$ip_managment_settings = $this->tailwatch_ip_managment_settings();
 
 		if ( ! filter_var( $ip, FILTER_VALIDATE_IP ) ) {
 			Log::error(
@@ -176,7 +176,7 @@ class IpAccessService {
 		}
 
 		// HOOK: Allow premium plugin to handle country-based rules checking
-		$country_rules_check = apply_filters( 'wptw_login_defender_country_rules_check', false, $ip, $country, $ip_managment_settings, $this->settings, $this->notifications );
+		$country_rules_check = apply_filters( 'tailwatch_login_defender_country_rules_check', false, $ip, $country, $ip_managment_settings, $this->settings, $this->notifications );
 		if ( $country_rules_check !== false && is_array( $country_rules_check ) ) {
 			return $country_rules_check;
 		}
@@ -280,7 +280,7 @@ class IpAccessService {
 	}
 
 	public function log_failed_attempt( $ip, $attempt_type, $username = '' ) {
-		$login_defender_settings = $this->wptw_login_defender_settings();
+		$login_defender_settings = $this->tailwatch_login_defender_settings();
 		if ( ! ( $login_defender_settings['ip_protection_enabled'] ?? false ) ) {
 			return false;
 		}
@@ -344,15 +344,15 @@ class IpAccessService {
 	public static function is_ip_in_range( $ip, $range ) {
 		// Normalize the candidate up front so an IPv4-mapped IPv6 form (::ffff:a.b.c.d)
 		// is collapsed to plain IPv4 — the CIDR branches below then see the v4 address
-		// and an IPv4 rule matches it. wptw_get_client_ip() already normalizes, so this
+		// and an IPv4 rule matches it. tailwatch_get_client_ip() already normalizes, so this
 		// is defense-in-depth for any direct caller.
-		$ip = GetIpServices::wptw_normalize_ip( $ip );
+		$ip = GetIpServices::tailwatch_normalize_ip( $ip );
 
 		// Exact single-IP match. Compare the canonical form of the rule too so the
 		// same IPv6 address written differently (compressed/expanded, mixed-case hex)
 		// still matches. normalize() returns CIDR strings untouched, so range rules
 		// fall through to the subnet branches below unchanged.
-		if ( $ip === $range || $ip === GetIpServices::wptw_normalize_ip( $range ) ) {
+		if ( $ip === $range || $ip === GetIpServices::tailwatch_normalize_ip( $range ) ) {
 			return true;
 		}
 

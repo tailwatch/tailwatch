@@ -2,17 +2,17 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import { CronHealer } from '../../../Components/CroneHealer/CronHealer';
 import { alertService } from "../../../Components/AlertService/AlertService";
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 export const instantScanning = async ({ setScanCompleted, setErrorMessages, fetchLogs }) => {
     try {
         const formData = new FormData();
-        formData.append("action", "wptw_global_ajax_handler");
-        formData.append("action_type", "wptw_start_hardening_audit");
-        formData.append("nonce", wptw_ajax.nonce);
+        formData.append("action", "tailwatch_global_ajax_handler");
+        formData.append("action_type", "tailwatch_start_hardening_audit");
+        formData.append("nonce", tailwatch_ajax.nonce);
         formData.append("data", JSON.stringify({ instant_scan: true }));
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
 
@@ -54,11 +54,11 @@ const executeCronIfFailed = async () => {
     try {
         isCronExecuting = true;
         const formData = new FormData();
-        formData.append("action", "wptw_global_ajax_handler");
-        formData.append("action_type", "wptw_hardening_audit_cron_if_failed");
-        formData.append("nonce", wptw_ajax.nonce);
+        formData.append("action", "tailwatch_global_ajax_handler");
+        formData.append("action_type", "tailwatch_hardening_audit_cron_if_failed");
+        formData.append("nonce", tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
 
@@ -96,14 +96,14 @@ const checkCronExecution = async (cron_running) => {
 export const fetchLogs = async (setLogs, setIsCompleted, isFirstExecution = true, isComponentActiveRef, setProgress, setIsScanInProgress, setIsLogsVisible, setErrorMessages, setIsPaused, setIsCanceled, setRenderKey, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setFeatureEnable, setParentEnable) => {
     try {
         const formData = new FormData();
-        formData.append("action", "wptw_global_ajax_handler");
-        formData.append("action_type", "wptw_get_hardening_audit_live_logs");
-        formData.append("nonce", wptw_ajax.nonce);
+        formData.append("action", "tailwatch_global_ajax_handler");
+        formData.append("action_type", "tailwatch_get_hardening_audit_live_logs");
+        formData.append("nonce", tailwatch_ajax.nonce);
 
         const lastLogIndex = isFirstExecution ? 0 : isLastLogIndex;
         formData.append("data", JSON.stringify({ last_log_index: lastLogIndex }));
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
 
@@ -184,12 +184,12 @@ export const fetchLogs = async (setLogs, setIsCompleted, isFirstExecution = true
 export const handleHardeningAuditActions = async ({ scan_state, setIsScanInProgress, setIsPaused, setIsCompleted, setLogs, setIsLogsVisible, setErrorMessages }) => {
     try {
         const formData = new FormData();
-        formData.append("action", "wptw_global_ajax_handler");
-        formData.append("action_type", "wptw_cancel_pause_hardening_audit");
+        formData.append("action", "tailwatch_global_ajax_handler");
+        formData.append("action_type", "tailwatch_cancel_pause_hardening_audit");
         formData.append("data", JSON.stringify({ scan_state }));
-        formData.append("nonce", wptw_ajax.nonce);
+        formData.append("nonce", tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
 
@@ -215,11 +215,11 @@ export const verifyHardeningAuditStatus = async (setLoading, setVerifyStatus, se
     try {
         setLoading(true);
         const formData = new FormData();
-        formData.append("action", "wptw_global_ajax_handler");
-        formData.append("action_type", "wptw_verify_hardening_audit_status");
-        formData.append("nonce", wptw_ajax.nonce);
+        formData.append("action", "tailwatch_global_ajax_handler");
+        formData.append("action_type", "tailwatch_verify_hardening_audit_status");
+        formData.append("nonce", tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
 
@@ -259,12 +259,12 @@ export const listHardeningAuditReports = async ({ setReports, setLoading, page =
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_list_hardening_audit_reports');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_list_hardening_audit_reports');
         formData.append('data', JSON.stringify({ page, limit }));
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
 
@@ -310,12 +310,12 @@ export const listHardeningAuditReports = async ({ setReports, setLoading, page =
 export const getHardeningAuditReportById = async (id) => {
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_get_hardening_audit_report_by_id');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_get_hardening_audit_report_by_id');
         formData.append('data', JSON.stringify({ id }));
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
 
@@ -334,12 +334,12 @@ export const deleteHardeningAuditReport = async (deleteData, setIsDeleting, refe
     setIsDeleting(true);
     try {
         const formData = new FormData();
-        formData.append("action", "wptw_global_ajax_handler");
-        formData.append("action_type", "wptw_delete_hardening_audit_report_by_id");
+        formData.append("action", "tailwatch_global_ajax_handler");
+        formData.append("action_type", "tailwatch_delete_hardening_audit_report_by_id");
         formData.append("data", JSON.stringify({ ids, is_delete }));
-        formData.append("nonce", wptw_ajax.nonce);
+        formData.append("nonce", tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
 

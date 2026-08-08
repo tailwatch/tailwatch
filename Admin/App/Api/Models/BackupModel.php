@@ -23,7 +23,7 @@ class BackupModel {
 	 */
 	public function get_all_backups( $key, $option ) {
 		global $wpdb;
-		$db_table_name = $wpdb->prefix . WPTW_DB_TABLE_NAME;
+		$db_table_name = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 
 		$query = $wpdb->prepare(
 			'SELECT id, value FROM %i WHERE `key` = %s AND `option` = %s ORDER BY id ASC',
@@ -39,15 +39,15 @@ class BackupModel {
 	/**
 	 * Get paginated backup folders with decoded JSON data.
 	 *
-	 * @param string $wptw_key The key to filter by.
+	 * @param string $tailwatch_key The key to filter by.
 	 * @param string $option   The option to filter by.
 	 * @param int    $limit    Number of records to retrieve.
 	 * @param int    $offset   Offset for pagination.
 	 * @return array Array of backup folder data.
 	 */
-	public function get_all_backup_folders( $wptw_key, $option, $limit = 10, $offset = 0, $exclude_process_runs = array() ) {
+	public function get_all_backup_folders( $tailwatch_key, $option, $limit = 10, $offset = 0, $exclude_process_runs = array() ) {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 
 		// NOT LIKE fragment for $exclude_process_runs. `process_run` lives
 		// inside the JSON `value` column; match the compact JSON shape
@@ -73,7 +73,7 @@ class BackupModel {
 			'SELECT id, value FROM %i WHERE `option` = %s AND `key` = %s' . $exclude_clauses_sql . ' ORDER BY `date_created` DESC LIMIT %d OFFSET %d',
 			$table_name,
 			$option,
-			$wptw_key,
+			$tailwatch_key,
 			$limit,
 			$offset
 		), ARRAY_A );
@@ -97,13 +97,13 @@ class BackupModel {
 	/**
 	 * Get total count of backup folders.
 	 *
-	 * @param string $wptw_key The key to filter by.
+	 * @param string $tailwatch_key The key to filter by.
 	 * @param string $option   The option to filter by.
 	 * @return int Total count of backup folders.
 	 */
-	public function get_all_backup_folders_count( $wptw_key, $option, $exclude_process_runs = array() ) {
+	public function get_all_backup_folders_count( $tailwatch_key, $option, $exclude_process_runs = array() ) {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 
 		// Same exclude semantics as get_all_backup_folders — `total` must match
 		// the number of rows the page query actually returns.
@@ -126,7 +126,7 @@ class BackupModel {
 			'SELECT COUNT(*) FROM %i WHERE `option` = %s AND `key` = %s' . $exclude_clauses_sql,
 			$table_name,
 			$option,
-			$wptw_key
+			$tailwatch_key
 		) );
 		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
 		return $count;
@@ -136,10 +136,10 @@ class BackupModel {
 	 * Delete a backup entry by ID.
 	 *
 	 * @param int    $backup_id The ID of the backup to delete.
-	 * @param string $table     Optional. Table name constant. Default WPTW_DB_TABLE_NAME.
+	 * @param string $table     Optional. Table name constant. Default TAILWATCH_DB_TABLE_NAME.
 	 * @return int|false The number of rows deleted, or false on error.
 	 */
-	public function delete_backup_by_id( $backup_id, $table = WPTW_DB_TABLE_NAME ) {
+	public function delete_backup_by_id( $backup_id, $table = TAILWATCH_DB_TABLE_NAME ) {
 		global $wpdb;
 		$db_table_name = $wpdb->prefix . $table;
 
@@ -198,61 +198,51 @@ class BackupModel {
 		global $wpdb;
 		$safe_offset     = absint( $offset );
 		$safe_chunk_size = absint( $chunk_size );
-		$order_by        = $this->wptw_build_order_by( $order_by_cols );
+		list( $order_by_sql, $order_by_args ) = $this->tailwatch_build_order_by( $order_by_cols );
 
-		// $order_by is built ONLY from backtick-escaped, schema-derived column names
-		// (DESCRIBE output, never user input); every value is bound through prepare().
-		// The constructed clause trips the static analyzers regardless of which line they
-		// attribute it to, so disable/enable wraps the whole query section.
-		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, PluginCheck.Security.DirectDB.UnescapedDBParameter
+		// $order_by_sql is a code-literal ORDER BY clause whose column identifiers are %i
+		// placeholders, bound below from schema-derived DESCRIBE column names (never user
+		// input); every value is bound through prepare(). The assembled clause trips the
+		// static analyzers regardless of which line they attribute it to, so disable/enable
+		// wraps the whole query section.
+		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, PluginCheck.Security.DirectDB.UnescapedDBParameter
 		if ( $exclude_transients && $table_name === $wpdb->options ) {
 			return $wpdb->get_results( $wpdb->prepare(
-				'SELECT * FROM %i WHERE option_name NOT LIKE %s AND option_name NOT LIKE %s ' . $order_by . ' LIMIT %d, %d',
-				$table_name,
-				'_transient_%',
-				'_site_transient_%',
-				$safe_offset,
-				$safe_chunk_size
+				'SELECT * FROM %i WHERE option_name NOT LIKE %s AND option_name NOT LIKE %s ' . $order_by_sql . ' LIMIT %d, %d',
+				array_merge(
+					array( $table_name, '_transient_%', '_site_transient_%' ),
+					$order_by_args,
+					array( $safe_offset, $safe_chunk_size )
+				)
 			), ARRAY_A );
 		}
 
 		return $wpdb->get_results( $wpdb->prepare(
-			'SELECT * FROM %i ' . $order_by . ' LIMIT %d, %d',
-			$table_name,
-			$safe_offset,
-			$safe_chunk_size
+			'SELECT * FROM %i ' . $order_by_sql . ' LIMIT %d, %d',
+			array_merge(
+				array( $table_name ),
+				$order_by_args,
+				array( $safe_offset, $safe_chunk_size )
+			)
 		), ARRAY_A );
-		// phpcs:enable WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, PluginCheck.Security.DirectDB.UnescapedDBParameter
-	}
-
-	/**
-	 * Backtick-quote a schema identifier (column name) for safe inline use in ORDER BY /
-	 * WHERE. The name comes from DESCRIBE (the DB's own schema), never user input.
-	 *
-	 * @param string $identifier Column name.
-	 * @return string Backtick-quoted identifier.
-	 */
-	private function wptw_backtick( $identifier ) {
-		return '`' . str_replace( '`', '``', (string) $identifier ) . '`';
+		// phpcs:enable WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, PluginCheck.Security.DirectDB.UnescapedDBParameter
 	}
 
 	/**
 	 * Build a deterministic ORDER BY clause from a column list. Empty → ORDER BY 1
-	 * (best-effort stable order for keyless tables). Columns are backtick-escaped; they
+	 * (best-effort stable order for keyless tables). Each column is emitted as a %i
+	 * identifier placeholder; the columns to bind are returned alongside the clause. They
 	 * come from the table's own primary-key definition, never user input.
 	 *
 	 * @param array $cols Column names.
-	 * @return string ORDER BY clause.
+	 * @return array{0: string, 1: array} ORDER BY clause with %i placeholders, and the columns to bind.
 	 */
-	private function wptw_build_order_by( $cols ) {
+	private function tailwatch_build_order_by( $cols ) {
 		if ( empty( $cols ) || ! is_array( $cols ) ) {
-			return 'ORDER BY 1';
+			return array( 'ORDER BY 1', array() );
 		}
-		$parts = array();
-		foreach ( $cols as $c ) {
-			$parts[] = $this->wptw_backtick( $c ) . ' ASC';
-		}
-		return 'ORDER BY ' . implode( ', ', $parts );
+		$placeholders = implode( ', ', array_fill( 0, count( $cols ), '%i ASC' ) );
+		return array( 'ORDER BY ' . $placeholders, array_values( $cols ) );
 	}
 
 	/**

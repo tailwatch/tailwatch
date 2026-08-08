@@ -47,27 +47,27 @@ class BackupController extends BaseController {
 	 *
 	 * @var array
 	 */
-	protected $wptw_feature_check_exemptions = array();
+	protected $tailwatch_feature_check_exemptions = array();
 
 	/**
 	 * Returns backup feature status (wrapper for get_backup_feature_data).
 	 *
 	 * @return array Backup feature data.
 	 */
-	protected function wptw_get_feature_status() {
+	protected function tailwatch_get_feature_status() {
 		return $this->get_backup_feature_data();
 	}
 
 	/** @since 1.0.0 @var string */
-	private $log_directory = WPTW_LOGS_DIRECTORY . '/backup-logs';
+	private $log_directory = TAILWATCH_LOGS_DIRECTORY . '/backup-logs';
 	/** @since 1.0.0 @var string */
-	private $get_live_logs = WPTW_LOGS_DIRECTORY . '/backup-logs/create_backup';
+	private $get_live_logs = TAILWATCH_LOGS_DIRECTORY . '/backup-logs/create_backup';
 	/** @since 1.0.0 @var string */
-	private $backup_directory = WPTW_BACKUP_DIR . '/files/';
+	private $backup_directory = TAILWATCH_BACKUP_DIR . '/files/';
 	/** @since 1.0.0 @var string */
-	private $db_directory = WPTW_BACKUP_DIR . '/database/';
+	private $db_directory = TAILWATCH_BACKUP_DIR . '/database/';
 	/** @since 1.0.0 @var string */
-	private $get_migration_progress = WPTW_BACKUP_DIR . '/migrator/import/migration_data.json';
+	private $get_migration_progress = TAILWATCH_BACKUP_DIR . '/migrator/import/migration_data.json';
 	/** @since 1.0.0 @var \Tailwatch\Admin\App\Api\Services\ProcessManager */
 	private $process_manager;
 	/** @since 1.0.0 @var int|null */
@@ -82,10 +82,10 @@ class BackupController extends BaseController {
 		$this->register_process_monitoring();
 
 		$hook_controller = new HookControllers();
-		$hook_controller->add_action_hook( 'wptw_backup_daily_scan', array( $this, 'wptw_run_backup_cron' ) );
-		$hook_controller->add_action_hook( 'wptw_verify_backup_cron_hook', array( $this, 'wptw_verify_backup_cron_status' ) );
-		$hook_controller->add_action_hook( 'wptw_delete_backup_files_entry', array( $this, 'wptw_delete_files_entry_with_cron' ) );
-		$hook_controller->add_action_hook( 'wptw_recovery_process_failed', array( $this, 'wptw_on_recovery_failed' ) );
+		$hook_controller->add_action_hook( 'tailwatch_backup_daily_scan', array( $this, 'tailwatch_run_backup_cron' ) );
+		$hook_controller->add_action_hook( 'tailwatch_verify_backup_cron_hook', array( $this, 'tailwatch_verify_backup_cron_status' ) );
+		$hook_controller->add_action_hook( 'tailwatch_delete_backup_files_entry', array( $this, 'tailwatch_delete_files_entry_with_cron' ) );
+		$hook_controller->add_action_hook( 'tailwatch_recovery_process_failed', array( $this, 'tailwatch_on_recovery_failed' ) );
 
 		new BackupDbController();
 	}
@@ -101,7 +101,7 @@ class BackupController extends BaseController {
 				// Informational: backup uses a dedicated recover_backup_process() handler
 				// in RecoveryService that picks the correct sub-step cron from backup
 				// state, so this list is not consulted by the generic recovery dispatch.
-				'cron_hooks'          => array( 'wptw_backup_daily_scan', 'wptw_scan_db_tables_cron', 'wptw_create_db_backup_cron' ),
+				'cron_hooks'          => array( 'tailwatch_backup_daily_scan', 'tailwatch_scan_db_tables_cron', 'tailwatch_create_db_backup_cron' ),
 				'data_source'         => 'wp_tw_settings',
 				'data_key'            => 'default_backup_scan',
 				'data_option'         => 'scan_backp',
@@ -110,13 +110,13 @@ class BackupController extends BaseController {
 				'stuck_threshold'     => 300, // 5 minutes.
 				'max_retries'         => 10,
 				// Settings ProcessGuard freezes while this process runs. Backup may run db_optimize
-				// as its optimize-before-backup phase (wptw_database_optimize_start); that phase's
+				// as its optimize-before-backup phase (tailwatch_database_optimize_start); that phase's
 				// own lock releases when it finishes, so we keep the optimizer feature locked for
 				// the whole backup to prevent settings drift mid-backup.
 				'locks_features'      => array( 'default_backup_enable', 'default_database_optimizer' ),
 				// Process types that, when running, prevent a user from starting
 				// a new backup. db_optimize is intentionally NOT listed because
-				// the optimizer-adoption logic in wptw_calculate_folder_sizes
+				// the optimizer-adoption logic in tailwatch_calculate_folder_sizes
 				// allows backup to subsume a running optimizer instead of
 				// duplicating it.
 				'cannot_start_while'  => array(
@@ -140,8 +140,8 @@ class BackupController extends BaseController {
 	 *
 	 * @return string Log file path.
 	 */
-	public function wptw_get_log_file_path() {
-		$backup_data = $this->wptw_get_scan_backup_data();
+	public function tailwatch_get_log_file_path() {
+		$backup_data = $this->tailwatch_get_scan_backup_data();
 		$file_key    = isset( $backup_data['zipId'] ) ? $backup_data['zipId'] : '';
 		return $this->get_live_logs . '_' . $file_key . '.json';
 	}
@@ -150,11 +150,11 @@ class BackupController extends BaseController {
 	 * Verifies backup cron status and reschedules daily scan if no backup cron is scheduled.
 	 *
 	 */
-	public function wptw_verify_backup_cron_status() {
-		$next_daily     = wp_next_scheduled( 'wptw_backup_daily_scan' );
-		$next_recurring = wp_next_scheduled( 'wptw_backup_schedule_run' );
+	public function tailwatch_verify_backup_cron_status() {
+		$next_daily     = wp_next_scheduled( 'tailwatch_backup_daily_scan' );
+		$next_recurring = wp_next_scheduled( 'tailwatch_backup_schedule_run' );
 		if ( ! $next_daily && ! $next_recurring ) {
-			wp_schedule_single_event( time() + 5, 'wptw_backup_daily_scan' );
+			wp_schedule_single_event( time() + 5, 'tailwatch_backup_daily_scan' );
 		}
 	}
 
@@ -163,10 +163,10 @@ class BackupController extends BaseController {
 	 *
 	 * @return array|null Response array on early return, null otherwise.
 	 */
-	public function wptw_execute_cron_if_failed() {
+	public function tailwatch_execute_cron_if_failed() {
 		try {
-			$get_backup_data = $this->wptw_get_scan_backup_data();
-			$cancel_pause    = $this->wptw_backup_cancel_pause_data();
+			$get_backup_data = $this->tailwatch_get_scan_backup_data();
+			$cancel_pause    = $this->tailwatch_backup_cancel_pause_data();
 
 			if ( empty( $get_backup_data ) || ! is_array( $get_backup_data ) ) {
 				return null;
@@ -190,7 +190,7 @@ class BackupController extends BaseController {
 				$get_backup_type = $get_backup_data['backupType'];
 				$cron_scheduled  = false;
 
-				$premium_handled = apply_filters( 'wptw_handle_premium_backup_cron', false, $get_backup_type, $get_backup_data );
+				$premium_handled = apply_filters( 'tailwatch_handle_premium_backup_cron', false, $get_backup_type, $get_backup_data );
 				if ( false !== $premium_handled ) {
 					// Validate hook response format.
 					if ( is_array( $premium_handled ) && isset( $premium_handled['code'] ) && isset( $premium_handled['message'] ) ) {
@@ -206,7 +206,7 @@ class BackupController extends BaseController {
 					}
 				}
 
-				$valid_backup_types = apply_filters( 'wptw_valid_backup_types', array( 'Complete Backup' ), $get_backup_type );
+				$valid_backup_types = apply_filters( 'tailwatch_valid_backup_types', array( 'Complete Backup' ), $get_backup_type );
 
 				if ( in_array( $get_backup_type, $valid_backup_types, true ) ) {
 					if ( true === $get_backup_data['database_optimize'] && false === $get_backup_data['optimize_completed'] ) {
@@ -218,16 +218,16 @@ class BackupController extends BaseController {
 							)
 						);
 						$db_optimizer = new DatabaseOptimizerController();
-						return $db_optimizer->wptw_db_optimization_cron_if_failed();
+						return $db_optimizer->tailwatch_db_optimization_cron_if_failed();
 					}
 				}
 
 				switch ( $get_backup_type ) {
 					case 'Complete Backup':
 						if ( ! isset( $get_backup_data['tables'] ) ) {
-							$database_backup = wp_next_scheduled( 'wptw_scan_db_tables_cron' );
+							$database_backup = wp_next_scheduled( 'tailwatch_scan_db_tables_cron' );
 							if ( ! $database_backup ) {
-								$cron_scheduled = wp_schedule_single_event( time() + 5, 'wptw_scan_db_tables_cron' );
+								$cron_scheduled = wp_schedule_single_event( time() + 5, 'tailwatch_scan_db_tables_cron' );
 							} else {
 								Log::info(
 									'Complete backup DB scan cron already running',
@@ -243,9 +243,9 @@ class BackupController extends BaseController {
 								);
 							}
 						} else {
-							$database_backup = wp_next_scheduled( 'wptw_create_db_backup_cron' );
+							$database_backup = wp_next_scheduled( 'tailwatch_create_db_backup_cron' );
 							if ( ! $database_backup ) {
-								$cron_scheduled = wp_schedule_single_event( time() + 5, 'wptw_create_db_backup_cron' );
+								$cron_scheduled = wp_schedule_single_event( time() + 5, 'tailwatch_create_db_backup_cron' );
 							} else {
 								Log::info(
 									'Complete backup DB creation cron already running',
@@ -265,7 +265,7 @@ class BackupController extends BaseController {
 
 					default:
 						// Let premium plugin handle unknown backup types.
-						$premium_result = apply_filters( 'wptw_backup_unknown_type', null, $get_backup_type, $get_backup_data );
+						$premium_result = apply_filters( 'tailwatch_backup_unknown_type', null, $get_backup_type, $get_backup_data );
 						if ( null !== $premium_result ) {
 							return $premium_result;
 						}
@@ -352,7 +352,7 @@ class BackupController extends BaseController {
 		$key               = 'default_feature_settings';
 		$option            = 'default_backup_enable';
 		$field_name        = 'field_1';
-		return $push_notification->wptw_notification_enable_for_feature( $key, $option, $field_name );
+		return $push_notification->tailwatch_notification_enable_for_feature( $key, $option, $field_name );
 	}
 
 	/**
@@ -362,7 +362,7 @@ class BackupController extends BaseController {
 	 */
 	public function get_backup_feature_data() {
 		$get_backup_option = new BackupMaintainController();
-		$backup_data       = $get_backup_option->wptw_get_backup_settings();
+		$backup_data       = $get_backup_option->tailwatch_get_backup_settings();
 
 		if ( empty( $backup_data ) ) {
 			return array(
@@ -419,11 +419,11 @@ class BackupController extends BaseController {
 	 *
 	 * @return array Scan backup data.
 	 */
-	public function wptw_get_scan_backup_data() {
+	public function tailwatch_get_scan_backup_data() {
 		$feature_controller = new DBModel();
-		$wptw_key           = 'default_backup_scan';
+		$tailwatch_key           = 'default_backup_scan';
 		$option             = 'scan_backp';
-		$get_data           = $feature_controller->get_recent_data( $option, $wptw_key );
+		$get_data           = $feature_controller->get_recent_data( $option, $tailwatch_key );
 		return $get_data;
 	}
 
@@ -442,12 +442,12 @@ class BackupController extends BaseController {
 	 * @param string $option             'scan_backp' or 'backup_cancel_pause'.
 	 * @return array Payload, with scan_state coerced back to the active stop-state when applicable.
 	 */
-	private function wptw_guard_stop_state( array $options, $allow_state_change, $option ) {
+	private function tailwatch_guard_stop_state( array $options, $allow_state_change, $option ) {
 		if ( $allow_state_change || ! isset( $options['scan_state'] )
 			|| in_array( $options['scan_state'], array( 'pause', 'cancel', 'failed', 'completed' ), true ) ) {
 			return $options;
 		}
-		$current = ( 'scan_backp' === $option ) ? $this->wptw_get_scan_backup_data() : $this->wptw_backup_cancel_pause_data();
+		$current = ( 'scan_backp' === $option ) ? $this->tailwatch_get_scan_backup_data() : $this->tailwatch_backup_cancel_pause_data();
 		if ( isset( $current['scan_state'] )
 			&& in_array( $current['scan_state'], array( 'pause', 'cancel', 'failed' ), true ) ) {
 			$options['scan_state'] = $current['scan_state'];
@@ -459,29 +459,29 @@ class BackupController extends BaseController {
 	 * Updates the stored backup scan data (e.g. progress, state).
 	 *
 	 * @param array $options            Data to store (will be JSON-encoded).
-	 * @param bool  $allow_state_change Pass true only for a deliberate resume (see wptw_guard_stop_state).
+	 * @param bool  $allow_state_change Pass true only for a deliberate resume (see tailwatch_guard_stop_state).
 	 */
 	public function update_backup_data( array $options, $allow_state_change = false ) {
-		$options  = $this->wptw_guard_stop_state( $options, $allow_state_change, 'scan_backp' );
+		$options  = $this->tailwatch_guard_stop_state( $options, $allow_state_change, 'scan_backp' );
 		$db_model = new DBModel();
-		$wptw_key = 'default_backup_scan';
+		$tailwatch_key = 'default_backup_scan';
 		$option   = 'scan_backp';
 
 		$db_data = array(
 			'value' => wp_json_encode( $options ),
 		);
 
-		$db_model->update_recent_row( $db_data, $wptw_key, $option );
+		$db_model->update_recent_row( $db_data, $tailwatch_key, $option );
 	}
 
 	/**
 	 * Updates the backup scan state (e.g. in-progress, cancel, pause, completed).
 	 *
 	 * @param string $scan_state         New state value.
-	 * @param bool   $allow_state_change Pass true only for a deliberate resume (see wptw_guard_stop_state).
+	 * @param bool   $allow_state_change Pass true only for a deliberate resume (see tailwatch_guard_stop_state).
 	 */
 	public function update_backup_scan_state( $scan_state, $allow_state_change = false ) {
-		$backup_data = $this->wptw_get_scan_backup_data();
+		$backup_data = $this->tailwatch_get_scan_backup_data();
 		if ( empty( $backup_data ) || ! is_array( $backup_data ) ) {
 			return;
 		}
@@ -496,30 +496,30 @@ class BackupController extends BaseController {
 	 *
 	 * @return array Cancel/pause and progress data.
 	 */
-	public function wptw_backup_cancel_pause_data() {
+	public function tailwatch_backup_cancel_pause_data() {
 		$feature_controller = new DBModel();
-		$wptw_key           = 'default_backup_scan';
+		$tailwatch_key           = 'default_backup_scan';
 		$option             = 'backup_cancel_pause';
-		return $feature_controller->get_recent_data( $option, $wptw_key );
+		return $feature_controller->get_recent_data( $option, $tailwatch_key );
 	}
 
 	/**
 	 * Updates the backup cancel/pause and progress record.
 	 *
 	 * @param array $options            Data to store (will be JSON-encoded).
-	 * @param bool  $allow_state_change Pass true only for a deliberate resume (see wptw_guard_stop_state).
+	 * @param bool  $allow_state_change Pass true only for a deliberate resume (see tailwatch_guard_stop_state).
 	 */
 	public function update_backup_cancel_pause( array $options, $allow_state_change = false ) {
-		$options  = $this->wptw_guard_stop_state( $options, $allow_state_change, 'backup_cancel_pause' );
+		$options  = $this->tailwatch_guard_stop_state( $options, $allow_state_change, 'backup_cancel_pause' );
 		$db_model = new DBModel();
-		$wptw_key = 'default_backup_scan';
+		$tailwatch_key = 'default_backup_scan';
 		$option   = 'backup_cancel_pause';
 
 		$db_data = array(
 			'value' => wp_json_encode( $options ),
 		);
 
-		$db_model->update_recent_row( $db_data, $wptw_key, $option );
+		$db_model->update_recent_row( $db_data, $tailwatch_key, $option );
 	}
 
 	/**
@@ -532,14 +532,14 @@ class BackupController extends BaseController {
 	 * @param bool        $database_optimize   Whether to run DB optimization before backup.
 	 * @param string|null $backup_type       Backup type (e.g. Complete Backup).
 	 */
-	public function wptw_calculate_folder_sizes( $user_name = null, $user_role = null, $scan_type = null, $process_run = 'backup', $database_optimize = false, $backup_type = null ) {
+	public function tailwatch_calculate_folder_sizes( $user_name = null, $user_role = null, $scan_type = null, $process_run = 'backup', $database_optimize = false, $backup_type = null ) {
 		try {
-			$this->wptw_delete_files_entry_with_cron();
+			$this->tailwatch_delete_files_entry_with_cron();
 
 			$db_model = new DBModel();
 
 			$get_backup_option = new BackupMaintainController();
-			$backup_data       = $get_backup_option->wptw_get_backup_settings();
+			$backup_data       = $get_backup_option->tailwatch_get_backup_settings();
 
 			if ( ! $backup_data ) {
 				throw new \Exception( 'Failed to retrieve backup settings' );
@@ -552,7 +552,7 @@ class BackupController extends BaseController {
 			}
 
 			// Allow premium plugin to validate premium backup types.
-			$valid_backup_types = apply_filters( 'wptw_valid_backup_types', array( 'Complete Backup' ), $get_backup_type );
+			$valid_backup_types = apply_filters( 'tailwatch_valid_backup_types', array( 'Complete Backup' ), $get_backup_type );
 			if ( ! in_array( $get_backup_type, $valid_backup_types, true ) ) {
 				Log::error(
 					'Invalid backup type provided: ' . $get_backup_type,
@@ -596,12 +596,12 @@ class BackupController extends BaseController {
 				'folderDate'   => $sizes['folderDate'],
 				'started_time' => $sizes['started_time'],
 				'backup_type'  => $sizes['backupType'],
-				'site_size'    => $this->wptw_estimation_site_size( $sizes['backupType'] ),
+				'site_size'    => $this->tailwatch_estimation_site_size( $sizes['backupType'] ),
 			);
 
 			$process_id               = $this->process_manager->get_or_create_process(
 				'backup',
-				'wptw_backup_daily_scan',
+				'tailwatch_backup_daily_scan',
 				array(
 					'zipId'      => $sizes['zipId'],
 					'folderDate' => $sizes['folderDate'],
@@ -670,11 +670,11 @@ class BackupController extends BaseController {
 			if ( $result ) {
 				$message   = 'Backup process started.';
 				$live_logs = new LiveLogsController();
-				$live_logs->insert_live_logs_records( $message, $this->log_directory, $this->wptw_get_log_file_path() );
+				$live_logs->insert_live_logs_records( $message, $this->log_directory, $this->tailwatch_get_log_file_path() );
 
 				try {
 					// Allow premium plugin to handle premium backup execution.
-					$premium_executed = apply_filters( 'wptw_premium_backup_execution', false, $get_backup_type, $backup_data, $database_optimize );
+					$premium_executed = apply_filters( 'tailwatch_premium_backup_execution', false, $get_backup_type, $backup_data, $database_optimize );
 					if ( false !== $premium_executed ) {
 						// Validate hook response format.
 						if ( is_array( $premium_executed ) && isset( $premium_executed['code'] ) && isset( $premium_executed['message'] ) ) {
@@ -699,28 +699,28 @@ class BackupController extends BaseController {
 								// and abandoning the running run's progress. The adoption
 								// works by tagging the existing optimizer row with
 								// process_run='db_backup' so its completion handler at
-								// DatabaseOptimizerController::wptw_global_db_optimize_with_monitoring
+								// DatabaseOptimizerController::tailwatch_global_db_optimize_with_monitoring
 								// will flip this backup's optimize_completed flag and
 								// schedule the DB-scan cron when it finishes.
 								$status_service = new ProcessStatusService();
 
 								if ( $status_service->is_running( 'db_optimize' ) ) {
-									$db_optimizer->wptw_mark_optimizer_for_backup_completion();
+									$db_optimizer->tailwatch_mark_optimizer_for_backup_completion();
 									$this->update_logs_records( 'Adopting in-progress database optimization for this backup' );
 								} else {
-									$db_optimizer->wptw_database_optimize_start( 'on-demand', 'db_backup' );
+									$db_optimizer->tailwatch_database_optimize_start( 'on-demand', 'db_backup' );
 								}
 							} else {
-								$database_backup = wp_next_scheduled( 'wptw_scan_db_tables_cron' );
+								$database_backup = wp_next_scheduled( 'tailwatch_scan_db_tables_cron' );
 								if ( ! $database_backup ) {
-									wp_schedule_single_event( time() + 5, 'wptw_scan_db_tables_cron' );
+									wp_schedule_single_event( time() + 5, 'tailwatch_scan_db_tables_cron' );
 								}
 							}
 							break;
 
 						default:
 							// Allow premium plugin to handle unknown backup types.
-							$unknown_handled = apply_filters( 'wptw_backup_unknown_type', null, $get_backup_type, $backup_data );
+							$unknown_handled = apply_filters( 'tailwatch_backup_unknown_type', null, $get_backup_type, $backup_data );
 							if ( null !== $unknown_handled ) {
 								if ( is_array( $unknown_handled ) && isset( $unknown_handled['code'] ) && isset( $unknown_handled['message'] ) ) {
 									return $unknown_handled;
@@ -778,18 +778,18 @@ class BackupController extends BaseController {
 	}
 
 	/**
-	 * Estimates total site size for backup type (files + DB minus wptw-backup folder).
+	 * Estimates total site size for backup type (files + DB minus tailwatch-backup folder).
 	 *
 	 * @param string $backup_type Backup type (e.g. Complete Backup).
 	 * @return int|float Total size in bytes.
 	 */
-	public function wptw_estimation_site_size( $backup_type ) {
+	public function tailwatch_estimation_site_size( $backup_type ) {
 		$disk_space_controller = new DiskSpaceController();
 		if ( 'Complete Backup' === $backup_type ) {
 			$file_size   = $disk_space_controller->calculate_directory_sizes();
 			$db_size     = $disk_space_controller->get_database_info();
-			$wptw_backup = DiskSpaceController::calculate_folder_size( WPTW_BACKUP_DIR );
-			$total_size  = $file_size['files_size'] - $wptw_backup;
+			$tailwatch_backup = DiskSpaceController::calculate_folder_size( TAILWATCH_BACKUP_DIR );
+			$total_size  = $file_size['files_size'] - $tailwatch_backup;
 			$total_size += $db_size['db_size'];
 		} else {
 			$total_size = 0;
@@ -806,12 +806,12 @@ class BackupController extends BaseController {
 	public function update_logs_records( $message, $level = 'INFO' ) {
 
 		$live_logs = new LiveLogsController();
-		$live_logs->update_live_logs_records( $message, $this->wptw_get_log_file_path(), $level );
+		$live_logs->update_live_logs_records( $message, $this->tailwatch_get_log_file_path(), $level );
 
-		$existing_data = $this->wptw_get_scan_backup_data();
+		$existing_data = $this->tailwatch_get_scan_backup_data();
 		if ( isset( $existing_data['process_run'] ) && in_array( $existing_data['process_run'], array( 'files_integrity', 'malware' ), true ) ) {
 			// Allow pro plugin (MalwareScanner) to handle log records.
-			do_action( 'wptw_backup_malware_scan_logs', $message, $level );
+			do_action( 'tailwatch_backup_malware_scan_logs', $message, $level );
 		}
 	}
 
@@ -822,7 +822,7 @@ class BackupController extends BaseController {
 	 * @param array  $skip      Paths to skip.
 	 * @return int Size in bytes.
 	 */
-	public function wptw_get_directory_size( $directory, $skip = array() ) {
+	public function tailwatch_get_directory_size( $directory, $skip = array() ) {
 		$size = 0;
 
 		$directory_iterator = new \RecursiveIteratorIterator( new \RecursiveDirectoryIterator( $directory, \RecursiveDirectoryIterator::SKIP_DOTS ) );
@@ -848,7 +848,7 @@ class BackupController extends BaseController {
 	 *
 	 * @return array Map of folder key to path for verified folders.
 	 */
-	public function wptw_verify_required_folders() {
+	public function tailwatch_verify_required_folders() {
 		// Use WP_CONTENT_DIR basename so Bedrock-style layouts (/app) snapshot under the real folder name.
 		$candidate_basename = wp_basename( WP_CONTENT_DIR );
 		$content_basename   = is_string( $candidate_basename )
@@ -858,13 +858,13 @@ class BackupController extends BaseController {
 				: 'wp-content';
 
 		$folders = array(
-			'others'      => realpath( WPTW_BACKUP_DIR . '/wptw-scanner/' ),
-			'wp-admin'    => WPTW_BACKUP_DIR . '/wptw-scanner/wp-admin',
-			'wp-includes' => WPTW_BACKUP_DIR . '/wptw-scanner/wp-includes',
-			'wp-content'  => WPTW_BACKUP_DIR . '/wptw-scanner/' . $content_basename,
-			'plugins'     => WPTW_BACKUP_DIR . '/wptw-scanner/' . $content_basename . '/plugins',
-			'themes'      => WPTW_BACKUP_DIR . '/wptw-scanner/' . $content_basename . '/themes',
-			'uploads'     => WPTW_BACKUP_DIR . '/wptw-scanner/' . $content_basename . '/uploads',
+			'others'      => realpath( TAILWATCH_BACKUP_DIR . '/tailwatch-scanner/' ),
+			'wp-admin'    => TAILWATCH_BACKUP_DIR . '/tailwatch-scanner/wp-admin',
+			'wp-includes' => TAILWATCH_BACKUP_DIR . '/tailwatch-scanner/wp-includes',
+			'wp-content'  => TAILWATCH_BACKUP_DIR . '/tailwatch-scanner/' . $content_basename,
+			'plugins'     => TAILWATCH_BACKUP_DIR . '/tailwatch-scanner/' . $content_basename . '/plugins',
+			'themes'      => TAILWATCH_BACKUP_DIR . '/tailwatch-scanner/' . $content_basename . '/themes',
+			'uploads'     => TAILWATCH_BACKUP_DIR . '/tailwatch-scanner/' . $content_basename . '/uploads',
 		);
 
 		$verified_paths = array();
@@ -884,7 +884,7 @@ class BackupController extends BaseController {
 					}
 
 					if ( 'wp-content' === $key ) {
-						if ( 'wptw-backup' === $item || 'plugins' === $item || 'themes' === $item || 'uploads' === $item ) {
+						if ( 'tailwatch-backup' === $item || 'plugins' === $item || 'themes' === $item || 'uploads' === $item ) {
 							continue;
 						}
 					}
@@ -900,19 +900,19 @@ class BackupController extends BaseController {
 	}
 
 	/**
-	 * Main backup cron callback (hook 'wptw_backup_daily_scan'). Thin wrapper that
+	 * Main backup cron callback (hook 'tailwatch_backup_daily_scan'). Thin wrapper that
 	 * holds a single-worker lock around the real tick so the verify-hook and the
 	 * recovery watchdog cannot run a SECOND worker on the same scan_backp row — two
 	 * concurrent workers do interleaved read-modify-write and clobber progress.
 	 */
-	public function wptw_run_backup_cron() {
-		if ( ! $this->wptw_acquire_worker_lock() ) {
+	public function tailwatch_run_backup_cron() {
+		if ( ! $this->tailwatch_acquire_worker_lock() ) {
 			return; // Another worker is mid-tick — skip this injected run.
 		}
 		try {
-			$this->wptw_run_backup_cron_worker();
+			$this->tailwatch_run_backup_cron_worker();
 		} finally {
-			$this->wptw_release_worker_lock();
+			$this->tailwatch_release_worker_lock();
 		}
 	}
 
@@ -926,12 +926,12 @@ class BackupController extends BaseController {
 	 *
 	 * @return bool True if this worker got the lock, false if one is already running.
 	 */
-	private function wptw_acquire_worker_lock() {
-		if ( get_transient( 'wptw_backup_worker_lock' ) ) {
+	private function tailwatch_acquire_worker_lock() {
+		if ( get_transient( 'tailwatch_backup_worker_lock' ) ) {
 			return false;
 		}
-		set_transient( 'wptw_backup_worker_lock', time(), 600 );
-		register_shutdown_function( array( $this, 'wptw_release_worker_lock' ) );
+		set_transient( 'tailwatch_backup_worker_lock', time(), 600 );
+		register_shutdown_function( array( $this, 'tailwatch_release_worker_lock' ) );
 		return true;
 	}
 
@@ -941,39 +941,39 @@ class BackupController extends BaseController {
 	 *
 	 * @return void
 	 */
-	public function wptw_release_worker_lock() {
-		delete_transient( 'wptw_backup_worker_lock' );
+	public function tailwatch_release_worker_lock() {
+		delete_transient( 'tailwatch_backup_worker_lock' );
 	}
 
 	/**
 	 * The real backup tick: maintains backups, loads state, and runs folder backup or
 	 * finalization. Runs only while holding the single-worker lock (see the wrapper).
 	 */
-	private function wptw_run_backup_cron_worker() {
+	private function tailwatch_run_backup_cron_worker() {
 
 		$feature_controller = new DBModel();
 
-		$wptw_key        = 'default_backup_scan';
+		$tailwatch_key        = 'default_backup_scan';
 		$option          = 'scan_backp';
 		$backup_maintain = new BackupMaintainController();
-		$backup_maintain->maintain_backups( $wptw_key, $option );
+		$backup_maintain->maintain_backups( $tailwatch_key, $option );
 
-		$get_data      = $feature_controller->get_recent_data( $option, $wptw_key );
+		$get_data      = $feature_controller->get_recent_data( $option, $tailwatch_key );
 		$existing_data = $get_data;
 
 		if ( empty( $existing_data ) || ! is_array( $existing_data ) ) {
 			return;
 		}
 
-		$cancel_pause = $this->wptw_backup_cancel_pause_data();
+		$cancel_pause = $this->tailwatch_backup_cancel_pause_data();
 
 		// This prevents recovery/watchdog from re-running a paused, cancelled, or
 		// hard-failed process. 'failed' is terminal — bail without doing work or
 		// rescheduling so a marked-failed backup can't be revived into a loop.
 		if ( 'cancel' === $cancel_pause['scan_state'] || 'pause' === $cancel_pause['scan_state'] || 'failed' === $cancel_pause['scan_state'] ) {
-			$timestamp = wp_next_scheduled( 'wptw_backup_daily_scan' );
+			$timestamp = wp_next_scheduled( 'tailwatch_backup_daily_scan' );
 			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'wptw_backup_daily_scan' );
+				wp_unschedule_event( $timestamp, 'tailwatch_backup_daily_scan' );
 			}
 			$this->update_backup_scan_state( $cancel_pause['scan_state'] );
 			return;
@@ -988,7 +988,7 @@ class BackupController extends BaseController {
 			$this->update_backup_cancel_pause( $cancel_pause );
 		}
 
-		$this->wptw_backup_function_started();
+		$this->tailwatch_backup_function_started();
 
 		// Resolve dynamic core paths reliably
 		$upload_dir      = wp_upload_dir();
@@ -996,9 +996,9 @@ class BackupController extends BaseController {
 		$content_basename = wp_basename( WP_CONTENT_DIR );
 
 		if ( 'files_integrity' === $existing_data['process_run'] ) {
-			$folders = $this->wptw_verify_required_folders();
+			$folders = $this->tailwatch_verify_required_folders();
 
-			$backup_dir_base = trailingslashit( WPTW_BACKUP_DIR ) . 'wptw-scanner/';
+			$backup_dir_base = trailingslashit( TAILWATCH_BACKUP_DIR ) . 'tailwatch-scanner/';
 
 			$exclude_wp_content_folders = array(
 				$backup_dir_base . $content_basename . '/plugins',
@@ -1027,7 +1027,7 @@ class BackupController extends BaseController {
 				WP_PLUGIN_DIR,
 				get_theme_root(),
 				$uploads_basedir,
-				defined( 'WPTW_CONTENT_DIR_BASE' ) ? WPTW_CONTENT_DIR_BASE : '',
+				defined( 'TAILWATCH_CONTENT_DIR_BASE' ) ? TAILWATCH_CONTENT_DIR_BASE : '',
 			);
 
 			$exclude_root_folders = $this->get_root_folders_name();
@@ -1039,21 +1039,21 @@ class BackupController extends BaseController {
 					continue; // Skip if already completed
 				}
 
-				$this->process_folder_backup( $key, $folder_path, $existing_data, $feature_controller, $wptw_key, $option, $exclude_wp_content_folders, $exclude_root_folders );
+				$this->process_folder_backup( $key, $folder_path, $existing_data, $feature_controller, $tailwatch_key, $option, $exclude_wp_content_folders, $exclude_root_folders );
 
 				// Check again in case scan_state changed during execution: user cancel/pause,
 				// OR a hard failure (manifest build / part packing hit its cap) marked the run
 				// 'failed'. In all three we stop WITHOUT rescheduling the next tick.
-				$cancel_pause = $this->wptw_backup_cancel_pause_data();
+				$cancel_pause = $this->tailwatch_backup_cancel_pause_data();
 				if ( 'cancel' === $cancel_pause['scan_state'] || 'pause' === $cancel_pause['scan_state'] || 'failed' === $cancel_pause['scan_state'] ) {
-					$timestamp = wp_next_scheduled( 'wptw_backup_daily_scan' );
+					$timestamp = wp_next_scheduled( 'tailwatch_backup_daily_scan' );
 					if ( $timestamp ) {
-						wp_unschedule_event( $timestamp, 'wptw_backup_daily_scan' );
+						wp_unschedule_event( $timestamp, 'tailwatch_backup_daily_scan' );
 					}
 
-					$timestamp_backup_status = wp_next_scheduled( 'wptw_verify_backup_cron_hook' );
+					$timestamp_backup_status = wp_next_scheduled( 'tailwatch_verify_backup_cron_hook' );
 					if ( $timestamp_backup_status ) {
-						wp_unschedule_event( $timestamp_backup_status, 'wptw_verify_backup_cron_hook' );
+						wp_unschedule_event( $timestamp_backup_status, 'tailwatch_verify_backup_cron_hook' );
 					}
 
 					if ( true === $cancel_pause['cron_running'] ) {
@@ -1062,16 +1062,16 @@ class BackupController extends BaseController {
 					}
 					$this->update_backup_scan_state( $cancel_pause['scan_state'] );
 				} else {
-					wp_schedule_single_event( time() + 3, 'wptw_backup_daily_scan' );
+					wp_schedule_single_event( time() + 3, 'tailwatch_backup_daily_scan' );
 				}
-				$this->wptw_backup_function_complete();
+				$this->tailwatch_backup_function_complete();
 				$this->process_manager->heart_beat( $process_id );
 				return;
 			}
 
 			// Finalize the backup process after all folders are processed.
-			$this->check_and_finalize_backup( $existing_data, $feature_controller, $wptw_key, $option, $process_id );
-			$this->wptw_backup_function_complete();
+			$this->check_and_finalize_backup( $existing_data, $feature_controller, $tailwatch_key, $option, $process_id );
+			$this->tailwatch_backup_function_complete();
 		} catch ( \Throwable $e ) {
 			$this->process_manager->mark_failed( $process_id, $e->getMessage() );
 			$backup_type_label = isset( $existing_data['backupType'] ) ? $existing_data['backupType'] : 'website';
@@ -1101,8 +1101,8 @@ class BackupController extends BaseController {
 	 * Marks backup function as started in cancel/pause data.
 	 *
 	 */
-	public function wptw_backup_function_started() {
-		$cancel_pause                       = $this->wptw_backup_cancel_pause_data();
+	public function tailwatch_backup_function_started() {
+		$cancel_pause                       = $this->tailwatch_backup_cancel_pause_data();
 		$cancel_pause['function_completed'] = false;
 		$cancel_pause['function_started']   = true;
 		$this->update_backup_cancel_pause( $cancel_pause );
@@ -1112,8 +1112,8 @@ class BackupController extends BaseController {
 	 * Marks backup function as complete in cancel/pause data.
 	 *
 	 */
-	public function wptw_backup_function_complete() {
-		$cancel_pause                         = $this->wptw_backup_cancel_pause_data();
+	public function tailwatch_backup_function_complete() {
+		$cancel_pause                         = $this->tailwatch_backup_cancel_pause_data();
 		$cancel_pause['function_completed']   = true;
 		$cancel_pause['function_started']     = false;
 		$cancel_pause['completion_timestamp'] = time();
@@ -1143,7 +1143,7 @@ class BackupController extends BaseController {
 	 *                                    Sourced from a filter at the call site → future option.
 	 * @return array|false { files, large, total_size, num_parts, skipped_oversize } or false on failure.
 	 */
-	private function wptw_build_backup_manifest( $folder_path, array $exclude, $manifest_file, $large_file_manifest, $zip_size_limit = 52428800, $scan_max_size = 0 ) {
+	private function tailwatch_build_backup_manifest( $folder_path, array $exclude, $manifest_file, $large_file_manifest, $zip_size_limit = 52428800, $scan_max_size = 0 ) {
 		$exclude = array_filter( array_map( 'realpath', $exclude ) );
 
 		$tmp  = $manifest_file . '.tmp';
@@ -1300,7 +1300,7 @@ class BackupController extends BaseController {
 	 * @param int    $zip_size_limit Per-part byte limit (default 50MB).
 	 * @return array|false { next_offset, added, part_size, eof, closed } or false on open failure.
 	 */
-	private function wptw_pack_part_from_manifest( $manifest_file, $offset, $folder_path, $path_prefix, $destination, $zip_size_limit = 52428800 ) {
+	private function tailwatch_pack_part_from_manifest( $manifest_file, $offset, $folder_path, $path_prefix, $destination, $zip_size_limit = 52428800 ) {
 		if ( ! file_exists( $manifest_file ) ) {
 			return false;
 		}
@@ -1386,7 +1386,7 @@ class BackupController extends BaseController {
 		$next_offset = ftell( $handle );
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- stream close.
 		fclose( $handle );
-		$closed = $use_ziparchive ? $zip->close() : $this->wptw_pclzip_write_part( $destination, $pcl_groups );
+		$closed = $use_ziparchive ? $zip->close() : $this->tailwatch_pclzip_write_part( $destination, $pcl_groups );
 
 		return array(
 			'next_offset' => (int) $next_offset,
@@ -1407,7 +1407,7 @@ class BackupController extends BaseController {
 	 * @param array  $groups      [source_dir][in_zip_dir][] = abs path.
 	 * @return bool True on success.
 	 */
-	private function wptw_pclzip_write_part( $destination, $groups ) {
+	private function tailwatch_pclzip_write_part( $destination, $groups ) {
 		if ( ! class_exists( 'PclZip' ) && file_exists( ABSPATH . 'wp-admin/includes/class-pclzip.php' ) ) {
 			require_once ABSPATH . 'wp-admin/includes/class-pclzip.php';
 		}
@@ -1441,7 +1441,7 @@ class BackupController extends BaseController {
 	 * @param string $key Folder key.
 	 * @return string Prefix (no trailing slash), '' for root.
 	 */
-	private function wptw_path_prefix_for_key( $key ) {
+	private function tailwatch_path_prefix_for_key( $key ) {
 		$content_base = basename( WP_CONTENT_DIR );
 		switch ( $key ) {
 			case 'wp-admin':
@@ -1472,7 +1472,7 @@ class BackupController extends BaseController {
 	 * @param string $folder_path    Folder the rel paths are under.
 	 * @return array List of large-file entries.
 	 */
-	private function wptw_load_large_files_from_manifest( $large_manifest, $folder_path ) {
+	private function tailwatch_load_large_files_from_manifest( $large_manifest, $folder_path ) {
 		$out = array();
 		if ( ! file_exists( $large_manifest ) ) {
 			return $out;
@@ -1504,14 +1504,14 @@ class BackupController extends BaseController {
 	 *
 	 * @return bool
 	 */
-	private function wptw_zip_engine_available() {
+	private function tailwatch_zip_engine_available() {
 		if ( class_exists( 'ZipArchive' ) || class_exists( 'PclZip' ) ) {
 			return true;
 		}
 		return file_exists( ABSPATH . 'wp-admin/includes/class-pclzip.php' );
 	}
 
-	public function process_folder_backup( $key, $folder_path, &$existing_data, $feature_controller, $wptw_key, $option, $exclude_wp_content_folders, $exclude_root_folders ) {
+	public function process_folder_backup( $key, $folder_path, &$existing_data, $feature_controller, $tailwatch_key, $option, $exclude_wp_content_folders, $exclude_root_folders ) {
 		if ( ! isset( $existing_data['zipId'] ) || ! isset( $existing_data['folderDate'] ) ) {
 			return;
 		}
@@ -1525,9 +1525,9 @@ class BackupController extends BaseController {
 		// File backup needs a zip engine: ZipArchive (the zip extension) or the
 		// WordPress-bundled PclZip fallback. If neither is usable, fail fast with a clear
 		// message instead of the generic "failed to write a part".
-		if ( ! $this->wptw_zip_engine_available() ) {
+		if ( ! $this->tailwatch_zip_engine_available() ) {
 			$this->update_logs_records( 'Backup needs the PHP "zip" extension (ZipArchive) or PclZip; neither is available on this server. Enable the PHP zip extension to continue.', 'ERROR' );
-			$this->wptw_mark_backup_failed( 'no_zip_engine' );
+			$this->tailwatch_mark_backup_failed( 'no_zip_engine' );
 			return;
 		}
 
@@ -1536,7 +1536,7 @@ class BackupController extends BaseController {
 		$zip_unique_id                       = $existing_data['zipId'];
 		$folder_date                         = $existing_data['folderDate'];
 
-		$backup_directory = WPTW_BACKUP_DIR . '/';
+		$backup_directory = TAILWATCH_BACKUP_DIR . '/';
 		if ( ! is_dir( $backup_directory ) ) {
 			// Seal the backup root with deny files so archives are not reachable over the web.
 			SecureDirectoryService::ensure_private_root( $backup_directory );
@@ -1564,7 +1564,7 @@ class BackupController extends BaseController {
 			} elseif ( 'uploads' === $key ) {
 				// Skip the plugin's own logs and generated data (including the
 				// GeoIP database) so backups do not carry regenerable files.
-				$folder_exclude = array( WPTW_LOGS_DIRECTORY );
+				$folder_exclude = array( TAILWATCH_LOGS_DIRECTORY );
 			} else {
 				$folder_exclude = array();
 			}
@@ -1575,15 +1575,15 @@ class BackupController extends BaseController {
 			// archives Imunify won't deep-scan) to cut upload+scan cost. Restore is unaffected:
 			// a skipped file never enters the backup → never uploaded/scanned/restored. The
 			// regular full backup keeps everything (cap stays 0). The cap value is FILTERABLE,
-			// so a future user-selectable option just hooks 'wptw_malware_scan_max_file_size'
+			// so a future user-selectable option just hooks 'tailwatch_malware_scan_max_file_size'
 			// (return 0 to disable). Default 52428800 reuses the engine's 50MB large-file line.
 			$scan_process_run = isset( $existing_data['process_run'] ) ? $existing_data['process_run'] : '';
 			$scan_max_size    = 0;
 			if ( in_array( $scan_process_run, array( 'malware', 'files_integrity' ), true ) ) {
-				$scan_max_size = (int) apply_filters( 'wptw_malware_scan_max_file_size', 52428800, $scan_process_run, $key );
+				$scan_max_size = (int) apply_filters( 'tailwatch_malware_scan_max_file_size', 52428800, $scan_process_run, $key );
 			}
 
-			$stats = $this->wptw_build_backup_manifest( $folder_path, $folder_exclude, $manifest_file, $large_manifest, $zip_size_limit, $scan_max_size );
+			$stats = $this->tailwatch_build_backup_manifest( $folder_path, $folder_exclude, $manifest_file, $large_manifest, $zip_size_limit, $scan_max_size );
 			if ( false === $stats ) {
 				// Same hard-failure cap as the packing loop: a persistent manifest build
 				// failure (disk full, can't write the sidecars) would otherwise be re-kicked
@@ -1595,7 +1595,7 @@ class BackupController extends BaseController {
 				$this->update_backup_data( $existing_data );
 				if ( $plan_fail >= 3 ) {
 					$this->update_logs_records( "Failed to plan {$key} (manifest build) after {$plan_fail} attempts — aborting backup", 'ERROR' );
-					$this->wptw_mark_backup_failed( "manifest_build_failed:{$key}" );
+					$this->tailwatch_mark_backup_failed( "manifest_build_failed:{$key}" );
 				}
 				return; // build failed — retried next tick until the cap.
 			}
@@ -1606,7 +1606,7 @@ class BackupController extends BaseController {
 			$existing_data[ $key ]['manifest_file']   = $manifest_file;
 			$existing_data[ $key ]['num_zips']        = $stats['num_parts'];
 			$existing_data[ $key ]['manifest_offset'] = 0;
-			$existing_data[ $key ]['large_files']     = $this->wptw_load_large_files_from_manifest( $large_manifest, $folder_path );
+			$existing_data[ $key ]['large_files']     = $this->tailwatch_load_large_files_from_manifest( $large_manifest, $folder_path );
 			$this->update_backup_data( $existing_data );
 			return;
 		}
@@ -1632,11 +1632,11 @@ class BackupController extends BaseController {
 			$buffer_time          = 180;
 			$total_scheduled_time = $estimated_time + $buffer_time;
 
-			if ( ! wp_next_scheduled( 'wptw_verify_backup_cron_hook' ) ) {
-				wp_schedule_single_event( time() + $total_scheduled_time, 'wptw_verify_backup_cron_hook' );
+			if ( ! wp_next_scheduled( 'tailwatch_verify_backup_cron_hook' ) ) {
+				wp_schedule_single_event( time() + $total_scheduled_time, 'tailwatch_verify_backup_cron_hook' );
 			}
 
-			$timestamp_run = wp_next_scheduled( 'wptw_verify_backup_cron_hook' );
+			$timestamp_run = wp_next_scheduled( 'tailwatch_verify_backup_cron_hook' );
 
 			$large_zips          = $current_large_file_index + 1;
 			$large_zip_name      = "{$key}_large_part_{$large_zips}_{$zip_unique_id}.zip";
@@ -1665,7 +1665,7 @@ class BackupController extends BaseController {
 			++$existing_data[ $key ]['batch'][ "large_zip_{$large_zips}" ]['attempts'];
 			$this->update_backup_data( $existing_data );
 
-			if ( ! $this->wptw_is_valid_zip( $large_zip_file_path ) ) {
+			if ( ! $this->tailwatch_is_valid_zip( $large_zip_file_path ) ) {
 				// Delete a truncated/corrupt large-file zip so this attempt rebuilds it.
 				if ( file_exists( $large_zip_file_path ) ) {
 					wp_delete_file( $large_zip_file_path );
@@ -1674,7 +1674,7 @@ class BackupController extends BaseController {
 				$this->create_single_file_zip( $file, $key, $large_zips, $folder_path, $daily_backup_directory, $zip_unique_id );
 			}
 
-			if ( $this->wptw_is_valid_zip( $large_zip_file_path ) ) {
+			if ( $this->tailwatch_is_valid_zip( $large_zip_file_path ) ) {
 				$batch[ "large_zip_{$large_zips}" ] = array(
 					'size'      => filesize( $large_zip_file_path ),
 					'path'      => $large_zip_file_path,
@@ -1697,16 +1697,16 @@ class BackupController extends BaseController {
 				$existing_data[ $key ]['batch']     = $batch;
 			}
 
-			$cancel_pause = $this->wptw_backup_cancel_pause_data();
+			$cancel_pause = $this->tailwatch_backup_cancel_pause_data();
 			if ( 'cancel' === $cancel_pause['scan_state'] || 'pause' === $cancel_pause['scan_state'] ) {
-				$timestamp = wp_next_scheduled( 'wptw_backup_daily_scan' );
+				$timestamp = wp_next_scheduled( 'tailwatch_backup_daily_scan' );
 				if ( $timestamp ) {
-					wp_unschedule_event( $timestamp, 'wptw_backup_daily_scan' );
+					wp_unschedule_event( $timestamp, 'tailwatch_backup_daily_scan' );
 				}
 
-				$timestamp_backup_status = wp_next_scheduled( 'wptw_verify_backup_cron_hook' );
+				$timestamp_backup_status = wp_next_scheduled( 'tailwatch_verify_backup_cron_hook' );
 				if ( $timestamp_backup_status ) {
-					wp_unschedule_event( $timestamp_backup_status, 'wptw_verify_backup_cron_hook' );
+					wp_unschedule_event( $timestamp_backup_status, 'tailwatch_verify_backup_cron_hook' );
 				}
 
 				if ( true === $cancel_pause['cron_running'] ) {
@@ -1716,11 +1716,11 @@ class BackupController extends BaseController {
 				$this->update_backup_scan_state( $cancel_pause['scan_state'] );
 				return;
 			} else {
-				$timestamp = wp_next_scheduled( 'wptw_verify_backup_cron_hook' );
+				$timestamp = wp_next_scheduled( 'tailwatch_verify_backup_cron_hook' );
 				if ( $timestamp ) {
-					wp_unschedule_event( $timestamp, 'wptw_verify_backup_cron_hook' );
+					wp_unschedule_event( $timestamp, 'tailwatch_verify_backup_cron_hook' );
 				}
-				wp_schedule_single_event( time() + 3, 'wptw_backup_daily_scan' );
+				wp_schedule_single_event( time() + 3, 'tailwatch_backup_daily_scan' );
 				return;
 			}
 		}
@@ -1728,12 +1728,12 @@ class BackupController extends BaseController {
 		// Pack parts from the manifest cursor in a time-budgeted loop (many parts/tick),
 		// advancing offset + index in lockstep — no per-part-retry desync. Falls through
 		// to folder completion once every part is written.
-		if ( ! wp_next_scheduled( 'wptw_verify_backup_cron_hook' ) ) {
-			wp_schedule_single_event( time() + 230, 'wptw_verify_backup_cron_hook' );
+		if ( ! wp_next_scheduled( 'tailwatch_verify_backup_cron_hook' ) ) {
+			wp_schedule_single_event( time() + 230, 'tailwatch_verify_backup_cron_hook' );
 		}
 		$cursor_offset   = (int) ( isset( $existing_data[ $key ]['manifest_offset'] ) ? $existing_data[ $key ]['manifest_offset'] : 0 );
 		$manifest_path = isset( $existing_data[ $key ]['manifest_file'] ) ? $existing_data[ $key ]['manifest_file'] : '';
-		$in_zip_prefix   = $this->wptw_path_prefix_for_key( $key );
+		$in_zip_prefix   = $this->tailwatch_path_prefix_for_key( $key );
 		$tick_deadline = time() + 25;
 		$paused   = false;
 
@@ -1747,7 +1747,7 @@ class BackupController extends BaseController {
 		$stuck_ticks      = ( $last_tick_offset === $cursor_offset ) ? ( $stuck_ticks + 1 ) : 0;
 		if ( $stuck_ticks >= 3 ) {
 			$this->update_logs_records( "Backup of {$key} stalled at part {$current_zip_index} of {$num_zips} (a single part is exceeding the host time limit) — aborting backup", 'ERROR' );
-			$this->wptw_mark_backup_failed( "part_pack_no_progress:{$key}:{$current_zip_index}" );
+			$this->tailwatch_mark_backup_failed( "part_pack_no_progress:{$key}:{$current_zip_index}" );
 			return;
 		}
 		$existing_data[ $key ]['last_tick_offset'] = $cursor_offset;
@@ -1760,7 +1760,7 @@ class BackupController extends BaseController {
 
 		while ( $current_zip_index <= $num_zips && time() < $tick_deadline ) {
 			$zip_file_path = $daily_backup_directory . "{$key}_part_{$current_zip_index}_{$zip_unique_id}.zip";
-			$result        = $this->wptw_pack_part_from_manifest( $manifest_path, $cursor_offset, $folder_path, $in_zip_prefix, $zip_file_path, $zip_size_limit );
+			$result        = $this->tailwatch_pack_part_from_manifest( $manifest_path, $cursor_offset, $folder_path, $in_zip_prefix, $zip_file_path, $zip_size_limit );
 			if ( false === $result ) {
 				// Hard packer failure (manifest gone, disk full, or the part zip can't be
 				// created). The cursor hasn't advanced, so a persistent error would re-break
@@ -1774,14 +1774,14 @@ class BackupController extends BaseController {
 				$this->update_backup_data( $existing_data );
 				if ( $pack_fail >= 3 ) {
 					$this->update_logs_records( "Failed to write a part for {$key} after {$pack_fail} attempts — aborting backup", 'ERROR' );
-					$this->wptw_mark_backup_failed( "part_pack_failed:{$key}" );
+					$this->tailwatch_mark_backup_failed( "part_pack_failed:{$key}" );
 					return;
 				}
 				break;
 			}
 			// Successful pack — clear the consecutive hard-failure counter.
 			$existing_data[ $key ]['pack_fail_attempts'] = 0;
-			if ( $this->wptw_is_valid_zip( $zip_file_path ) ) {
+			if ( $this->tailwatch_is_valid_zip( $zip_file_path ) ) {
 				$batch[ "zip_{$current_zip_index}" ] = array(
 					'size'      => filesize( $zip_file_path ),
 					'path'      => $zip_file_path,
@@ -1807,7 +1807,7 @@ class BackupController extends BaseController {
 				$this->update_logs_records( "Archived {$done_parts} of {$num_zips} parts for {$key}" );
 			}
 
-			$cancel_pause = $this->wptw_backup_cancel_pause_data();
+			$cancel_pause = $this->tailwatch_backup_cancel_pause_data();
 			if ( 'cancel' === $cancel_pause['scan_state'] || 'pause' === $cancel_pause['scan_state'] ) {
 				$paused = true;
 				break;
@@ -1815,15 +1815,15 @@ class BackupController extends BaseController {
 		}
 		
 		if ( $paused ) {
-			$timestamp = wp_next_scheduled( 'wptw_backup_daily_scan' );
+			$timestamp = wp_next_scheduled( 'tailwatch_backup_daily_scan' );
 			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'wptw_backup_daily_scan' );
+				wp_unschedule_event( $timestamp, 'tailwatch_backup_daily_scan' );
 			}
-			$timestamp_backup_status = wp_next_scheduled( 'wptw_verify_backup_cron_hook' );
+			$timestamp_backup_status = wp_next_scheduled( 'tailwatch_verify_backup_cron_hook' );
 			if ( $timestamp_backup_status ) {
-				wp_unschedule_event( $timestamp_backup_status, 'wptw_verify_backup_cron_hook' );
+				wp_unschedule_event( $timestamp_backup_status, 'tailwatch_verify_backup_cron_hook' );
 			}
-			$cancel_pause = $this->wptw_backup_cancel_pause_data();
+			$cancel_pause = $this->tailwatch_backup_cancel_pause_data();
 			if ( true === $cancel_pause['cron_running'] ) {
 				$cancel_pause['cron_running'] = false;
 				$this->update_backup_cancel_pause( $cancel_pause );
@@ -1833,15 +1833,15 @@ class BackupController extends BaseController {
 		}
 		
 		if ( $current_zip_index <= $num_zips ) {
-			$timestamp_backup_status = wp_next_scheduled( 'wptw_verify_backup_cron_hook' );
+			$timestamp_backup_status = wp_next_scheduled( 'tailwatch_verify_backup_cron_hook' );
 			if ( $timestamp_backup_status ) {
-				wp_unschedule_event( $timestamp_backup_status, 'wptw_verify_backup_cron_hook' );
+				wp_unschedule_event( $timestamp_backup_status, 'tailwatch_verify_backup_cron_hook' );
 			}
-			wp_schedule_single_event( time() + 3, 'wptw_backup_daily_scan' );
+			wp_schedule_single_event( time() + 3, 'tailwatch_backup_daily_scan' );
 			return;
 		}
 
-		$this->wptw_update_scan_state_unschedule_cron();
+		$this->tailwatch_update_scan_state_unschedule_cron();
 
 		// If all ZIPs are created, mark the process as complete.
 		$existing_data[ $key ]['path']      = $folder_path;
@@ -1855,17 +1855,17 @@ class BackupController extends BaseController {
 	 * Updates scan state and unschedules backup-related crons.
 	 *
 	 */
-	public function wptw_update_scan_state_unschedule_cron() {
-		$cancel_pause = $this->wptw_backup_cancel_pause_data();
+	public function tailwatch_update_scan_state_unschedule_cron() {
+		$cancel_pause = $this->tailwatch_backup_cancel_pause_data();
 		if ( 'cancel' === $cancel_pause['scan_state'] || 'pause' === $cancel_pause['scan_state'] ) {
-			$timestamp = wp_next_scheduled( 'wptw_backup_daily_scan' );
+			$timestamp = wp_next_scheduled( 'tailwatch_backup_daily_scan' );
 			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'wptw_backup_daily_scan' );
+				wp_unschedule_event( $timestamp, 'tailwatch_backup_daily_scan' );
 			}
 
-			$timestamp_backup_status = wp_next_scheduled( 'wptw_verify_backup_cron_hook' );
+			$timestamp_backup_status = wp_next_scheduled( 'tailwatch_verify_backup_cron_hook' );
 			if ( $timestamp_backup_status ) {
-				wp_unschedule_event( $timestamp_backup_status, 'wptw_verify_backup_cron_hook' );
+				wp_unschedule_event( $timestamp_backup_status, 'tailwatch_verify_backup_cron_hook' );
 			}
 
 			if ( true === $cancel_pause['cron_running'] ) {
@@ -1875,11 +1875,11 @@ class BackupController extends BaseController {
 			$this->update_backup_scan_state( $cancel_pause['scan_state'] );
 			return;
 		} else {
-			$timestamp = wp_next_scheduled( 'wptw_verify_backup_cron_hook' );
+			$timestamp = wp_next_scheduled( 'tailwatch_verify_backup_cron_hook' );
 			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'wptw_verify_backup_cron_hook' );
+				wp_unschedule_event( $timestamp, 'tailwatch_verify_backup_cron_hook' );
 			}
-			wp_schedule_single_event( time() + 3, 'wptw_backup_daily_scan' );
+			wp_schedule_single_event( time() + 3, 'tailwatch_backup_daily_scan' );
 			return;
 		}
 	}
@@ -1939,7 +1939,7 @@ class BackupController extends BaseController {
 		$file_size            = filesize( $file_path );
 		$single_file_zip_name = "{$key}_large_part_{$large_zips}_{$zip_unique_id}.zip";
 		$single_file_zip_path = $destination . DIRECTORY_SEPARATOR . $single_file_zip_name;
-		$log_file_path        = WPTW_LOGS_DIRECTORY . '/backup_zip_file_log.txt';
+		$log_file_path        = TAILWATCH_LOGS_DIRECTORY . '/backup_zip_file_log.txt';
 
 		// Log if file is >50MB to confirm processing.
 		if ( $file_size > 52428800 ) {
@@ -1983,7 +1983,7 @@ class BackupController extends BaseController {
 
 		// Call global ZIP function, skipping 50MB limit for single file.
 		$create_zip = new ZipCreation();
-		return $create_zip->wptw_create_zip_global(
+		return $create_zip->tailwatch_create_zip_global(
 			$file_path,
 			$single_file_zip_path,
 			$path_prefix,
@@ -1997,15 +1997,15 @@ class BackupController extends BaseController {
 
 
 	/**
-	 * Listener for the generic 'wptw_recovery_process_failed' action (fired by
+	 * Listener for the generic 'tailwatch_recovery_process_failed' action (fired by
 	 * RecoveryService when a process exhausts its retries). Only acts on backups.
 	 *
 	 * @param array $process_data The failed process row (must carry process_type).
 	 * @return void
 	 */
-	public function wptw_on_recovery_failed( $process_data ) {
+	public function tailwatch_on_recovery_failed( $process_data ) {
 		if ( ! empty( $process_data['process_type'] ) && 'backup' === $process_data['process_type'] ) {
-			$this->wptw_mark_backup_failed( 'recovery_max_retries' );
+			$this->tailwatch_mark_backup_failed( 'recovery_max_retries' );
 		}
 	}
 
@@ -2020,14 +2020,14 @@ class BackupController extends BaseController {
 	 * @param string $reason Short machine reason for logs.
 	 * @return void
 	 */
-	public function wptw_mark_backup_failed( $reason = '' ) {
-		$cancel_pause = $this->wptw_backup_cancel_pause_data();
+	public function tailwatch_mark_backup_failed( $reason = '' ) {
+		$cancel_pause = $this->tailwatch_backup_cancel_pause_data();
 		if ( empty( $cancel_pause ) || ! isset( $cancel_pause['scan_state'] ) || 'in-progress' !== $cancel_pause['scan_state'] ) {
 			return;
 		}
 
 		// Stop the worker chain + watchdog + DB sub-step crons.
-		foreach ( array( 'wptw_backup_daily_scan', 'wptw_verify_backup_cron_hook', 'wptw_create_db_backup_cron', 'wptw_scan_db_tables_cron' ) as $hook ) {
+		foreach ( array( 'tailwatch_backup_daily_scan', 'tailwatch_verify_backup_cron_hook', 'tailwatch_create_db_backup_cron', 'tailwatch_scan_db_tables_cron' ) as $hook ) {
 			$timestamp = wp_next_scheduled( $hook );
 			if ( $timestamp ) {
 				wp_unschedule_event( $timestamp, $hook );
@@ -2038,7 +2038,7 @@ class BackupController extends BaseController {
 		$cancel_pause['cron_running'] = false;
 		$this->update_backup_cancel_pause( $cancel_pause );
 
-		$scan_backp = $this->wptw_get_scan_backup_data();
+		$scan_backp = $this->tailwatch_get_scan_backup_data();
 		if ( ! empty( $scan_backp ) && is_array( $scan_backp ) ) {
 			$scan_backp['scan_state'] = 'failed'; // completed stays false → cleanup GCs it after 24h.
 			$this->update_backup_data( $scan_backp );
@@ -2083,7 +2083,7 @@ class BackupController extends BaseController {
 	 * @param string $path Absolute zip path.
 	 * @return bool True if the file exists and is a readable archive.
 	 */
-	private function wptw_is_valid_zip( $path ) {
+	private function tailwatch_is_valid_zip( $path ) {
 		if ( ! file_exists( $path ) || filesize( $path ) <= 0 ) {
 			return false;
 		}
@@ -2106,7 +2106,7 @@ class BackupController extends BaseController {
 	 * @param array $existing_data Backup state.
 	 * @return array List of "folderKey/partKey" strings (empty when all parts succeeded).
 	 */
-	private function wptw_collect_failed_parts( array $existing_data ) {
+	private function tailwatch_collect_failed_parts( array $existing_data ) {
 		$failed_parts = array();
 		foreach ( $existing_data as $folder_key => $folder_data ) {
 			if ( ! is_array( $folder_data ) || empty( $folder_data['batch'] ) || ! is_array( $folder_data['batch'] ) ) {
@@ -2126,13 +2126,13 @@ class BackupController extends BaseController {
 	 *
 	 * @param array    $existing_data       Backup state (by reference).
 	 * @param mixed    $feature_controller  DB model instance.
-	 * @param string   $wptw_key            Option key.
+	 * @param string   $tailwatch_key            Option key.
 	 * @param string   $option              Option name.
 	 * @param int|null $process_id        Process ID for process manager.
 	 */
-	public function check_and_finalize_backup( &$existing_data, $feature_controller, $wptw_key, $option, $process_id ) {
+	public function check_and_finalize_backup( &$existing_data, $feature_controller, $tailwatch_key, $option, $process_id ) {
 		$all_completed = true;
-		$cancel_pause  = $this->wptw_backup_cancel_pause_data();
+		$cancel_pause  = $this->tailwatch_backup_cancel_pause_data();
 
 		foreach ( $existing_data as $folder => $data ) {
 
@@ -2159,7 +2159,7 @@ class BackupController extends BaseController {
 			// consumed by ~14 hardcoded sites; a new value would silently break the
 			// status reader, list filter, and cleanup) — the truth lives in these
 			// separate flags and the notification text.
-			$failed_parts = $this->wptw_collect_failed_parts( $existing_data );
+			$failed_parts = $this->tailwatch_collect_failed_parts( $existing_data );
 			$had_failures = ! empty( $failed_parts );
 
 			$existing_data['had_failures'] = $had_failures;
@@ -2223,17 +2223,17 @@ class BackupController extends BaseController {
 				);
 			}
 
-			wp_delete_file( WPTW_LOGS_DIRECTORY . '/backup_zip_file_log.txt' );
+			wp_delete_file( TAILWATCH_LOGS_DIRECTORY . '/backup_zip_file_log.txt' );
 
 			// Allow pro plugin (MalwareScanner) to handle backup completion notification.
-			do_action( 'wptw_backup_completed_notification', $existing_data );
+			do_action( 'tailwatch_backup_completed_notification', $existing_data );
 
 			$live_logs = new LiveLogsController();
-			$live_logs->wptw_live_logs_completed( true, $this->wptw_get_log_file_path() );
+			$live_logs->tailwatch_live_logs_completed( true, $this->tailwatch_get_log_file_path() );
 
-			$timestamp_backup_status = wp_next_scheduled( 'wptw_verify_backup_cron_hook' );
+			$timestamp_backup_status = wp_next_scheduled( 'tailwatch_verify_backup_cron_hook' );
 			if ( $timestamp_backup_status ) {
-				wp_unschedule_event( $timestamp_backup_status, 'wptw_verify_backup_cron_hook' );
+				wp_unschedule_event( $timestamp_backup_status, 'tailwatch_verify_backup_cron_hook' );
 			}
 
 			Log::info(
@@ -2244,7 +2244,7 @@ class BackupController extends BaseController {
 				)
 			);
 
-			wp_clear_scheduled_hook( 'wptw_backup_daily_scan' );
+			wp_clear_scheduled_hook( 'tailwatch_backup_daily_scan' );
 		}
 	}
 
@@ -2254,17 +2254,17 @@ class BackupController extends BaseController {
 	 * @param string $post_data JSON-encoded POST data.
 	 * @return array Response with data or error.
 	 */
-	public function wptw_get_live_logs( $post_data ) {
+	public function tailwatch_get_live_logs( $post_data ) {
 		try {
-			$backup_data  = $this->wptw_backup_cancel_pause_data();
+			$backup_data  = $this->tailwatch_backup_cancel_pause_data();
 			$feature_type = 'create_backup';
 
 			$params = array(
-				'backup_size' => $this->wptw_get_specfic_backup_size( $backup_data ),
+				'backup_size' => $this->tailwatch_get_specfic_backup_size( $backup_data ),
 			);
 
 			$livelogs = new LiveLogsController();
-			$result   = $livelogs->wptw_import_live_logs( $post_data, $this->wptw_get_log_file_path(), $backup_data, $feature_type, $params );
+			$result   = $livelogs->tailwatch_import_live_logs( $post_data, $this->tailwatch_get_log_file_path(), $backup_data, $feature_type, $params );
 
 			return $result;
 		} catch ( \Throwable $e ) {
@@ -2290,8 +2290,8 @@ class BackupController extends BaseController {
 	 * @param array $backup_data Cancel/pause backup data with folderDate, backup_type.
 	 * @return int|float Size in bytes.
 	 */
-	public function wptw_get_specfic_backup_size( $backup_data ) {
-		$premium_size = apply_filters( 'wptw_premium_backup_size_calculation', false, $backup_data );
+	public function tailwatch_get_specfic_backup_size( $backup_data ) {
+		$premium_size = apply_filters( 'tailwatch_premium_backup_size_calculation', false, $backup_data );
 		if ( false !== $premium_size ) {
 			// Validate hook response (should be numeric size in bytes).
 			if ( is_numeric( $premium_size ) && $premium_size >= 0 ) {
@@ -2326,7 +2326,7 @@ class BackupController extends BaseController {
 	 * @param string $post_data JSON-encoded POST data with instant_scan.
 	 * @return array Response with code and message.
 	 */
-	public function wptw_instant_backup_scanner( $post_data ) {
+	public function tailwatch_instant_backup_scanner( $post_data ) {
 		try {
 			// Refuse to start if a conflicting process is currently running.
 			// See ProcessGuard for the cannot_start_while declaration on the
@@ -2376,14 +2376,14 @@ class BackupController extends BaseController {
 				$database_optimize = false;
 
 				$get_backup_option = new BackupMaintainController();
-				$backup_data       = $get_backup_option->wptw_get_backup_settings();
+				$backup_data       = $get_backup_option->tailwatch_get_backup_settings();
 
 				// Allow premium plugin to add backup types that support optimization.
-				$optimization_supported_types = apply_filters( 'wptw_backup_types_supporting_optimization', array( 'Complete Backup' ), $backup_data );
+				$optimization_supported_types = apply_filters( 'tailwatch_backup_types_supporting_optimization', array( 'Complete Backup' ), $backup_data );
 
 				if ( true === $backup_data['optimizeDatabase'] && in_array( $backup_data['backupType'], $optimization_supported_types, true ) ) {
 					$database_clean = new DatabaseOptimizerController();
-					$get_options    = $database_clean->wptw_db_optimize_options();
+					$get_options    = $database_clean->tailwatch_db_optimize_options();
 
 					if (
 						empty( $get_options ) || ! isset( $get_options['field_1']['options']['option']['selected'] ) ||
@@ -2393,10 +2393,10 @@ class BackupController extends BaseController {
 					} else {
 						$optimize_skip     = false;
 						$database_optimize = true;
-						$this->wptw_start_backup_creation( $database_optimize, $optimize_skip, 'on-demand' );
+						$this->tailwatch_start_backup_creation( $database_optimize, $optimize_skip, 'on-demand' );
 					}
 				} else {
-					$this->wptw_start_backup_creation( $database_optimize, $optimize_skip, 'on-demand' );
+					$this->tailwatch_start_backup_creation( $database_optimize, $optimize_skip, 'on-demand' );
 				}
 
 				Log::info(
@@ -2451,7 +2451,7 @@ class BackupController extends BaseController {
 	 * Resolve whether the database optimizer should run before a backup.
 	 *
 	 * Encapsulates the full gate chain used by the user-initiated entry
-	 * point (`wptw_backup_api_cron_start`) so the recurring cron path
+	 * point (`tailwatch_backup_api_cron_start`) so the recurring cron path
 	 * (`BackupCronJob::execute`) can honour the same setting. Prior to
 	 * 1.0.1 the cron path hardcoded the `$database_optimize` argument
 	 * to `false`, which silently disabled the "Optimize Database Before
@@ -2464,13 +2464,13 @@ class BackupController extends BaseController {
 	 *   - The selected `backupType` is in the list of types that
 	 *     support optimization (Complete Backup by default, with
 	 *     companion plugins free to add their own types via the
-	 *     `wptw_backup_types_supporting_optimization` filter).
+	 *     `tailwatch_backup_types_supporting_optimization` filter).
 	 *   - The Database Optimizer feature itself is configured AND
 	 *     enabled (no point running an optimizer the user has
 	 *     turned off elsewhere).
 	 *
 	 * @param array $backup_data Settings array from
-	 *                           {@see BackupMaintainController::wptw_get_backup_settings()}.
+	 *                           {@see BackupMaintainController::tailwatch_get_backup_settings()}.
 	 * @return bool True if the optimizer should run before the backup, false otherwise.
 	 */
 	public function should_optimize_database_for_backup( $backup_data ) {
@@ -2483,7 +2483,7 @@ class BackupController extends BaseController {
 		}
 
 		$supported_types = apply_filters(
-			'wptw_backup_types_supporting_optimization',
+			'tailwatch_backup_types_supporting_optimization',
 			array( 'Complete Backup' ),
 			$backup_data
 		);
@@ -2494,7 +2494,7 @@ class BackupController extends BaseController {
 		}
 
 		$db_optimizer = new DatabaseOptimizerController();
-		$options      = $db_optimizer->wptw_db_optimize_options();
+		$options      = $db_optimizer->tailwatch_db_optimize_options();
 
 		if ( empty( $options )
 			|| ! isset( $options['field_1']['options']['option']['selected'] )
@@ -2512,7 +2512,7 @@ class BackupController extends BaseController {
 	 * @param bool   $optimize_skip     Whether to skip optimization.
 	 * @param string $scan_type         Scan type (e.g. automatically, on-demand).
 	 */
-	public function wptw_start_backup_creation( $database_optimize, $optimize_skip, $scan_type = 'automatically' ) {
+	public function tailwatch_start_backup_creation( $database_optimize, $optimize_skip, $scan_type = 'automatically' ) {
 		$db_optimize  = true === $database_optimize && false === $optimize_skip;
 		$current_user = wp_get_current_user();
 		$user_name    = $current_user->user_login;
@@ -2523,7 +2523,7 @@ class BackupController extends BaseController {
 		if ( null !== $backup_job ) {
 			$backup_job->unschedule();
 		}
-		$this->wptw_calculate_folder_sizes( $user_name, $user_role, $scan_type, 'backup', $db_optimize );
+		$this->tailwatch_calculate_folder_sizes( $user_name, $user_role, $scan_type, 'backup', $db_optimize );
 	}
 
 	/**
@@ -2532,7 +2532,7 @@ class BackupController extends BaseController {
 	 * @param string $post_data JSON-encoded POST data.
 	 * @return array Response with code and message.
 	 */
-	public function wptw_start_backup_with_optimize_or_not( $post_data ) {
+	public function tailwatch_start_backup_with_optimize_or_not( $post_data ) {
 		try {
 			$json_data = isset( $post_data ) ? wp_unslash( $post_data ) : '';
 			$data      = json_decode( $json_data, true );
@@ -2553,7 +2553,7 @@ class BackupController extends BaseController {
 			}
 
 			if ( isset( $data['optimize_skip'] ) && false === $data['optimize_skip'] ) {
-				$optimizer_enable = $this->wptw_enable_database_optimizer();
+				$optimizer_enable = $this->tailwatch_enable_database_optimizer();
 
 				if ( $optimizer_enable ) {
 					Log::info(
@@ -2583,7 +2583,7 @@ class BackupController extends BaseController {
 					);
 				}
 			} else {
-				$this->wptw_start_backup_creation( false, true, 'on-demand' );
+				$this->tailwatch_start_backup_creation( false, true, 'on-demand' );
 				Log::info(
 					'Backup process started without database optimization',
 					array(
@@ -2614,9 +2614,9 @@ class BackupController extends BaseController {
 		}
 	}
 
-	public function wptw_enable_database_optimizer() {
+	public function tailwatch_enable_database_optimizer() {
 		$recommended_features = new RecommendedFeaturesController();
-		$feature_data         = $recommended_features->wptw_get_feature_id( 'default_database_optimizer' );
+		$feature_data         = $recommended_features->tailwatch_get_feature_id( 'default_database_optimizer' );
 		if ( ! $feature_data ) {
 			return false;
 		}
@@ -2624,7 +2624,7 @@ class BackupController extends BaseController {
 		$id_is     = $feature_data['id'];
 		$is_active = $feature_data['is_active'];
 
-		$parent_status = $recommended_features->wptw_update_parent_active_status( $id_is, $is_active );
+		$parent_status = $recommended_features->tailwatch_update_parent_active_status( $id_is, $is_active );
 
 		if ( $parent_status ) {
 			$options[] = array(
@@ -2639,9 +2639,9 @@ class BackupController extends BaseController {
 			);
 
 			$features_controller = new FeaturesController();
-			$is_updated          = $features_controller->wptw_update_inner_feature( null, $options_data );
+			$is_updated          = $features_controller->tailwatch_update_inner_feature( null, $options_data );
 
-			$this->wptw_start_backup_creation( true, false, 'on-demand' );
+			$this->tailwatch_start_backup_creation( true, false, 'on-demand' );
 
 			return true;
 		}
@@ -2654,12 +2654,12 @@ class BackupController extends BaseController {
 	 *
 	 * @return array Response with backup status.
 	 */
-	public function wptw_verify_backup_status() {
+	public function tailwatch_verify_backup_status() {
 		try {
-			$existing_data = $this->wptw_backup_cancel_pause_data();
-			$backup_data   = $this->wptw_get_scan_backup_data();
+			$existing_data = $this->tailwatch_backup_cancel_pause_data();
+			$backup_data   = $this->tailwatch_get_scan_backup_data();
 
-			$download_status        = apply_filters( 'wptw_get_backup_downloading_status', array(), false );
+			$download_status        = apply_filters( 'tailwatch_get_backup_downloading_status', array(), false );
 			$backup_download_status = false;
 			if ( ! empty( $download_status ) && is_array( $download_status ) ) {
 				$backup_download_status = $download_status['in_progress'] ?? false;
@@ -2766,15 +2766,15 @@ class BackupController extends BaseController {
 		}
 	}
 
-	public function wptw_resume_backup() {
+	public function tailwatch_resume_backup() {
 		try {
-			$existing_data = $this->wptw_get_scan_backup_data();
+			$existing_data = $this->tailwatch_get_scan_backup_data();
 			if ( ! empty( $existing_data ) && ! empty( $existing_data['backupType'] ) ) {
 
 				// Resume is the one deliberate stop -> in-progress transition; force past the
 				// stop-state guard that otherwise keeps a pause/cancel from being reverted.
 				$this->update_backup_scan_state( 'in-progress', true );
-				$cancel_pause               = $this->wptw_backup_cancel_pause_data();
+				$cancel_pause               = $this->tailwatch_backup_cancel_pause_data();
 				$cancel_pause['scan_state'] = 'in-progress';
 				$this->update_backup_cancel_pause( $cancel_pause, true );
 
@@ -2788,31 +2788,31 @@ class BackupController extends BaseController {
 				if ( in_array( $existing_data['backupType'], array( 'Complete Backup' ), true ) ) {
 					if ( $existing_data['database_optimize'] === true && $existing_data['optimize_completed'] === false ) {
 						$db_optimizer = new DatabaseOptimizerController();
-						return $db_optimizer->wptw_resume_db_optimize();
+						return $db_optimizer->tailwatch_resume_db_optimize();
 					}
 				}
 
 				/**
-				 * Filter: wptw_premium_backup_resume
+				 * Filter: tailwatch_premium_backup_resume
 				 *
 				 * @param bool  $handled      Whether premium plugin handled the resume (default: false).
 				 * @param array $backup_data  Complete backup data for resuming.
 				 * @return bool True if handled by premium plugin, false if not handled.
 				 */
-				$premium_resume = apply_filters( 'wptw_premium_backup_resume', false, $existing_data );
+				$premium_resume = apply_filters( 'tailwatch_premium_backup_resume', false, $existing_data );
 				if ( false === $premium_resume ) {
 					switch ( $existing_data['backupType'] ) {
 						case 'Complete Backup':
 							// Resume the phase the run was actually in. Until the table-scan has built
 							// the list, resume the SCAN cron; jumping straight to the dump would find an
 							// empty list and mark the DB "complete" — silently skipping it. Mirrors
-							// wptw_execute_cron_if_failed().
+							// tailwatch_execute_cron_if_failed().
 							if ( ! isset( $existing_data['tables'] ) ) {
-								if ( ! wp_next_scheduled( 'wptw_scan_db_tables_cron' ) ) {
-									wp_schedule_single_event( time() + 5, 'wptw_scan_db_tables_cron' );
+								if ( ! wp_next_scheduled( 'tailwatch_scan_db_tables_cron' ) ) {
+									wp_schedule_single_event( time() + 5, 'tailwatch_scan_db_tables_cron' );
 								}
-							} elseif ( ! wp_next_scheduled( 'wptw_create_db_backup_cron' ) ) {
-								wp_schedule_single_event( time() + 5, 'wptw_create_db_backup_cron' );
+							} elseif ( ! wp_next_scheduled( 'tailwatch_create_db_backup_cron' ) ) {
+								wp_schedule_single_event( time() + 5, 'tailwatch_create_db_backup_cron' );
 							}
 							break;
 						default:
@@ -2863,7 +2863,7 @@ class BackupController extends BaseController {
 		}
 	}
 
-	public function wptw_pause_backup_creation( $post_data ) {
+	public function tailwatch_pause_backup_creation( $post_data ) {
 		try {
 			$json_data = isset( $post_data ) ? wp_unslash( $post_data ) : '';
 			$data      = json_decode( $json_data, true );
@@ -2885,25 +2885,25 @@ class BackupController extends BaseController {
 
 			if ( ! empty( $data['scan_state'] ) && ( 'pause' === $data['scan_state'] || 'cancel' === $data['scan_state'] ) ) {
 
-				$cancel_pause            = $this->wptw_backup_cancel_pause_data();
-				$timestamp_backup_status = wp_next_scheduled( 'wptw_verify_backup_cron_hook' );
+				$cancel_pause            = $this->tailwatch_backup_cancel_pause_data();
+				$timestamp_backup_status = wp_next_scheduled( 'tailwatch_verify_backup_cron_hook' );
 				if ( $timestamp_backup_status ) {
-					wp_unschedule_event( $timestamp_backup_status, 'wptw_verify_backup_cron_hook' );
+					wp_unschedule_event( $timestamp_backup_status, 'tailwatch_verify_backup_cron_hook' );
 				}
 
 				$cancel_pause['scan_state'] = $data['scan_state'];
 				$this->update_backup_cancel_pause( $cancel_pause );
 				$this->update_backup_scan_state( $data['scan_state'] );
 
-				$backup_data = $this->wptw_get_scan_backup_data();
+				$backup_data = $this->tailwatch_get_scan_backup_data();
 				if ( $backup_data['optimize_completed'] === false ) {
 					$database_clean = new DatabaseOptimizerController();
-					$database_clean->wptw_pause_db_optimize( wp_json_encode( array( 'scan_state' => $data['scan_state'] ) ) );
+					$database_clean->tailwatch_pause_db_optimize( wp_json_encode( array( 'scan_state' => $data['scan_state'] ) ) );
 				}
 
-				$timestamp = wp_next_scheduled( 'wptw_backup_daily_scan' );
+				$timestamp = wp_next_scheduled( 'tailwatch_backup_daily_scan' );
 				if ( true ) {
-					wp_unschedule_event( $timestamp, 'wptw_backup_daily_scan' );
+					wp_unschedule_event( $timestamp, 'tailwatch_backup_daily_scan' );
 
 					// Handle process state based on cancel/pause
 					$process_id = $cancel_pause['process_id'] ?? null;
@@ -2923,7 +2923,7 @@ class BackupController extends BaseController {
 							)
 						);
 
-						wp_schedule_single_event( time() + 5, 'wptw_delete_backup_files_entry' );
+						wp_schedule_single_event( time() + 5, 'tailwatch_delete_backup_files_entry' );
 					} elseif ( 'pause' === $data['scan_state'] ) {
 						// Keep state as in_progress when paused (for recovery)
 						// Just send final heartbeat
@@ -2995,12 +2995,12 @@ class BackupController extends BaseController {
 		}
 	}
 
-	public function wptw_delete_files_entry_with_cron() {
+	public function tailwatch_delete_files_entry_with_cron() {
 
 		$feature_controller = new DBModel();
 		$key                = 'default_backup_scan';
-		$existing_data      = $this->wptw_get_scan_backup_data();
-		$backup_progress    = $this->wptw_backup_cancel_pause_data();
+		$existing_data      = $this->tailwatch_get_scan_backup_data();
+		$backup_progress    = $this->tailwatch_backup_cancel_pause_data();
 
 		$is_folder_deleted = array(
 			'folder_deleted' => false,
@@ -3016,7 +3016,7 @@ class BackupController extends BaseController {
 			&& false === $existing_data['completed']
 		) {
 			if ( isset( $backup_progress['folderDate'] ) && $existing_data['folderDate'] === $backup_progress['folderDate'] ) {
-				$is_folder_deleted = $this->wptw_cleanup_incomplete_backup( $existing_data );
+				$is_folder_deleted = $this->tailwatch_cleanup_incomplete_backup( $existing_data );
 				if ( isset( $is_folder_deleted['folder_deleted'] ) && true === $is_folder_deleted['folder_deleted'] ) {
 					$delete_entries = array( 'scan_backp', 'backup_cancel_pause' );
 
@@ -3041,13 +3041,13 @@ class BackupController extends BaseController {
 		}
 	}
 
-	public function wptw_delete_backup_entries( $delete_entries ) {
+	public function tailwatch_delete_backup_entries( $delete_entries ) {
 		foreach ( $delete_entries as $delete_entry ) {
-			$this->wptw_delete_backup_entry( $delete_entry );
+			$this->tailwatch_delete_backup_entry( $delete_entry );
 		}
 	}
 
-	public function wptw_delete_backup_folders( $existing_data ) {
+	public function tailwatch_delete_backup_folders( $existing_data ) {
 		$folder_name = isset( $existing_data['folderDate'] ) ? $existing_data['folderDate'] : '';
 
 		// Empty folderDate is bad input (we can't tell which folder to touch) -> signal failure.
@@ -3076,8 +3076,8 @@ class BackupController extends BaseController {
 		return $folder_deleted_files && $folder_deleted_db;
 	}
 
-	public function wptw_cleanup_incomplete_backup( $existing_data ) {
-		$is_deleted = $this->wptw_delete_backup_folders( $existing_data );
+	public function tailwatch_cleanup_incomplete_backup( $existing_data ) {
+		$is_deleted = $this->tailwatch_delete_backup_folders( $existing_data );
 		if ( $is_deleted ) {
 			return array(
 				'folder_deleted' => true,
@@ -3106,9 +3106,9 @@ class BackupController extends BaseController {
 		return $wp_filesystem->delete( $folder_path, true );
 	}
 
-	public function wptw_auto_cleanup_incomplete_backup() {
+	public function tailwatch_auto_cleanup_incomplete_backup() {
 		// Allow pro plugin (MalwareScanner) to provide scanner data.
-		$scanner_data = apply_filters( 'wptw_get_malware_scanner_progress_data', array() );
+		$scanner_data = apply_filters( 'tailwatch_get_malware_scanner_progress_data', array() );
 
 		if ( file_exists( $this->get_migration_progress ) ) {
 			$fs             = FilesystemService::get_filesystem();
@@ -3123,14 +3123,14 @@ class BackupController extends BaseController {
 		}
 
 		$feature_controller = new DBModel();
-		$wptw_key           = 'default_backup_scan';
+		$tailwatch_key           = 'default_backup_scan';
 		$option             = 'scan_backp';
 
 		$backup_maintain = new BackupMaintainController();
-		$backup_maintain->maintain_backups( $wptw_key, $option );
+		$backup_maintain->maintain_backups( $tailwatch_key, $option );
 
-		$all_backups          = $feature_controller->get_log_value( $wptw_key, $option );
-		$all_backups_progress = $feature_controller->get_log_value( $wptw_key, 'backup_cancel_pause' );
+		$all_backups          = $feature_controller->get_log_value( $tailwatch_key, $option );
+		$all_backups_progress = $feature_controller->get_log_value( $tailwatch_key, 'backup_cancel_pause' );
 
 		if ( ! empty( $all_backups ) ) {
 			$all_backup_dates = array();
@@ -3155,9 +3155,9 @@ class BackupController extends BaseController {
 
 							// Handle cancel state
 							if ( $backup_progress_json['scan_state'] === 'cancel' ) {
-								$this->wptw_delete_backup_folders( $backup_json );
+								$this->tailwatch_delete_backup_folders( $backup_json );
 								$delete_entries = array( $backup_data['id'], $backup_progress['id'] );
-								$this->wptw_delete_backup_entries( $delete_entries );
+								$this->tailwatch_delete_backup_entries( $delete_entries );
 
 								$index = array_search( $folder_date, $all_backup_dates );
 								if ( $index !== false ) {
@@ -3170,9 +3170,9 @@ class BackupController extends BaseController {
 							if ( $backup_progress_json['scan_state'] === 'pause' && isset( $backup_json['zipId'] ) ) {
 								$time_elapsed = time() - $backup_json['zipId'];
 								if ( $time_elapsed >= 43200 ) { // 12 hours
-									$this->wptw_delete_backup_folders( $backup_json );
+									$this->tailwatch_delete_backup_folders( $backup_json );
 									$delete_entries = array( $backup_data['id'], $backup_progress['id'] );
-									$this->wptw_delete_backup_entries( $delete_entries );
+									$this->tailwatch_delete_backup_entries( $delete_entries );
 
 									$index = array_search( $folder_date, $all_backup_dates );
 									if ( $index !== false ) {
@@ -3188,9 +3188,9 @@ class BackupController extends BaseController {
 							if ( $backup_progress_json['scan_state'] === 'in-progress' && isset( $backup_json['zipId'] ) ) {
 								$time_elapsed = time() - $backup_json['zipId'];
 								if ( $time_elapsed >= 86400 ) { // 12 hours
-									$this->wptw_delete_backup_folders( $backup_json );
+									$this->tailwatch_delete_backup_folders( $backup_json );
 									$delete_entries = array( $backup_data['id'], $backup_progress['id'] );
-									$this->wptw_delete_backup_entries( $delete_entries );
+									$this->tailwatch_delete_backup_entries( $delete_entries );
 
 									$index = array_search( $folder_date, $all_backup_dates );
 									if ( $index !== false ) {
@@ -3208,9 +3208,9 @@ class BackupController extends BaseController {
 							if ( $backup_progress_json['scan_state'] === 'failed' && isset( $backup_json['zipId'] ) ) {
 								$time_elapsed = time() - $backup_json['zipId'];
 								if ( $time_elapsed >= 86400 ) { // 24 hours
-									$this->wptw_delete_backup_folders( $backup_json );
+									$this->tailwatch_delete_backup_folders( $backup_json );
 									$delete_entries = array( $backup_data['id'], $backup_progress['id'] );
-									$this->wptw_delete_backup_entries( $delete_entries );
+									$this->tailwatch_delete_backup_entries( $delete_entries );
 
 									$index = array_search( $folder_date, $all_backup_dates );
 									if ( $index !== false ) {
@@ -3225,11 +3225,11 @@ class BackupController extends BaseController {
 							if ( $backup_progress_json['scan_state'] === 'completed' && isset( $backup_json['slug_requested_at'] ) ) {
 								$time_elapsed = time() - $backup_json['slug_requested_at'];
 								if ( $time_elapsed >= 86400 ) { // 24 hours
-									$export_dir  = WPTW_BACKUP_DIR . '/migrator/export/';
+									$export_dir  = TAILWATCH_BACKUP_DIR . '/migrator/export/';
 									$folder_name = $backup_json['folderDate'];
 									$zip_files   = array(
-										$export_dir . 'wptw_files_backup_' . $folder_name . '.zip',
-										$export_dir . 'wptw_database_backup_' . $folder_name . '.zip',
+										$export_dir . 'tailwatch_files_backup_' . $folder_name . '.zip',
+										$export_dir . 'tailwatch_database_backup_' . $folder_name . '.zip',
 									);
 
 									foreach ( $zip_files as $zip_file ) {
@@ -3243,8 +3243,8 @@ class BackupController extends BaseController {
 					}
 
 					if ( ! $has_progress_entry ) {
-						$this->wptw_delete_backup_folders( $backup_json );
-						$this->wptw_delete_backup_entries( array( $backup_data['id'] ) );
+						$this->tailwatch_delete_backup_folders( $backup_json );
+						$this->tailwatch_delete_backup_entries( array( $backup_data['id'] ) );
 
 						$index = array_search( $folder_date, $all_backup_dates );
 						if ( $index !== false ) {
@@ -3260,7 +3260,7 @@ class BackupController extends BaseController {
 				$folderDate           = $backup_progress_json['folderDate'];
 
 				if ( ! in_array( $folderDate, $all_backup_dates ) ) {
-					$this->wptw_delete_backup_entries( array( $backup_progress['id'] ) );
+					$this->tailwatch_delete_backup_entries( array( $backup_progress['id'] ) );
 				}
 			}
 
@@ -3308,7 +3308,7 @@ class BackupController extends BaseController {
 		return $wp_filesystem->delete( $folder, true );
 	}
 
-	public function wptw_delete_backup_entry( $ids ) {
+	public function tailwatch_delete_backup_entry( $ids ) {
 		$backup_model = new BackupModel();
 		$ids          = is_array( $ids ) ? $ids : array( $ids );
 		foreach ( $ids as $id ) {
@@ -3317,7 +3317,7 @@ class BackupController extends BaseController {
 		return true;
 	}
 
-	public function wptw_get_backup_folders_info( $post_data ) {
+	public function tailwatch_get_backup_folders_info( $post_data ) {
 		try {
 
 			$json_data = isset( $post_data ) ? wp_unslash( $post_data ) : '';
@@ -3339,7 +3339,7 @@ class BackupController extends BaseController {
 			// Consumers (e.g. pro) can exclude internal-flow backup rows from
 			// this user-facing list. Same list goes to both queries so
 			// pagination stays accurate.
-			$exclude_process_runs = apply_filters( 'wptw_backup_list_exclude_process_runs', array() );
+			$exclude_process_runs = apply_filters( 'tailwatch_backup_list_exclude_process_runs', array() );
 			if ( ! is_array( $exclude_process_runs ) ) {
 				$exclude_process_runs = array();
 			}
@@ -3365,7 +3365,7 @@ class BackupController extends BaseController {
 			}
 
 			$backup_ids       = array();
-			$download_backups = apply_filters( 'wptw_get_backup_downloading_status', array(), true );
+			$download_backups = apply_filters( 'tailwatch_get_backup_downloading_status', array(), true );
 			if ( ! empty( $download_backups ) && is_array( $download_backups ) ) {
 				$download_status = $download_backups['in_progress'] ?? false;
 
@@ -3601,7 +3601,7 @@ class BackupController extends BaseController {
 	 * @param string $post_data JSON with folder_name and id.
 	 * @return array Response with data (file list) or error.
 	 */
-	public function wptw_get_backup_folder_files( $post_data ) {
+	public function tailwatch_get_backup_folder_files( $post_data ) {
 		$json_data   = isset( $post_data ) ? wp_unslash( $post_data ) : '';
 		$data        = json_decode( $json_data, true );
 		$folder_name = isset( $data['folder_name'] ) ? sanitize_text_field( $data['folder_name'] ) : '';
@@ -3690,7 +3690,7 @@ class BackupController extends BaseController {
 
 					if ( in_array( $file_name, $db_files, true ) ) {
 						$file_size = $file->getSize();
-						$file_url  = WPTW_BACKUP_URL . '/' . $type . '/' . $folder_name . '/' . $file_name;
+						$file_url  = TAILWATCH_BACKUP_URL . '/' . $type . '/' . $folder_name . '/' . $file_name;
 
 						$verified_files[] = array(
 							'file_name'         => $file_name,

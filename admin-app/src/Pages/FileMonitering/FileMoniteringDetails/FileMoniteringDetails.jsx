@@ -3,7 +3,7 @@ import InfoBar from '../../../Components/InfoBar/InfoBar.jsx';
 import { SkeletonStatus } from '../../../Components/Skeleton/LoaderSkeleton.jsx';
 import { toast } from 'react-toastify';
 import axios from 'axios';
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 const FileMoniteringDetails = ({ featureEnable, setFeatureEnable, parentEnable, setParentEnable,isLicenseConnect, setIsLicenseConnect }) => {
     const [moniteringDetails, setMoniteringDetails] = useState(null);
@@ -13,11 +13,11 @@ const FileMoniteringDetails = ({ featureEnable, setFeatureEnable, parentEnable, 
         setLoading(true);
         try {
             const formData = new FormData();
-            formData.append('action', 'wptw_global_ajax_handler');
-            formData.append('action_type', 'wptw_get_file_integrity_status');
-            formData.append('nonce', wptw_ajax.nonce);
+            formData.append('action', 'tailwatch_global_ajax_handler');
+            formData.append('action_type', 'tailwatch_get_file_integrity_status');
+            formData.append('nonce', tailwatch_ajax.nonce);
 
-            const response = await axios.post(wptw_ajax.ajax_url, formData, {
+            const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },

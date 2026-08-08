@@ -147,7 +147,7 @@ class LoginProtectionController {
 		if ( ! $this->is_feature_enabled( 'field_15' ) ) {
 			return;
 		}
-		wp_add_inline_style( 'login', '.wptw-honeypot-field{position:absolute;left:-9999px;top:-9999px;height:0;width:0;overflow:hidden;}' );
+		wp_add_inline_style( 'login', '.tailwatch-honeypot-field{position:absolute;left:-9999px;top:-9999px;height:0;width:0;overflow:hidden;}' );
 	}
 
 	public function block_lost_password_page() {
@@ -284,9 +284,9 @@ class LoginProtectionController {
 		if ( ! $this->is_feature_enabled( 'field_15' ) ) {
 			return;
 		}
-		echo '<p class="wptw-honeypot-field" aria-hidden="true">';
-		echo '<label for="wptw-verify-check">' . esc_html__( 'Leave this field empty', 'tailwatch' ) . '</label>';
-		echo '<input type="text" name="wptw_verify_check" id="wptw-verify-check" value="" tabindex="-1" autocomplete="off" />';
+		echo '<p class="tailwatch-honeypot-field" aria-hidden="true">';
+		echo '<label for="tailwatch-verify-check">' . esc_html__( 'Leave this field empty', 'tailwatch' ) . '</label>';
+		echo '<input type="text" name="tailwatch_verify_check" id="tailwatch-verify-check" value="" tabindex="-1" autocomplete="off" />';
 		echo '</p>';
 	}
 
@@ -325,7 +325,7 @@ class LoginProtectionController {
 				return new \WP_Error( 'authentication_failed', esc_html( $user_message ) );
 			}
 
-			if ( ! empty( $_POST['wptw_verify_check'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.NonceVerification.Recommended
+			if ( ! empty( $_POST['tailwatch_verify_check'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.NonceVerification.Recommended
 				Log::error(
 					'Honeypot field filled',
 					array(

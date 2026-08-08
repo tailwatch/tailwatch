@@ -3,12 +3,12 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { FaCheckCircle, FaSpinner, FaTimesCircle } from "react-icons/fa";
 import { useVerifyVisitStatus } from '../../Components/Hooks/VerifyVisitStatus/VerifyVisitStatus';
-import { verifyVisitStatus, checkPhpVersion, checkWpVersion, checkCronStatus, check_wptw_table, handleHttpRequest } from "./VisitServices/VisitServices";
+import { verifyVisitStatus, checkPhpVersion, checkWpVersion, checkCronStatus, check_tailwatch_table } from "./VisitServices/VisitServices";
 import VisitModal from "./VisitModal/VisitModal";
 import VisitSteps from "./VisitSteps/VisitSteps";
 import { CronHealer } from "../../Components/CroneHealer/CronHealer";
 
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 const Visit = () => {
   const navigate = useNavigate();
@@ -83,9 +83,9 @@ const Visit = () => {
       setCurrentStep(2);
       await verifyVisitStatus(setVisitStep, navigate);
 
-    } else if (visitStep === "wptw_table") {
+    } else if (visitStep === "tailwatch_table") {
       await delay(4000);
-      const response = await check_wptw_table();
+      const response = await check_tailwatch_table();
       if (response.error) {
         setTimeout(() => { setIsModalOpen(true); }, 1000);
         setModalMessage(response.error);
@@ -129,7 +129,7 @@ const Visit = () => {
       await verifyVisitStatus(setVisitStep, navigate);
 
     } else if (visitStep === "db_initialize") {
-      const response = await check_wptw_table();
+      const response = await check_tailwatch_table();
       if (response) {
         await delay(4000);
         await fetchLogs();
@@ -141,11 +141,11 @@ const Visit = () => {
   const fetchLogs = async () => {
     try {
       const formData = new FormData();
-      formData.append("action", "wptw_global_ajax_handler");
-      formData.append("action_type", "wptw_verify_initialize_completed");
-      formData.append("nonce", wptw_ajax.nonce);
+      formData.append("action", "tailwatch_global_ajax_handler");
+      formData.append("action_type", "tailwatch_verify_initialize_completed");
+      formData.append("nonce", tailwatch_ajax.nonce);
 
-      const response = await axios.post(wptw_ajax.ajax_url, formData, {
+      const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
@@ -186,7 +186,7 @@ const Visit = () => {
     const mapVisitStepToIndex = {
       check_php_version: 0,
       check_wp_version: 1,
-      wptw_table: 2,
+      tailwatch_table: 2,
       check_cron_status: 3,
       db_initialize: 4,
     };

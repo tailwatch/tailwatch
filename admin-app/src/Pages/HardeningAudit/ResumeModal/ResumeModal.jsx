@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import axios from "axios";
 import Modal from "../../../Components/Modal/Modal";
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 const ResumeModal = ({
     setOperationLoading,
@@ -35,11 +35,11 @@ const ResumeModal = ({
         setIsSubmitting(true);
         try {
             const formData = new FormData();
-            formData.append("action", "wptw_global_ajax_handler");
-            formData.append("action_type", "wptw_resume_hardening_audit");
-            formData.append("nonce", wptw_ajax.nonce);
+            formData.append("action", "tailwatch_global_ajax_handler");
+            formData.append("action_type", "tailwatch_resume_hardening_audit");
+            formData.append("nonce", tailwatch_ajax.nonce);
 
-            const response = await axios.post(wptw_ajax.ajax_url, formData, {
+            const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
                 headers: { "Content-Type": "multipart/form-data" },
             });
 

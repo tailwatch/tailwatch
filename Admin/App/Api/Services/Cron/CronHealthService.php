@@ -37,7 +37,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class CronHealthService {
 
 	/** @var string Transient that caches a healthy loopback result. */
-	const CACHE_KEY = 'wptw_cron_status_ok';
+	const CACHE_KEY = 'tailwatch_cron_status_ok';
 
 	/** @var int Cache TTL, in seconds, for a healthy result. */
 	const CACHE_TTL = HOUR_IN_SECONDS;

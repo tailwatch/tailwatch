@@ -4,7 +4,7 @@ import axios from "axios";
 import { useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 const CheckLicense = () => {
     const location = useLocation();
@@ -16,11 +16,11 @@ const CheckLicense = () => {
         const checkLicense = async () => {
           try {
             const formData = new FormData();
-            formData.append("action", "wptw_global_ajax_handler");
-            formData.append("action_type", "wptw_verify_license");
-            formData.append("nonce", wptw_ajax.nonce);
+            formData.append("action", "tailwatch_global_ajax_handler");
+            formData.append("action_type", "tailwatch_verify_license");
+            formData.append("nonce", tailwatch_ajax.nonce);
     
-            const response = await axios.post(wptw_ajax.ajax_url, formData, {
+            const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
               headers: {
                 "Content-Type": "multipart/form-data",
               },

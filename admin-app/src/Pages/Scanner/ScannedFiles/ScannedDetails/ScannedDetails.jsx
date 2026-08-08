@@ -11,7 +11,7 @@ import PopUpModal from '../../../../Components/Modal/PopUpModal';
 import { useNavigate } from 'react-router-dom';
 import { viewInfectedContent } from '../../ScannerServices/ScannerServices.jsx';
 import { Tooltip } from '../../../../Components/ToolTip/Tooltip';
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 const ScannedDetails = () => {
   const { pid: paramId } = useParams();
@@ -41,12 +41,12 @@ const ScannedDetails = () => {
       setLoading(true);
       try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_get_malware_scanner_report_by_pid');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_get_malware_scanner_report_by_pid');
         formData.append('data', JSON.stringify({ pid }));
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
           headers: {
             'Content-Type': 'multipart/form-data'
           }
@@ -83,12 +83,12 @@ const ScannedDetails = () => {
     if (isConfirmed) {
       try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_continue_malware_restore');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_continue_malware_restore');
         formData.append('data', JSON.stringify({ pid }));
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
           headers: {
             'Content-Type': 'multipart/form-data'
           }

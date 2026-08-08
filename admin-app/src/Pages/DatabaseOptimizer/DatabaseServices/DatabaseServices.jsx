@@ -3,7 +3,7 @@ import { toast } from 'react-toastify';
 import { CronHealer } from '../../../Components/CroneHealer/CronHealer';
 import { alertService } from "../../../Components/AlertService/AlertService";
 
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 const EMPTY_OPTIMIZER_STATUS = {
   steps: {},
   schedule: null,
@@ -16,11 +16,11 @@ const EMPTY_OPTIMIZER_STATUS = {
 export const getDbOptimizerStatus = async () => {
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_get_db_optimizer_status');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_get_db_optimizer_status');
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
 
@@ -48,12 +48,12 @@ export const getDbOptimizerStatus = async () => {
 export const instantScanning = async (setScanCompleted, fetchLogs) => {
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_database_optimize");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_database_optimize");
+    formData.append("nonce", tailwatch_ajax.nonce);
     formData.append("data", JSON.stringify({ instant_scan: true }));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -109,11 +109,11 @@ const executeCronIfFailed = async () => {
     
 
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_db_optimization_cron_if_failed");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_db_optimization_cron_if_failed");
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -162,14 +162,14 @@ const checkCronExecution = async (message, cron_running) => {
 export const fetchLogs = async (setLogs, setIsCompleted, isFirstExecution = true, isComponentActiveRef, setIsLogsVisible, setIsScanInProgress, setProgress, setRenderKey, setIsPausing, setIsPaused, setIsCanceled, setOperationLoading, isLastLogIndex, setIsLastLogIndex) => {
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_get_optimize_live_logs");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_get_optimize_live_logs");
+    formData.append("nonce", tailwatch_ajax.nonce);
 
     const lastLogIndex = isFirstExecution ? 0 : isLastLogIndex;
     formData.append("data", JSON.stringify({ last_log_index: lastLogIndex }));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -258,11 +258,11 @@ export const fetchLogs = async (setLogs, setIsCompleted, isFirstExecution = true
 export const verifyDatabaseOptimizeStatus = async ({ setProgress, setScanState, setProcessType, setScanType, setVerifyStatus, setVerifyLoading, setFeatureEnable, setParentEnable }) => {
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_verify_db_optimize_status");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_verify_db_optimize_status");
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -293,12 +293,12 @@ export const verifyDatabaseOptimizeStatus = async ({ setProgress, setScanState, 
 export const onPauseOrCancel = async ({ scan_state, setIsLogsVisible, setLogs, setIsScanInProgress, setIsCompleted, setIsPaused, setErrorMessages }) => {
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_pause_db_optimize");
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_pause_db_optimize");
     formData.append("data", JSON.stringify({ scan_state }));
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -325,11 +325,11 @@ export const onPauseOrCancel = async ({ scan_state, setIsLogsVisible, setLogs, s
 export const checkOptimizeStatus = async ({ setCheckTableStatus }) => {
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_check_db_optimization_status");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_check_db_optimization_status");
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
     

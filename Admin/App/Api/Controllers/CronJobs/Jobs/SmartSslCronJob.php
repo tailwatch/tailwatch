@@ -44,8 +44,8 @@ class SmartSslCronJob extends AbstractCronJob {
 	 *
 	 */
 	public function __construct() {
-		$this->cron_hook_name   = 'wptw_verify_ssl';
-		$this->schedule_name    = 'wptw_ssl_verification';
+		$this->cron_hook_name   = 'tailwatch_verify_ssl';
+		$this->schedule_name    = 'tailwatch_ssl_verification';
 		$this->default_interval = '1 Day';
 
 		parent::__construct();
@@ -98,17 +98,17 @@ class SmartSslCronJob extends AbstractCronJob {
 			 * Fires before SSL verification cron executes.
 			 *
 			 */
-			do_action( 'wptw_before_ssl_cron_execute' );
+			do_action( 'tailwatch_before_ssl_cron_execute' );
 
 			// Perform SSL verification (controller is lazy loaded here).
-			$result = $this->get_ssl_controller()->wptw_verify_ssl_connection();
+			$result = $this->get_ssl_controller()->tailwatch_verify_ssl_connection();
 
 			/**
 			 * Fires after SSL verification cron executes.
 	 		 *
 			 * @param mixed $result The result of SSL verification.
 			 */
-			do_action( 'wptw_after_ssl_cron_execute', $result );
+			do_action( 'tailwatch_after_ssl_cron_execute', $result );
 		} catch ( \Throwable $e ) {
 			// Log the error but don't re-throw to prevent cron from failing silently.
 			Log::error(

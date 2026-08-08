@@ -9,7 +9,7 @@ class RecoveryLogModel {
 
 	public function log_recovery( $process_id, $log_data ) {
 		global $wpdb;
-		$table = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 
 		$data = array(
 			'user_id'       => $log_data['user_id'] ?? get_current_user_id(),
@@ -32,7 +32,7 @@ class RecoveryLogModel {
 
 	public function get_process_recovery_logs( $process_id, $limit = 50 ) {
 		global $wpdb;
-		$table = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom logs table; per-process recovery log.
 		$results = $wpdb->get_results(
@@ -61,7 +61,7 @@ class RecoveryLogModel {
 
 	public function get_recent_recovery_logs( $limit = 100 ) {
 		global $wpdb;
-		$table = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom logs table; recent recovery log.
 		$results = $wpdb->get_results(
@@ -103,7 +103,7 @@ class RecoveryLogModel {
 
 	public function get_recovery_success_rate( $process_type, $days = 7 ) {
 		global $wpdb;
-		$table = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 
 		$cutoff_date = wp_date( 'Y-m-d H:i:s', strtotime( '-' . absint( $days ) . ' days' ) );
 
@@ -148,7 +148,7 @@ class RecoveryLogModel {
 
 	public function cleanup_old_logs( $days = 30 ) {
 		global $wpdb;
-		$table = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 
 		$cutoff_date = wp_date( 'Y-m-d H:i:s', strtotime( '-' . absint( $days ) . ' days' ) );
 
@@ -167,7 +167,7 @@ class RecoveryLogModel {
 
 	public function get_recovery_summary() {
 		global $wpdb;
-		$table = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 
 		// Get logs from last 7 days.
 		$seven_days_ago = wp_date( 'Y-m-d H:i:s', strtotime( '-7 days' ) );

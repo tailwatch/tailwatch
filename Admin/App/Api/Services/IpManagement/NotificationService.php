@@ -21,7 +21,7 @@ class NotificationService {
 
 	public function log_notification( $type, $data ) {
 		global $wpdb;
-		$table_name   = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name   = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 		$notification = array(
 			'type'      => sanitize_text_field( $type ),
 			'data'      => wp_json_encode( $data ),
@@ -58,7 +58,7 @@ class NotificationService {
 		// Invalidate the cached feed so the next read rebuilds from the DB.
 		// (Re-reading via get_notification_logs() here would return the stale
 		// cache and miss the row just inserted.)
-		delete_transient( 'login_defender_notification_logs' );
+		delete_transient( 'tailwatch_login_defender_notification_logs' );
 
 		Log::info(
 			'Logged notification',
@@ -73,13 +73,13 @@ class NotificationService {
 
 	public function get_notification_logs( $limit = 100, $offset = 0 ) {
 		global $wpdb;
-		$cache_key = 'login_defender_notification_logs';
+		$cache_key = 'tailwatch_login_defender_notification_logs';
 		$cached    = get_transient( $cache_key );
 		if ( $cached !== false ) {
 			return array_slice( $cached, $offset, $limit );
 		}
 
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 		$logs       = $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table, no WP cache API.
 			$wpdb->prepare(
 				'SELECT * FROM %i WHERE `key` = %s AND is_active = %d ORDER BY date_created DESC LIMIT %d OFFSET %d',

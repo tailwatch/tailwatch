@@ -22,7 +22,7 @@ class RuleModel {
 
 	public function add_ip_rule( $ip_ranges, $block_type, $block_duration, $scope, $reason, $geoip, $block_page = null ) {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 		$results    = array(
 			'success' => true,
 			'failed'  => array(),
@@ -189,15 +189,15 @@ class RuleModel {
 		// Refresh the rule cache even on a partial batch — rows are written
 		// immediately (no wrapping transaction), so a new rule must enforce at once
 		// rather than after the 1h TTL. Clear the _all variant too (the admin list).
-		delete_transient( 'login_defender_ip_rules' );
-		delete_transient( 'login_defender_ip_rules_all' );
+		delete_transient( 'tailwatch_login_defender_ip_rules' );
+		delete_transient( 'tailwatch_login_defender_ip_rules_all' );
 
 		return $results;
 	}
 
 	public function update_ip_rule( $ip_ranges, $block_type, $block_duration, $scope, $reason, $geoip, $block_page = null ) {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 		$results    = array(
 			'success' => true,
 			'failed'  => array(),
@@ -384,15 +384,15 @@ class RuleModel {
 		// Always refresh both cache variants (harmless after a ROLLBACK — the rebuild
 		// just re-reads the unchanged rows; required so the _all admin-list variant
 		// never goes stale).
-		delete_transient( 'login_defender_ip_rules' );
-		delete_transient( 'login_defender_ip_rules_all' );
+		delete_transient( 'tailwatch_login_defender_ip_rules' );
+		delete_transient( 'tailwatch_login_defender_ip_rules_all' );
 
 		return $results;
 	}
 
 	public function get_active_rules( $type, $limit = null, $page = null, $only_active = true ) {
 		global $wpdb;
-		$cache_key = 'login_defender_' . ( $type === 'ip' ? 'ip_rules' : 'country_rules' ) . ( $only_active ? '' : '_all' );
+		$cache_key = 'tailwatch_login_defender_' . ( $type === 'ip' ? 'ip_rules' : 'country_rules' ) . ( $only_active ? '' : '_all' );
 
 		if ( $limit === null && $page === null ) {
 			$cached = get_transient( $cache_key );
@@ -401,7 +401,7 @@ class RuleModel {
 			}
 		}
 
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 		$key        = $type === 'ip' ? 'ip_range_block' : 'country_block';
 
 		// Each branch passes a static SQL literal to prepare() so WPCS can
@@ -471,7 +471,7 @@ class RuleModel {
 
 	public function delete_ip_rule( $ip_ranges, $is_delete = false ) {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 		$results    = array(
 			'success' => true,
 			'failed'  => array(),
@@ -549,8 +549,8 @@ class RuleModel {
 			}
 		}
 
-		delete_transient( 'login_defender_ip_rules' );
-		delete_transient( 'login_defender_ip_rules_all' );
+		delete_transient( 'tailwatch_login_defender_ip_rules' );
+		delete_transient( 'tailwatch_login_defender_ip_rules_all' );
 		return $results;
 	}
 
@@ -649,8 +649,8 @@ class RuleModel {
 
 	public function count_blocked_ip_ranges( $block_type = null ) {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
-		$sql        = "SELECT COUNT(*) FROM $table_name WHERE `key` = 'ip_range_block' AND is_active = 1";
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
+		$sql        = $wpdb->prepare( "SELECT COUNT(*) FROM %i WHERE `key` = 'ip_range_block' AND is_active = 1", $table_name );
 		if ( $block_type ) {
 			$sql .= $wpdb->prepare( " AND JSON_UNQUOTE(JSON_EXTRACT(value, '$.block_type')) = %s", $block_type );
 		}
@@ -659,8 +659,8 @@ class RuleModel {
 
 	public function count_blocked_countries( $block_type = null ) {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
-		$sql        = "SELECT COUNT(*) FROM $table_name WHERE `key` = 'country_block' AND is_active = 1";
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
+		$sql        = $wpdb->prepare( "SELECT COUNT(*) FROM %i WHERE `key` = 'country_block' AND is_active = 1", $table_name );
 		if ( $block_type ) {
 			$sql .= $wpdb->prepare( " AND JSON_UNQUOTE(JSON_EXTRACT(value, '$.block_type')) = %s", $block_type );
 		}

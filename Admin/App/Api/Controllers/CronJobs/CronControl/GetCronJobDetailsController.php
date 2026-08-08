@@ -37,7 +37,7 @@ class GetCronJobDetailsController {
 
 	/**
 	 * Canonical list of cron hooks owned by this plugin (and by Pro / other
-	 * extensions via the `wptw_register_cron_hooks` filter). Sourced from
+	 * extensions via the `tailwatch_register_cron_hooks` filter). Sourced from
 	 * CronJobManager::get_all_cron_hooks() so the list stays in sync
 	 * automatically when a new feature ships a new cron — no manual list to
 	 * maintain in two places.
@@ -69,16 +69,16 @@ class GetCronJobDetailsController {
 
 	public function __construct() {
 		$hook_controller = new HookControllers();
-		$hook_controller->add_action_hook( 'init', array( $this, 'wptw_register_custom_schedules' ) );
-		$hook_controller->add_action_hook( 'init', array( $this, 'wptw_prevent_paused_job_execution' ) );
+		$hook_controller->add_action_hook( 'init', array( $this, 'tailwatch_register_custom_schedules' ) );
+		$hook_controller->add_action_hook( 'init', array( $this, 'tailwatch_prevent_paused_job_execution' ) );
 	}
 
-	public function wptw_register_custom_schedules() {
+	public function tailwatch_register_custom_schedules() {
 		$hook_controller = new HookControllers();
 		$hook_controller->add_filter_hook(
 			'cron_schedules',
 			function ( $schedules ) {
-				$custom_schedules = get_option( 'wptw_custom_schedules', array() );
+				$custom_schedules = get_option( 'tailwatch_custom_schedules', array() );
 				foreach ( $custom_schedules as $slug => $schedule ) {
 					$schedules[ $slug ] = array(
 						'interval' => $schedule['interval'],
@@ -97,12 +97,12 @@ class GetCronJobDetailsController {
 	 * catches rescheduling attempts regardless of the new timestamp.
 	 *
 	 */
-	public function wptw_prevent_paused_job_execution() {
+	public function tailwatch_prevent_paused_job_execution() {
 		$hook_controller = new HookControllers();
 		$hook_controller->add_filter_hook(
 			'pre_schedule_event',
 			function ( $pre, $event ) {
-				$paused_jobs = get_option( 'wptw_paused_cron_jobs', array() );
+				$paused_jobs = get_option( 'tailwatch_paused_cron_jobs', array() );
 
 				if ( empty( $paused_jobs ) || ! is_array( $paused_jobs ) ) {
 					return $pre;
@@ -131,7 +131,7 @@ class GetCronJobDetailsController {
 		return $options_controller->get_features_options( $key, $option, $is_active );
 	}
 
-	public function wptw_cron_job_feature_enable() {
+	public function tailwatch_cron_job_feature_enable() {
 		$feature_enable = $this->get_features_options();
 
 		if ( empty( $feature_enable ) ) {
@@ -157,9 +157,9 @@ class GetCronJobDetailsController {
 	}
 
 	// 3rd version
-	public function wptw_get_cron_jobs_with_source( $post_data ) {
+	public function tailwatch_get_cron_jobs_with_source( $post_data ) {
 		try {
-			$is_enabled = $this->wptw_cron_job_feature_enable();
+			$is_enabled = $this->tailwatch_cron_job_feature_enable();
 			if ( ! $is_enabled['feature_enable'] ) {
 				return array(
 					'data'           => array(),
@@ -212,14 +212,14 @@ class GetCronJobDetailsController {
 			if ( empty( $cron_jobs ) ) {
 				$cron_jobs = array();
 			}
-			$paused_jobs = get_option( 'wptw_paused_cron_jobs', array() );
+			$paused_jobs = get_option( 'tailwatch_paused_cron_jobs', array() );
 
-			$created_sigs = get_option( 'wptw_created_cron_jobs', array() );
+			$created_sigs = get_option( 'tailwatch_created_cron_jobs', array() );
 			if ( ! is_array( $created_sigs ) ) {
 				$created_sigs = array();
 			}
 
-			$custom_schedules          = get_option( 'wptw_custom_schedules', array() );
+			$custom_schedules          = get_option( 'tailwatch_custom_schedules', array() );
 			$schedules                 = wp_get_schedules();
 			$schedules['__single_run'] = array( 'display' => 'Non-repeating' );
 
@@ -376,10 +376,10 @@ class GetCronJobDetailsController {
 		}
 	}
 
-	public function wptw_get_schedules( $post_data ) {
+	public function tailwatch_get_schedules( $post_data ) {
 		try {
 
-			$is_enabled = $this->wptw_cron_job_feature_enable();
+			$is_enabled = $this->tailwatch_cron_job_feature_enable();
 			if ( ! $is_enabled['feature_enable'] ) {
 				return array(
 					'data'           => array(),
@@ -426,7 +426,7 @@ class GetCronJobDetailsController {
 			}
 
 			$schedules                 = wp_get_schedules();
-			$custom_schedules          = get_option( 'wptw_custom_schedules', array() );
+			$custom_schedules          = get_option( 'tailwatch_custom_schedules', array() );
 			$schedules['__single_run'] = array(
 				'display'  => 'Non-repeating',
 				'interval' => 0,

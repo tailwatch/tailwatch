@@ -4,7 +4,7 @@ import { CronHealer } from "../../../Components/CroneHealer/CronHealer";
 import { startSecurityFeature } from "../../Home/HomeServices/HomeServices";
 import { alertService } from "../../../Components/AlertService/AlertService";
 
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 let cronScheduled = false;
 let isCronExecuting = false;
 let cronTimeoutId = null;
@@ -17,11 +17,11 @@ const executeCronIfFailed = async () => {
     isCronExecuting = true;
 
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_run_feature_implement_cron_if_failed");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_run_feature_implement_cron_if_failed");
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -60,11 +60,11 @@ const checkCronExecution = async (cron_running) => {
 export const handleFeatureCompletion = async ({ setProgressValue, navigate }) => {
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_recommended_features_process");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_recommended_features_process");
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -107,11 +107,11 @@ export const handleFeatureCompletion = async ({ setProgressValue, navigate }) =>
 export const verifyVisitStatus = async (setVisitStep, navigate) => {
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_verify_visit_progress");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_verify_visit_progress");
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
     const { visit_step, is_completed } = response.data.data;
@@ -126,11 +126,11 @@ export const verifyVisitStatus = async (setVisitStep, navigate) => {
 export const checkPhpVersion = async () => {
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_check_php_version");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_check_php_version");
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -151,11 +151,11 @@ export const checkPhpVersion = async () => {
 export const checkWpVersion = async () => {
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_check_wordpress_version");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_check_wordpress_version");
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -176,11 +176,11 @@ export const checkWpVersion = async () => {
 export const checkCronStatus = async () => {
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_check_cron_status");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_check_cron_status");
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -197,37 +197,14 @@ export const checkCronStatus = async () => {
   }
 };
 
-export const handleHttpRequest = async () => {
+export const check_tailwatch_table = async () => {
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_check_http_request");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "check_tailwatch_table");
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
-
-    if (response?.data?.success) {
-      return {
-        message: response.data.data.message,
-      };
-    }
-    else {
-      throw new Error(response?.data?.data?.message || "Http Request Not Allowed.");
-    }
-  } catch (e) {
-    return { error: e.message };
-  }
-};
-export const check_wptw_table = async () => {
-  try {
-    const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "check_wptw_table");
-    formData.append("nonce", wptw_ajax.nonce);
-
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -248,11 +225,11 @@ export const getVisitFeatures = async (setFeatures, setIsLoading, setFeatureData
   setIsLoading(true);
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_get_feature");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_get_feature");
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
     if (response?.data?.success) {
@@ -270,13 +247,13 @@ export const getVisitFeatures = async (setFeatures, setIsLoading, setFeatureData
 export const updateVisitFeatures = async (setFeatures, payload) => {
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_update_feature_status");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_update_feature_status");
+    formData.append("nonce", tailwatch_ajax.nonce);
     // Send boolean true/false to backend
     formData.append("data", JSON.stringify(payload));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -305,12 +282,12 @@ export const handleSubmitButton = async ({ setLoading, setVisitStep, isProcessin
   try {
     setLoading(true);
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_start_features_implementation");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_start_features_implementation");
+    formData.append("nonce", tailwatch_ajax.nonce);
     formData.append("data", JSON.stringify({ "setup_configuration": setting }));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
     if (response?.data?.success) {
@@ -329,7 +306,7 @@ export const handleSubmitButton = async ({ setLoading, setVisitStep, isProcessin
   }
 }
 
-//     const response = await axios.post(wptw_ajax.ajax_url, formData, {
+//     const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
 //       headers: { "Content-Type": "multipart/form-data" },
 //     });
 

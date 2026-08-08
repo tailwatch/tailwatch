@@ -82,7 +82,7 @@ const ResetOptionsModal = ({ isOpen, onClose, onConfirm, isSubmitting }) => {
 
         <div className="px-6 py-4 space-y-3">
           <OptionCard
-            id="wptw-reset-settings"
+            id="tailwatch-reset-settings"
             icon={Cog}
             title="Reset Settings"
             description="Restore all plugin settings and feature configurations to their default values."
@@ -91,7 +91,7 @@ const ResetOptionsModal = ({ isOpen, onClose, onConfirm, isSubmitting }) => {
             disabled={isSubmitting}
           />
           <OptionCard
-            id="wptw-reset-data"
+            id="tailwatch-reset-data"
             icon={Database}
             title="Reset Data"
             description="Permanently delete all captured data — scan history, logs, blocked IPs, and monitoring records."

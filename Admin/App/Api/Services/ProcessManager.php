@@ -92,7 +92,7 @@ class ProcessManager {
 	 * @return string Process ID (existing or newly created).
 	 */
 	public function get_or_create_process( $process_type, $cron_hook, $metadata = array() ) {
-		$lock_key      = 'wptw_pm_lock_' . sanitize_key( $process_type );
+		$lock_key      = 'tailwatch_pm_lock_' . sanitize_key( $process_type );
 		$lock_acquired = false;
 
 		// Best-effort concurrency lock: only one process of a given type can be

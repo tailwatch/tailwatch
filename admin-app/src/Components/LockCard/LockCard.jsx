@@ -7,7 +7,7 @@ import {
   handleConnect,
 } from "../../Pages/Settings/LicenseTab/LicenseTabServices/LicenseTabServices";
 import { useFeaturesData } from "../Context/FeaturesDataContext";
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 const LockCard = ({
   featureId,
@@ -49,7 +49,7 @@ const LockCard = ({
     try {
       await handleConnect({
         setLoading: setLoading,
-        wptw_ajax,
+        tailwatch_ajax,
         successCallback: async () => {
           await fetchFeaturesData();
           if (typeof afterToggleCallback === "function") {

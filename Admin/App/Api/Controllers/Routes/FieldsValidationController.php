@@ -5,7 +5,7 @@ defined( 'ABSPATH' ) || exit;
 
 class FieldsValidationController {
 
-	public static function wptw_validate_json_and_fields( $post_data, $required_fields ) {
+	public static function tailwatch_validate_json_and_fields( $post_data, $required_fields ) {
 		$json_data = isset( $post_data ) ? wp_unslash( $post_data ) : '';
 		$data      = json_decode( $json_data, true );
 		if ( json_last_error() !== JSON_ERROR_NONE ) {

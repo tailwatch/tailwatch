@@ -9,7 +9,7 @@ class ProcessMonitorModel {
 
 	public function create_process( $process_data ) {
 		global $wpdb;
-		$table = $wpdb->prefix . WPTW_DB_TABLE_NAME;
+		$table = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 
 		$process_id = $process_data['process_id'];
 
@@ -34,7 +34,7 @@ class ProcessMonitorModel {
 
 	public function get_process( $process_id ) {
 		global $wpdb;
-		$table = $wpdb->prefix . WPTW_DB_TABLE_NAME;
+		$table = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table; live process lookup.
 		$row = $wpdb->get_row(
@@ -56,7 +56,7 @@ class ProcessMonitorModel {
 
 	public function update_process( $process_id, $process_data, $is_active = null ) {
 		global $wpdb;
-		$table = $wpdb->prefix . WPTW_DB_TABLE_NAME;
+		$table = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 
 		$update_data = array(
 			'value'         => wp_json_encode( $process_data ),
@@ -94,7 +94,7 @@ class ProcessMonitorModel {
 
 	public function get_stuck_processes( $stuck_threshold_seconds = 300 ) {
 		global $wpdb;
-		$table = $wpdb->prefix . WPTW_DB_TABLE_NAME;
+		$table = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table; stuck-process scan.
 		$results = $wpdb->get_results(
@@ -142,7 +142,7 @@ class ProcessMonitorModel {
 
 	public function get_all_active_processes() {
 		global $wpdb;
-		$table = $wpdb->prefix . WPTW_DB_TABLE_NAME;
+		$table = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table; active-process listing.
 		$results = $wpdb->get_results(
@@ -219,7 +219,7 @@ class ProcessMonitorModel {
 
 	public function delete_process( $process_id ) {
 		global $wpdb;
-		$table = $wpdb->prefix . WPTW_DB_TABLE_NAME;
+		$table = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table, no WP API available.
 		$result = $wpdb->delete(
@@ -235,7 +235,7 @@ class ProcessMonitorModel {
 
 	public function cleanup_old_processes( $days = 7 ) {
 		global $wpdb;
-		$table = $wpdb->prefix . WPTW_DB_TABLE_NAME;
+		$table = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 
 		$cutoff_date = wp_date( 'Y-m-d H:i:s', strtotime( '-' . absint( $days ) . ' days' ) );
 

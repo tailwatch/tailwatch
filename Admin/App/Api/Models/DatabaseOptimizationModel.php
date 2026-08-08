@@ -329,7 +329,7 @@ class DatabaseOptimizationModel {
 		global $wpdb;
 		try {
 			$maintain_revision = $this->get_revision_date( $number_of_days );
-			$table_name        = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+			$table_name        = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 			if ( null !== $number_interval ) {
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom logs table cleanup.
 				return $wpdb->get_col( $wpdb->prepare(
@@ -361,7 +361,7 @@ class DatabaseOptimizationModel {
 	 * @param string $table Table name (without prefix).
 	 * @return bool
 	 */
-	public function delete_data_by_id( int $id, string $table = WPTW_DB_LOGS_TABLE_NAME ): bool {
+	public function delete_data_by_id( int $id, string $table = TAILWATCH_DB_LOGS_TABLE_NAME ): bool {
 		global $wpdb;
 		try {
 			$db_table_name = $wpdb->prefix . $table;

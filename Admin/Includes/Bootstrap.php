@@ -45,12 +45,12 @@ class Bootstrap {
 	private static $loaded = false;
 
 	public function __construct() {
-		register_activation_hook( WPTW_PLUGIN_FILE, array( $this, 'upon_activation' ) );
-		register_deactivation_hook( WPTW_PLUGIN_FILE, array( $this, 'upon_deactivation' ) );
+		register_activation_hook( TAILWATCH_PLUGIN_FILE, array( $this, 'upon_activation' ) );
+		register_deactivation_hook( TAILWATCH_PLUGIN_FILE, array( $this, 'upon_deactivation' ) );
 		add_action( 'plugins_loaded', array( $this, 'plugin_loaded' ) );
 		add_action( 'admin_init', array( $this, 'ensure_private_storage' ) );
 
-		require_once WPTW_ADMIN_API_DIR . 'Models/OptionsModel.php';
+		require_once TAILWATCH_ADMIN_API_DIR . 'Models/OptionsModel.php';
 	}
 
 	public function plugin_loaded() {
@@ -63,7 +63,7 @@ class Bootstrap {
 	}
 
 	public function load_autoload() {
-		$autoload_file = WPTW_DIR . 'tw_autoload.php';
+		$autoload_file = TAILWATCH_DIR . 'tw_autoload.php';
 		if ( file_exists( $autoload_file ) ) {
 			require_once $autoload_file;
 		} else {
@@ -108,7 +108,7 @@ class Bootstrap {
 	 * Any failing precondition deactivates the plugin and dies with a message.
 	 */
 	public function upon_activation() {
-		$autoload_file = WPTW_DIR . 'tw_autoload.php';
+		$autoload_file = TAILWATCH_DIR . 'tw_autoload.php';
 		if ( file_exists( $autoload_file ) ) {
 			require_once $autoload_file;
 		} else {
@@ -116,10 +116,10 @@ class Bootstrap {
 		}
 
 		$options_model = new OptionsModel();
-		$options_model->wptw_upon_activation();
+		$options_model->tailwatch_upon_activation();
 
-		if ( version_compare( PHP_VERSION, WPTW_PHP_VERSION, '<' ) ) {
-			deactivate_plugins( plugin_basename( WPTW_PLUGIN_FILE ) );
+		if ( version_compare( PHP_VERSION, TAILWATCH_PHP_VERSION, '<' ) ) {
+			deactivate_plugins( plugin_basename( TAILWATCH_PLUGIN_FILE ) );
 
 			$error_message = sprintf(
 				/* translators: 1: Required PHP version, 2: Current PHP version, 3: Plugin page URL */
@@ -129,7 +129,7 @@ class Bootstrap {
                     <br/><br/><a href="%3$s" title="Back to Plugins Page">Back to Plugins Page</a>',
 					'tailwatch'
 				),
-				WPTW_PHP_VERSION,
+				TAILWATCH_PHP_VERSION,
 				PHP_VERSION,
 				esc_url( admin_url( 'plugins.php' ) )
 			);
@@ -142,13 +142,13 @@ class Bootstrap {
 			);
 		}
 
-		if ( version_compare( get_bloginfo( 'version' ), WPTW_WP_VERSION, '<' ) ) {
-			deactivate_plugins( plugin_basename( WPTW_PLUGIN_FILE ) );
+		if ( version_compare( get_bloginfo( 'version' ), TAILWATCH_WP_VERSION, '<' ) ) {
+			deactivate_plugins( plugin_basename( TAILWATCH_PLUGIN_FILE ) );
 
 			$error_message = sprintf(
 				/* translators: 1: Required WordPress version, 2: Current WordPress version, 3: Plugin page URL */
 				__( '<strong><u>WP Tail Watch:</u></strong><br/><br/>This plugin cannot be activated because it requires <strong>WordPress %1$s</strong> or <strong>Higher</strong>. Your current <strong>WordPress Version</strong> is <strong>%2$s</strong>. Please contact your developer, your hosting provider, or <a href="https://dashboard.wptailwatch.com/?utm_source=wp-plugins&utm_medium=wp-dash&utm_campaign=free&utm_content=activation_wp_notice" target="_blank" title="Open a Support Ticket">Open a Support Ticket</a> to fix this issue. <br/><br/><a href="%3$s" title="Back to Plugins Page">Back to Plugins Page</a>', 'tailwatch' ),
-				WPTW_WP_VERSION,
+				TAILWATCH_WP_VERSION,
 				get_bloginfo( 'version' ),
 				esc_url( admin_url( 'plugins.php' ) )
 			);
@@ -175,12 +175,12 @@ class Bootstrap {
 
 		// Create the private uploads folder for logs and generated data and seal it
 		// with deny files so its contents are not reachable over the web.
-		\Tailwatch\Admin\App\Api\Services\Common\SecureDirectoryService::ensure_private_root( WPTW_LOGS_DIRECTORY );
+		\Tailwatch\Admin\App\Api\Services\Common\SecureDirectoryService::ensure_private_root( TAILWATCH_LOGS_DIRECTORY );
 
 		// Seal the backup storage root the same way. Backup archives live under
 		// wp-content (the sanctioned location for backup plugins); the deny files
 		// keep those archives from being reachable by direct URL.
-		\Tailwatch\Admin\App\Api\Services\Common\SecureDirectoryService::ensure_private_root( WPTW_BACKUP_DIR );
+		\Tailwatch\Admin\App\Api\Services\Common\SecureDirectoryService::ensure_private_root( TAILWATCH_BACKUP_DIR );
 
 		$this->rewrite_rules();
 	}
@@ -201,17 +201,17 @@ class Bootstrap {
 		// Skip the filesystem check when it was verified recently. Keyed to the
 		// plugin version so an update (which may change the deny-file contents)
 		// forces a fresh verification.
-		$sealed_flag = 'wptw_storage_sealed_' . WPTW_VERSION;
+		$sealed_flag = 'tailwatch_storage_sealed_' . TAILWATCH_VERSION;
 		if ( get_transient( $sealed_flag ) ) {
 			return;
 		}
 
 		$roots = array();
-		if ( defined( 'WPTW_LOGS_DIRECTORY' ) ) {
-			$roots[] = WPTW_LOGS_DIRECTORY;
+		if ( defined( 'TAILWATCH_LOGS_DIRECTORY' ) ) {
+			$roots[] = TAILWATCH_LOGS_DIRECTORY;
 		}
-		if ( defined( 'WPTW_BACKUP_DIR' ) ) {
-			$roots[] = WPTW_BACKUP_DIR;
+		if ( defined( 'TAILWATCH_BACKUP_DIR' ) ) {
+			$roots[] = TAILWATCH_BACKUP_DIR;
 		}
 
 		$all_sealed = true;
@@ -235,7 +235,7 @@ class Bootstrap {
 	}
 
 	public function upon_deactivation() {
-		$autoload_file = WPTW_DIR . 'tw_autoload.php';
+		$autoload_file = TAILWATCH_DIR . 'tw_autoload.php';
 		if ( file_exists( $autoload_file ) ) {
 			require_once $autoload_file;
 		} else {
@@ -249,7 +249,7 @@ class Bootstrap {
 		CronJobManager::clear_all_cron_events();
 
 		$deactivate = new Deactivation();
-		$deactivate->wptw_remove_plugin_data();
+		$deactivate->tailwatch_remove_plugin_data();
 
 		$this->rewrite_rules();
 	}

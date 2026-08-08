@@ -70,12 +70,12 @@ class FCMController {
 		}
 
 		$response = wp_remote_post(
-			WPTW_RELAY,
+			TAILWATCH_RELAY,
 			array(
 				'headers'   => array(
 					'Content-Type'      => 'application/json',
-					'X-WPTW-Header-Key' => $header_key,
-					'X-WPTW-Route'      => $route_token,
+					'X-Tailwatch-Header-Key' => $header_key,
+					'X-Tailwatch-Route'      => $route_token,
 				),
 				'body'      => wp_json_encode( $notification_data ),
 				'timeout'   => self::NOTIFICATION_TIMEOUT,

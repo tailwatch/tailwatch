@@ -12,7 +12,7 @@ import { useUser } from "../Context/UserContext";
 import MobileConnectCTA from "./MobileConnectCTA";
 import { useLicenseProvider } from "../Context/LicenseProvider";
 import UserCard from "./UserCard";
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 const Sidebar = () => {
   const [isOpen, setIsOpen] = useState(false);  
@@ -67,7 +67,7 @@ const Sidebar = () => {
   }, []);
 
   const handleBackToWordPress = () => {
-    window.location.href = wptw_ajax.admin_url;
+    window.location.href = tailwatch_ajax.admin_url;
   };
 
   useEffect(() => {

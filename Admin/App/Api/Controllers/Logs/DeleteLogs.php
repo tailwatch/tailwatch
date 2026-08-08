@@ -29,7 +29,7 @@ class DeleteLogs {
 	 *     @type int    $code    HTTP response code.
 	 * }
 	 */
-	public function wptw_delete_logs( $post_data ) {
+	public function tailwatch_delete_logs( $post_data ) {
 		$key           = null;
 		$option        = null;
 		$is_delete_all = false;
@@ -96,7 +96,7 @@ class DeleteLogs {
 					'key'    => $key,
 				);
 
-				$result = $db_model->delete_table_rows( $where, WPTW_DB_LOGS_TABLE_NAME );
+				$result = $db_model->delete_table_rows( $where, TAILWATCH_DB_LOGS_TABLE_NAME );
 
 				if ( $result ) {
 					// Log successful deletion of all logs.
@@ -158,7 +158,7 @@ class DeleteLogs {
 
 					$backup_model = new BackupModel();
 					// Delete the log entry directly.
-					if ( $backup_model->delete_backup_by_id( $log_id, WPTW_DB_LOGS_TABLE_NAME ) ) {
+					if ( $backup_model->delete_backup_by_id( $log_id, TAILWATCH_DB_LOGS_TABLE_NAME ) ) {
 						++$success_count;
 					} else {
 						$failed_ids[]      = $log_id;
@@ -306,7 +306,7 @@ class DeleteLogs {
 		}
 	}
 
-	public function wptw_delete_entries_and_logs( $post_data ) {
+	public function tailwatch_delete_entries_and_logs( $post_data ) {
 		try {
 			if ( empty( $post_data ) || ! is_string( $post_data ) ) {
 				Log::error(
@@ -428,7 +428,7 @@ class DeleteLogs {
 
 				// Delete all rules
 				if ( in_array( $data['key'], array( 'default_redirection_logs', 'default_broken_link_logs' ) ) ) {
-					$result = $feature_controller->delete_table_rows( $where, WPTW_DB_LOGS_TABLE_NAME );
+					$result = $feature_controller->delete_table_rows( $where, TAILWATCH_DB_LOGS_TABLE_NAME );
 				} else {
 					$result = $feature_controller->delete_table_rows( $where );
 				}
@@ -444,7 +444,7 @@ class DeleteLogs {
 					);
 
 					if ( in_array( $data['key'], array( 'default_redirection_logs', 'default_broken_link_logs' ) ) ) {
-						$result = $feature_controller->delete_table_rows( $where, WPTW_DB_LOGS_TABLE_NAME );
+						$result = $feature_controller->delete_table_rows( $where, TAILWATCH_DB_LOGS_TABLE_NAME );
 					} else {
 						$result = $feature_controller->delete_table_rows( $where );
 					}

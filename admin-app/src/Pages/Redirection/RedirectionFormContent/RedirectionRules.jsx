@@ -14,7 +14,7 @@ export const renderRow = ({ rowData, selectedRules, handleRuleSelect, handleTogg
             return url.length > 30 ? url.substring(0, 30) + '...' : url;
         };
 
-        const baseUrl = window.wptw_ajax?.base_url || '';
+        const baseUrl = window.tailwatch_ajax?.base_url || '';
         const buildFullUrl = (slug) => {
             if (!slug) return '';
             if (/^https?:\/\//i.test(slug)) return slug;

@@ -13,7 +13,7 @@ class UserRolesController {
 
 	public function __construct() {
 		$hook_controller = new HookControllers();
-		$hook_controller->add_action_hook( 'init', array( $this, 'wptw_check_for_new_roles' ) );
+		$hook_controller->add_action_hook( 'init', array( $this, 'tailwatch_check_for_new_roles' ) );
 	}
 
 	/**
@@ -21,7 +21,7 @@ class UserRolesController {
 	 *
 	 * @return array<string, string> Role slug => translated name.
 	 */
-	public function wptw_get_user_roles() {
+	public function tailwatch_get_user_roles() {
 		try {
 			global $wp_roles;
 			if ( ! isset( $wp_roles ) ) {
@@ -53,9 +53,9 @@ class UserRolesController {
 	 *
 	 * @return array
 	 */
-	public function wptw_get_user_roles_data() {
+	public function tailwatch_get_user_roles_data() {
 		try {
-			$editable_roles = $this->wptw_get_user_roles();
+			$editable_roles = $this->tailwatch_get_user_roles();
 
 			if ( empty( $editable_roles ) ) {
 				Log::error(
@@ -105,17 +105,17 @@ class UserRolesController {
 	 *
 	 * @return bool True if new roles were detected and updated.
 	 */
-	public function wptw_check_for_new_roles() {
+	public function tailwatch_check_for_new_roles() {
 		try {
-			$user_roles     = $this->wptw_get_user_roles();
-			$existing_json  = get_option( 'wptw_user_roles', '[]' );
+			$user_roles     = $this->tailwatch_get_user_roles();
+			$existing_json  = get_option( 'tailwatch_user_roles', '[]' );
 			$existing_roles = json_decode( $existing_json, true );
 			$existing_roles = is_array( $existing_roles ) ? $existing_roles : array();
 			$new_roles      = array_diff_key( $user_roles, $existing_roles );
 
 			if ( ! empty( $new_roles ) ) {
-				update_option( 'wptw_user_roles', wp_json_encode( $user_roles ), false );
-				$this->wptw_update_user_roles_in_json( $user_roles );
+				update_option( 'tailwatch_user_roles', wp_json_encode( $user_roles ), false );
+				$this->tailwatch_update_user_roles_in_json( $user_roles );
 
 				return true;
 			}
@@ -140,7 +140,7 @@ class UserRolesController {
 	 *
 	 * @param array<string, string> $all_roles Role slug => name.
 	 */
-	public function wptw_update_user_roles_in_json( $all_roles ) {
+	public function tailwatch_update_user_roles_in_json( $all_roles ) {
 		$key      = 'default_feature_settings';
 		$options  = array( 'default_two_step_authenticate' );
 		$db_model = new DBModel();
@@ -152,7 +152,7 @@ class UserRolesController {
 				$option_data = is_array( $option_data ) ? $option_data : array();
 			}
 
-			$updated = $this->wptw_recursive_update_roles( $option_data, $all_roles );
+			$updated = $this->tailwatch_recursive_update_roles( $option_data, $all_roles );
 
 			if ( $updated ) {
 				$db_data = array( 'value' => wp_json_encode( $option_data ) );
@@ -172,7 +172,7 @@ class UserRolesController {
 	 * @param array $all_roles Role slug => name.
 	 * @return bool Whether anything was updated.
 	 */
-	private function wptw_recursive_update_roles( &$data, $all_roles ) {
+	private function tailwatch_recursive_update_roles( &$data, $all_roles ) {
 		$updated = false;
 
 		if ( ! is_array( $data ) ) {
@@ -212,7 +212,7 @@ class UserRolesController {
 		}
 
 		foreach ( $data as &$sub_data ) {
-			$updated = $this->wptw_recursive_update_roles( $sub_data, $all_roles ) || $updated;
+			$updated = $this->tailwatch_recursive_update_roles( $sub_data, $all_roles ) || $updated;
 		}
 
 		return $updated;
@@ -223,8 +223,8 @@ class UserRolesController {
 	 *
 	 * @return array
 	 */
-	public function wptw_generate_role_options() {
-		$user_roles = $this->wptw_get_user_roles();
+	public function tailwatch_generate_role_options() {
+		$user_roles = $this->tailwatch_get_user_roles();
 		$values     = array();
 		$index      = 0;
 

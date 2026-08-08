@@ -2,7 +2,7 @@ import axios from "axios";
 import { toast } from "react-toastify";
 import { alertService } from "../../../Components/AlertService/AlertService";
 import { CronHealer } from "../../../Components/CroneHealer/CronHealer";
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 export const instantScanning = async (
   setScanCompleted,
@@ -11,12 +11,12 @@ export const instantScanning = async (
 ) => {
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_instant_backup_scanner");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_instant_backup_scanner");
+    formData.append("nonce", tailwatch_ajax.nonce);
     formData.append("data", JSON.stringify({ instant_scan: true }));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -57,17 +57,17 @@ export const instantScanning = async (
 
       // new call execute
       const newFormData = new FormData();
-      newFormData.append("action", "wptw_global_ajax_handler");
+      newFormData.append("action", "tailwatch_global_ajax_handler");
       newFormData.append(
         "action_type",
-        "wptw_start_backup_with_optimize_or_not"
+        "tailwatch_start_backup_with_optimize_or_not"
       );
-      newFormData.append("nonce", wptw_ajax.nonce);
+      newFormData.append("nonce", tailwatch_ajax.nonce);
       newFormData.append(
         "data",
         JSON.stringify({ optimize_skip: optimizeSkipValue })
       );
-      const newResponse = await axios.post(wptw_ajax.ajax_url, newFormData, {
+      const newResponse = await axios.post(tailwatch_ajax.ajax_url, newFormData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
@@ -99,7 +99,7 @@ export const instantScanning = async (
       } else {
         setErrorMessages((prevErrors) => [
           ...prevErrors,
-          "wptw_instant_backup error",
+          "tailwatch_instant_backup error",
         ]);
       }
       return false;
@@ -126,11 +126,11 @@ const executeCronIfFailed = async () => {
     isCronExecuting = true;
 
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_execute_cron_if_failed");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_execute_cron_if_failed");
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -183,13 +183,13 @@ export const fetchLogs = async (
 ) => {
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_get_live_logs");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_get_live_logs");
+    formData.append("nonce", tailwatch_ajax.nonce);
     const lastLogIndex = isFirstExecution ? 0 : isLastLogIndex;
     formData.append("data", JSON.stringify({ last_log_index: lastLogIndex }));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
     
@@ -284,12 +284,12 @@ export const fetchFolderFiles = async (
 ) => {
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_get_backup_folder_files");
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_get_backup_folder_files");
     formData.append("data", JSON.stringify({ folder_name, id, backupFolder }));
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },
@@ -317,12 +317,12 @@ export const fetchBackupFiles = async (
 ) => {
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_get_backup_folders_info");
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_get_backup_folders_info");
     formData.append("data", JSON.stringify({ page, limit }));
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },
@@ -360,12 +360,12 @@ export const handleBackupAction = async ({
 }) => {
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_pause_backup_creation");
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_pause_backup_creation");
     formData.append("data", JSON.stringify({ scan_state }));
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -408,11 +408,11 @@ export const verifyBackupStatus = async (
     setLoading(true);
 
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_verify_backup_status");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_verify_backup_status");
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -454,11 +454,11 @@ export const fetchBackupDetails = async ({
   try {
     setLoading(true);
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_get_backup_status");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_get_backup_status");
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },
@@ -485,11 +485,11 @@ export const getBackupFilesDownloadStatus = async () => {
 
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_backup_files_download_status");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_backup_files_download_status");
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -526,11 +526,11 @@ export const onResumeBackup = async ({
   setIsLastLogIndex,
 }) => {
   const formData = new FormData();
-  formData.append("action", "wptw_global_ajax_handler");
-  formData.append("action_type", "wptw_resume_backup");
-  formData.append("nonce", wptw_ajax.nonce);
+  formData.append("action", "tailwatch_global_ajax_handler");
+  formData.append("action_type", "tailwatch_resume_backup");
+  formData.append("nonce", tailwatch_ajax.nonce);
 
-  const response = await axios.post(wptw_ajax.ajax_url, formData, {
+  const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
 
@@ -583,12 +583,12 @@ export const deleteBackupFolder = async ({
 
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_delete_backup_folder");
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_delete_backup_folder");
     formData.append("data", JSON.stringify({ ids, is_delete }));
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },

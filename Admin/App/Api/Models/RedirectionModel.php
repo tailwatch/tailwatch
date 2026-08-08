@@ -8,7 +8,7 @@ defined( 'ABSPATH' ) || exit;
 
 class RedirectionModel {
 
-	public function get_all_redirect_rules( $key, $type_state, $limit = 10, $page = 1, $table = WPTW_DB_TABLE_NAME ) {
+	public function get_all_redirect_rules( $key, $type_state, $limit = 10, $page = 1, $table = TAILWATCH_DB_TABLE_NAME ) {
 		global $wpdb;
 
 		$table_name = $wpdb->prefix . $table;

@@ -4,7 +4,7 @@ import ActionButton from '../../../Components/Buttons/ActionButton';
 import { RiRestartFill } from "react-icons/ri";
 import ShowCanvas from '../../../Components/ShowCanvasButton/ShowCanvas';
 
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 const DatabaseActions = ({ checkTableStatus, isScanInProgress, isStarting, featureEnable, isPaused, isCompleted, handleInstantScan, toggleLogs, isLogsVisible, handlePauseOptimize, handleCancelOptimize, isOperationInProgress, handleResumeOptimize, verifyStatus, isCanceled, isPausing, isCanceling,   resetAllStates, processType, checkDatabaseStatus }) => {
   const { enableDatabase } = UseDatabaseOptimizer();
   const { areAllSubOptionsFalse } = useSubOptionsCheck();

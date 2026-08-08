@@ -42,8 +42,8 @@ class IntegrityWatchCronJob extends AbstractCronJob {
 	 *
 	 */
 	public function __construct() {
-		$this->cron_hook_name   = 'wptw_files_integrity_schedule_run';
-		$this->schedule_name    = 'wptw_files_integrity_schedule';
+		$this->cron_hook_name   = 'tailwatch_files_integrity_schedule_run';
+		$this->schedule_name    = 'tailwatch_files_integrity_schedule';
 		$this->default_interval = 'Every 12 Hours';
 
 		parent::__construct();
@@ -134,18 +134,18 @@ class IntegrityWatchCronJob extends AbstractCronJob {
 		 * Fires before files integrity cron executes.
 		 *
 		 */
-		do_action( 'wptw_before_files_integrity_cron_execute' );
+		do_action( 'tailwatch_before_files_integrity_cron_execute' );
 
-		$remove_data = $this->get_integrity_controller()->wptw_remove_garbage_entries_files();
+		$remove_data = $this->get_integrity_controller()->tailwatch_remove_garbage_entries_files();
 
 		if ( $remove_data ) {
-			$this->get_integrity_controller()->wptw_start_monitoring( 'automatically' );
+			$this->get_integrity_controller()->tailwatch_start_monitoring( 'automatically' );
 		}
 
 		/**
 		 * Fires after files integrity cron was triggered.
 		 *
 		 */
-		do_action( 'wptw_after_files_integrity_cron_execute' );
+		do_action( 'tailwatch_after_files_integrity_cron_execute' );
 	}
 }

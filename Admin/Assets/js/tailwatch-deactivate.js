@@ -25,19 +25,19 @@
 
 		// Modal close handlers. Delegated from document so they keep working
 		// regardless of when the modal markup is added to the page.
-		$( document ).on( 'click', '.wptw_modal-close', closeModal );
+		$( document ).on( 'click', '.tailwatch_modal-close', closeModal );
 		$( document ).on( 'click', '#deleteModal', handleOutsideClick );
 		$( document ).on( 'keydown', handleEscapeKey );
 
 		// Form submission handlers (delegated for the same reason).
-		$( document ).on( 'click', '#wptw-deactivate', handleSubmitDeactivation );
-		$( document ).on( 'click', '#wptw-skip-deactivate', handleSkipDeactivation );
+		$( document ).on( 'click', '#tailwatch-deactivate', handleSubmitDeactivation );
+		$( document ).on( 'click', '#tailwatch-skip-deactivate', handleSkipDeactivation );
 
 		// Radio button selection.
-		$( document ).on( 'click', '.wptw_option', handleRadioSelection );
+		$( document ).on( 'click', '.tailwatch_option', handleRadioSelection );
 
 		// Help link handlers.
-		$( document ).on( 'click', '.wptw-help-link', handleHelpLink );
+		$( document ).on( 'click', '.tailwatch-help-link', handleHelpLink );
 	}
 
 	/**
@@ -147,16 +147,16 @@
 	function sendFeedback(reason, comments, dataHandling) {
 		return $.ajax(
 			{
-				url: wptw_ajax.ajax_url,
+				url: tailwatch_ajax.ajax_url,
 				method: 'POST',
 				timeout: 10000, // 10 second timeout.
 				data: {
-					action: wptw_ajax.submit_feedback_action,
-					nonce: wptw_ajax.nonce,
+					action: tailwatch_ajax.submit_feedback_action,
+					nonce: tailwatch_ajax.nonce,
 					reason: reason,
 					comments: comments,
 					data_handling: dataHandling,
-					domain: wptw_ajax.site_domain
+					domain: tailwatch_ajax.site_domain
 				}
 			}
 		).fail(
@@ -172,11 +172,11 @@
 	function deletePluginData() {
 		$.ajax(
 			{
-				url: wptw_ajax.ajax_url,
+				url: tailwatch_ajax.ajax_url,
 				method: 'POST',
 				data: {
-					action: wptw_ajax.delete_data_action,
-					nonce: wptw_ajax.nonce
+					action: tailwatch_ajax.delete_data_action,
+					nonce: tailwatch_ajax.nonce
 				},
 				timeout: 10000 // 10 second timeout.
 			}
@@ -270,20 +270,20 @@
 
 		switch (action) {
 			case 'documentation':
-				if (wptw_ajax.documentation_url) {
-					window.open( wptw_ajax.documentation_url, '_blank', 'noopener,noreferrer' );
+				if (tailwatch_ajax.documentation_url) {
+					window.open( tailwatch_ajax.documentation_url, '_blank', 'noopener,noreferrer' );
 				}
 				break;
 
 			case 'support':
-				if (wptw_ajax.support_url) {
-					window.open( wptw_ajax.support_url, '_blank', 'noopener,noreferrer' );
+				if (tailwatch_ajax.support_url) {
+					window.open( tailwatch_ajax.support_url, '_blank', 'noopener,noreferrer' );
 				}
 				break;
 
 			case 'settings':
-				if (wptw_ajax.settings_url) {
-					window.location.href = wptw_ajax.settings_url;
+				if (tailwatch_ajax.settings_url) {
+					window.location.href = tailwatch_ajax.settings_url;
 				}
 				break;
 		}
@@ -296,9 +296,9 @@
 	 * @param {string} type Button type ('submit' or 'skip')
 	 */
 	function setLoadingState(loading, type) {
-		var $submitBtn = $( '#wptw-deactivate' );
-		var $skipBtn   = $( '#wptw-skip-deactivate' );
-		var $closeBtn  = $( '.wptw_modal-close' );
+		var $submitBtn = $( '#tailwatch-deactivate' );
+		var $skipBtn   = $( '#tailwatch-skip-deactivate' );
+		var $closeBtn  = $( '.tailwatch_modal-close' );
 
 		isDeactivating = loading;
 
@@ -338,11 +338,11 @@
 	 */
 	function showError(message) {
 		// Remove existing error if present.
-		$( '.wptw-error-message' ).remove();
+		$( '.tailwatch-error-message' ).remove();
 
 		// Create error element.
 		var $error = $(
-			'<div class="wptw-error-message" role="alert">' +
+			'<div class="tailwatch-error-message" role="alert">' +
 			'<span class="dashicons dashicons-warning"></span> ' +
 			escapeHtml( message ) +
 			'</div>'

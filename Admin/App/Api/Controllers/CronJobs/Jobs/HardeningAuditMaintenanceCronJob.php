@@ -34,8 +34,8 @@ class HardeningAuditMaintenanceCronJob extends AbstractCronJob {
 	private $audit_controller = null;
 
 	public function __construct() {
-		$this->cron_hook_name   = 'wptw_hardening_audit_report_cleanup';
-		$this->schedule_name    = 'wptw_hardening_audit_maintenance_schedule';
+		$this->cron_hook_name   = 'tailwatch_hardening_audit_report_cleanup';
+		$this->schedule_name    = 'tailwatch_hardening_audit_maintenance_schedule';
 		$this->default_interval = 'Every 30 Minutes';
 
 		parent::__construct();
@@ -61,7 +61,7 @@ class HardeningAuditMaintenanceCronJob extends AbstractCronJob {
 
 	public function execute() {
 		try {
-			$this->get_audit_controller()->wptw_prune_hardening_audit_reports();
+			$this->get_audit_controller()->tailwatch_prune_hardening_audit_reports();
 		} catch ( \Throwable $e ) {
 			Log::error(
 				'Hardening audit report cleanup cron job failed',

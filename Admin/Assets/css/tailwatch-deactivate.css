@@ -11,7 +11,7 @@
  */
 
 /* Modal Overlay with Backdrop Blur */
-.wptw_modal-overlay {
+.tailwatch_modal-overlay {
 	position: fixed;
 	top: 0;
 	left: 0;
@@ -50,7 +50,7 @@
 }
 
 /* Modal Container with Glass Effect */
-.wptw_modal-container {
+.tailwatch_modal-container {
 	background: rgba(255, 255, 255, 0.98);
 	backdrop-filter: blur(20px);
 	-webkit-backdrop-filter: blur(20px);
@@ -69,7 +69,7 @@
 }
 
 /* Modal Header with Brand Orange Gradient */
-.wptw_modal-header {
+.tailwatch_modal-header {
 	background: linear-gradient(135deg, #F05123 0%, #d4451d 100%);
 	color: white;
 	padding: 16px 32px;
@@ -80,7 +80,7 @@
 	overflow: hidden;
 }
 
-.wptw_modal-header::before {
+.tailwatch_modal-header::before {
 	content: '';
 	position: absolute;
 	top: 0;
@@ -91,7 +91,7 @@
 	pointer-events: none;
 }
 
-.wptw_modal-header .wptw_icon {
+.tailwatch_modal-header .tailwatch_icon {
 	width: 32px;
 	height: 32px;
 	background: rgba(255, 255, 255, 0.15);
@@ -104,7 +104,7 @@
 	flex-shrink: 0;
 }
 
-.wptw_modal-header h3 {
+.tailwatch_modal-header h3 {
 	font-size: 22px;
 	font-weight: 600;
 	margin: 0;
@@ -113,7 +113,7 @@
 	color: #ffffff;
 }
 
-.wptw_modal-close {
+.tailwatch_modal-close {
 	position: absolute;
 	top: 10px;
 	right: 24px;
@@ -129,45 +129,45 @@
 	z-index: 1;
 }
 
-/* .wptw_modal-close:hover {
+/* .tailwatch_modal-close:hover {
 	background: rgba(255, 255, 255, 0.2);
 	transform: rotate(90deg);
 } */
 
 /* Modal Body with Better Spacing */
-.wptw_modal-body {
+.tailwatch_modal-body {
 	padding: 32px;
 	max-height: 60vh;
 	overflow-y: auto;
 }
 
-.wptw_modal-body::-webkit-scrollbar {
+.tailwatch_modal-body::-webkit-scrollbar {
 	width: 6px;
 }
 
-.wptw_modal-body::-webkit-scrollbar-track {
+.tailwatch_modal-body::-webkit-scrollbar-track {
 	background: rgba(0, 0, 0, 0.05);
 	border-radius: 10px;
 }
 
-.wptw_modal-body::-webkit-scrollbar-thumb {
+.tailwatch_modal-body::-webkit-scrollbar-thumb {
 	background: rgba(240, 81, 35, 0.3);
 	border-radius: 10px;
 }
 
-.wptw_modal-body::-webkit-scrollbar-thumb:hover {
+.tailwatch_modal-body::-webkit-scrollbar-thumb:hover {
 	background: rgba(240, 81, 35, 0.5);
 }
 
-.wptw_form-group {
+.tailwatch_form-group {
 	margin-bottom: 28px;
 }
 
-.wptw_form-group:last-child {
+.tailwatch_form-group:last-child {
 	margin-bottom: 0;
 }
 
-.wptw_form-group label {
+.tailwatch_form-group label {
 	display: block;
 	font-weight: 600;
 	margin-bottom: 12px;
@@ -176,7 +176,7 @@
 }
 
 /* Fixed Select Dropdown - Single Arrow Only */
-.wptw_form-group select {
+.tailwatch_form-group select {
 	width: 100%;
 	max-width: 100%;
 	padding: 10px 40px 10px 20px;
@@ -198,11 +198,11 @@
 }
 
 /* Fix for IE/Edge */
-.wptw_form-group select::-ms-expand {
+.tailwatch_form-group select::-ms-expand {
 	display: none;
 }
 
-.wptw_form-group textarea {
+.tailwatch_form-group textarea {
 	width: 100%;
 	max-width: 100%;
 	padding: 10px 20px;
@@ -214,8 +214,8 @@
 	font-family: inherit;
 }
 
-.wptw_form-group select:focus,
-.wptw_form-group textarea:focus {
+.tailwatch_form-group select:focus,
+.tailwatch_form-group textarea:focus {
 	outline: none;
 	border-color: #F05123;
 	box-shadow: 0 0 0 4px rgba(240, 81, 35, 0.1);
@@ -223,18 +223,18 @@
 	transform: translateY(-2px);
 }
 
-.wptw_form-group textarea {
+.tailwatch_form-group textarea {
 	resize: vertical;
 	min-height: 100px;
 	line-height: 1.6;
 }
 
-.wptw_form-group textarea::placeholder {
+.tailwatch_form-group textarea::placeholder {
 	color: #999;
 }
 
 /* Enhanced Data Options */
-.wptw_data-options {
+.tailwatch_data-options {
 	background: linear-gradient(135deg, rgba(240, 81, 35, 0.02) 0%, rgba(240, 81, 35, 0.05) 100%);
 	border: 2px solid rgba(240, 81, 35, 0.1);
 	border-radius: 16px;
@@ -242,7 +242,7 @@
 	margin-top: 12px;
 }
 
-.wptw_data-options .wptw_option {
+.tailwatch_data-options .tailwatch_option {
 	display: flex;
 	align-items: flex-start;
 	gap: 16px;
@@ -254,17 +254,17 @@
 	border: 2px solid transparent;
 }
 
-.wptw_data-options .wptw_option:last-child {
+.tailwatch_data-options .tailwatch_option:last-child {
 	margin-bottom: 0;
 }
 
-.wptw_data-options .wptw_option:hover {
+.tailwatch_data-options .tailwatch_option:hover {
 	background: rgba(240, 81, 35, 0.05);
 	transform: translateY(-2px);
 	border-color: rgba(240, 81, 35, 0.2);
 }
 
-.wptw_data-options input[type="radio"] {
+.tailwatch_data-options input[type="radio"] {
 	width: 20px;
 	height: 20px;
 	margin: 0;
@@ -272,7 +272,7 @@
 	flex-shrink: 0;
 }
 
-.wptw_data-options label {
+.tailwatch_data-options label {
 	margin: 0;
 	font-weight: 600;
 	cursor: pointer;
@@ -280,7 +280,7 @@
 	font-size: 15px;
 }
 
-.wptw_data-options .wptw_option-description {
+.tailwatch_data-options .tailwatch_option-description {
 	font-size: 13px;
 	color: #666;
 	margin-top: 4px;
@@ -288,7 +288,7 @@
 }
 
 /* Enhanced Help Section */
-.wptw_help-section {
+.tailwatch_help-section {
 	background: linear-gradient(135deg, rgba(240, 81, 35, 0.08) 0%, rgba(240, 81, 35, 0.12) 100%);
 	border: 2px solid rgba(240, 81, 35, 0.15);
 	border-radius: 16px;
@@ -296,20 +296,20 @@
 	margin-top: 12px;
 }
 
-.wptw_help-section h4 {
+.tailwatch_help-section h4 {
 	color: #F05123;
 	margin-bottom: 16px;
 	font-size: 16px;
 	font-weight: 600;
 }
 
-.wptw_help-links {
+.tailwatch_help-links {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 	gap: 16px;
 }
 
-.wptw_help-links a {
+.tailwatch_help-links a {
 	color: #F05123;
 	text-decoration: none;
 	font-size: 14px;
@@ -324,13 +324,13 @@
 	border: 1px solid rgba(240, 81, 35, 0.1);
 }
 
-.wptw_help-links a:hover {
+.tailwatch_help-links a:hover {
 	background: rgba(240, 81, 35, 0.1);
 	transform: translateY(-2px);
 	box-shadow: 0 4px 12px rgba(240, 81, 35, 0.15);
 }
 
-.wptw_help-links .wptw_icon {
+.tailwatch_help-links .tailwatch_icon {
 	width: 20px;
 	height: 20px;
 	display: flex;
@@ -340,21 +340,21 @@
 }
 
 /* Enhanced Modal Footer */
-.wptw_modal-footer {
+.tailwatch_modal-footer {
 	padding: 14px 32px;
 	background: linear-gradient(135deg, rgba(0, 0, 0, 0.02) 0%, rgba(0, 0, 0, 0.05) 100%);
 	border-top: 1px solid rgba(0, 0, 0, 0.08);
 	align-items: center;
 }
 
-.wptw_button-group {
+.tailwatch_button-group {
 	display: flex;
 	gap: 12px;
 	flex-direction: row;
 	justify-content: space-between;
 }
 
-.wptw_button {
+.tailwatch_button {
 	padding: 10px 20px;
 	border: none;
 	border-radius: 12px;
@@ -371,7 +371,7 @@
 	letter-spacing: -0.25px;
 }
 
-.wptw_button::before {
+.tailwatch_button::before {
 	content: '';
 	position: absolute;
 	top: 0;
@@ -382,40 +382,40 @@
 	transition: left 0.5s ease;
 }
 
-.wptw_button:hover::before {
+.tailwatch_button:hover::before {
 	left: 100%;
 }
 
-.wptw_button-secondary {
+.tailwatch_button-secondary {
 	background: linear-gradient(135deg, #F05123 0%, #d4451d 100%);
 	color: white;
 	box-shadow: 0 4px 12px rgba(240, 81, 35, 0.3);
 }
 
-.wptw_button-secondary:hover {
+.tailwatch_button-secondary:hover {
 	transform: translateY(-2px);
 	box-shadow: 0 8px 24px rgba(240, 81, 35, 0.4);
 }
 
-.wptw_button-cancel {
+.tailwatch_button-cancel {
 	background: rgba(13, 13, 13, 0.05);
 	color: #666;
 	border: 2px solid rgba(13, 13, 13, 0.1);
 }
 
-.wptw_button-cancel:hover {
+.tailwatch_button-cancel:hover {
 	background: rgba(13, 13, 13, 0.1);
 	color: #0D0D0D;
 	transform: translateY(-2px);
 }
 
-.wptw_button:disabled {
+.tailwatch_button:disabled {
 	cursor: not-allowed;
 	opacity: 0.7;
 }
 
 /* Radio Button Checked State */
-.wptw_data-options .wptw_option input[type=radio]:checked::before {
+.tailwatch_data-options .tailwatch_option input[type=radio]:checked::before {
 	content: "";
 	border-radius: 50%;
 	width: 0.8rem;
@@ -425,36 +425,36 @@
 	line-height: 1.14285714;
 }
 
-.wptw_data-options .wptw_option input[type=radio]:checked {
+.tailwatch_data-options .tailwatch_option input[type=radio]:checked {
 	border-color: #F05123;
 }
 
 /* Responsive Design */
 @media (max-width: 600px) {
-	.wptw_modal-container {
+	.tailwatch_modal-container {
 		width: 95%;
 		margin: 10px;
 		border-radius: 16px;
 	}
 
-	.wptw_modal-header,
-	.wptw_modal-body,
-	.wptw_modal-footer {
+	.tailwatch_modal-header,
+	.tailwatch_modal-body,
+	.tailwatch_modal-footer {
 		padding: 20px 24px;
 	}
 
-	.wptw_button-group {
+	.tailwatch_button-group {
 		flex-direction: column;
 		width: 100%;
 	}
 
-	.wptw_modal-footer {
+	.tailwatch_modal-footer {
 		flex-direction: column;
 		align-items: stretch;
 		gap: 12px;
 	}
 
-	.wptw_help-links {
+	.tailwatch_help-links {
 		grid-template-columns: 1fr;
 	}
 }
@@ -471,18 +471,18 @@
 }
 
 /* Focus Styles */
-.wptw_button:focus-visible {
+.tailwatch_button:focus-visible {
 	outline: 2px solid #F05123;
 	outline-offset: 2px;
 }
 
 /* Loading State */
-.wptw_button.loading {
+.tailwatch_button.loading {
 	pointer-events: none;
 	opacity: 0.8;
 }
 
-.wptw_button.loading::after {
+.tailwatch_button.loading::after {
 	content: '';
 	width: 16px;
 	height: 16px;

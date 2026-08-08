@@ -78,15 +78,15 @@ class IntegrityWatchController extends BaseController {
 	 *
 	 * @var array List of features exempt from the status check.
 	 */
-	protected $wptw_feature_check_exemptions = array();
+	protected $tailwatch_feature_check_exemptions = array();
 
 	/**
 	 * Whether integrity feature is enabled.
 	 *
 	 * @return bool
 	 */
-	protected function wptw_get_feature_status() {
-		return $this->wptw_integrity_feature_enable();
+	protected function tailwatch_get_feature_status() {
+		return $this->tailwatch_integrity_feature_enable();
 	}
 
 	/**
@@ -94,7 +94,7 @@ class IntegrityWatchController extends BaseController {
 	 *
 	 * @var string Absolute path to the file-monitoring-log directory.
 	 */
-	private $log_directory = WPTW_LOGS_DIRECTORY . '/file-monitoring-log';
+	private $log_directory = TAILWATCH_LOGS_DIRECTORY . '/file-monitoring-log';
 
 	/**
 	 * Batch size for processing.
@@ -108,21 +108,21 @@ class IntegrityWatchController extends BaseController {
 	 *
 	 * @var string Absolute path to scan_progress.json.
 	 */
-	private $progress_file = WPTW_LOGS_DIRECTORY . '/file-monitoring-log/scan_progress.json';
+	private $progress_file = TAILWATCH_LOGS_DIRECTORY . '/file-monitoring-log/scan_progress.json';
 
 	/**
 	 * Comparison progress JSON file path.
 	 *
 	 * @var string Absolute path to comparison_progress_file.json.
 	 */
-	private $comparison_progress_file = WPTW_LOGS_DIRECTORY . '/file-monitoring-log/comparison_progress_file.json';
+	private $comparison_progress_file = TAILWATCH_LOGS_DIRECTORY . '/file-monitoring-log/comparison_progress_file.json';
 
 	/**
 	 * Comparison logs JSON path.
 	 *
 	 * @var string Absolute path to comparison_logs.json.
 	 */
-	private $get_live_logs = WPTW_LOGS_DIRECTORY . '/file-monitoring-log/comparison_logs.json';
+	private $get_live_logs = TAILWATCH_LOGS_DIRECTORY . '/file-monitoring-log/comparison_logs.json';
 
 	/**
 	 * Cached "skip large files" flag for the current request, resolved once from
@@ -152,7 +152,7 @@ class IntegrityWatchController extends BaseController {
 	/**
 	 * Seconds of work per cron tick before the loop yields + reschedules. Kept below the
 	 * common 30s shared-host limit (Delicious Brains / WP Background Processing use 20s).
-	 * Filterable via 'wptw_integrity_tick_seconds'.
+	 * Filterable via 'tailwatch_integrity_tick_seconds'.
 	 *
 	 * @var int
 	 */
@@ -186,10 +186,10 @@ class IntegrityWatchController extends BaseController {
 	 */
 	public function __construct() {
 		$hook_controller = new HookControllers();
-		$hook_controller->add_action_hook( 'wptw_files_integrity_scan', array( $this, 'wptw_start_monitoring_files' ) );
-		$hook_controller->add_action_hook( 'wptw_delete_integrity_logs_file', array( $this, 'wptw_delete_integrity_logs' ) );
-		$hook_controller->add_action_hook( 'init', array( $this, 'wptw_run_integrity_cron' ) );
-		// Scheduling and handler for 'wptw_integrity_old_entry_cleanup' is owned by
+		$hook_controller->add_action_hook( 'tailwatch_files_integrity_scan', array( $this, 'tailwatch_start_monitoring_files' ) );
+		$hook_controller->add_action_hook( 'tailwatch_delete_integrity_logs_file', array( $this, 'tailwatch_delete_integrity_logs' ) );
+		$hook_controller->add_action_hook( 'init', array( $this, 'tailwatch_run_integrity_cron' ) );
+		// Scheduling and handler for 'tailwatch_integrity_old_entry_cleanup' is owned by
 		// IntegrityEntryMaintenanceCronJob in the CronJobs framework.
 		$this->process_manager = new ProcessManager();
 		$this->register_process_monitoring();
@@ -202,7 +202,7 @@ class IntegrityWatchController extends BaseController {
 		ProcessManager::register_process(
 			array(
 				'process_type'        => 'files_integrity',
-				'cron_hooks'          => array( 'wptw_files_integrity_scan' ),
+				'cron_hooks'          => array( 'tailwatch_files_integrity_scan' ),
 				'data_source'         => 'wp_tw_settings',
 				'data_key'            => 'default_files_integrity_check',
 				'data_option'         => 'files_integrity_progress',
@@ -210,7 +210,7 @@ class IntegrityWatchController extends BaseController {
 				'cancel_pause_option' => 'files_integrity_progress',
 				'stuck_threshold'     => 300,
 				'max_retries'         => 3,
-				// On completion, integrity fires wptw_after_integrity_check_completed
+				// On completion, integrity fires tailwatch_after_integrity_check_completed
 				// which extensions can hook to perform follow-up work (e.g.,
 				// scanning the changed files). Locking the malware feature
 				// during integrity prevents the user from changing scan-related
@@ -291,7 +291,7 @@ class IntegrityWatchController extends BaseController {
 	 *
 	 * @return bool True to skip large files, false to fully scan them.
 	 */
-	private function wptw_skip_large_files() {
+	private function tailwatch_skip_large_files() {
 		if ( null !== $this->large_file_skip ) {
 			return $this->large_file_skip;
 		}
@@ -323,7 +323,7 @@ class IntegrityWatchController extends BaseController {
 	 *
 	 * @return string 'fast' or 'thorough'.
 	 */
-	private function wptw_integrity_scan_mode() {
+	private function tailwatch_integrity_scan_mode() {
 		if ( null !== $this->scan_mode ) {
 			return $this->scan_mode;
 		}
@@ -354,8 +354,8 @@ class IntegrityWatchController extends BaseController {
 	 *
 	 * @return int Clamped to [5, 120].
 	 */
-	private function wptw_integrity_tick_seconds() {
-		$seconds = (int) apply_filters( 'wptw_integrity_tick_seconds', $this->tick_budget_seconds );
+	private function tailwatch_integrity_tick_seconds() {
+		$seconds = (int) apply_filters( 'tailwatch_integrity_tick_seconds', $this->tick_budget_seconds );
 		if ( $seconds < 5 ) {
 			$seconds = 5;
 		} elseif ( $seconds > 120 ) {
@@ -372,8 +372,8 @@ class IntegrityWatchController extends BaseController {
 	 *
 	 * @return bool
 	 */
-	private function wptw_integrity_memory_exceeded() {
-		$limit = $this->wptw_integrity_memory_limit_bytes();
+	private function tailwatch_integrity_memory_exceeded() {
+		$limit = $this->tailwatch_integrity_memory_limit_bytes();
 		if ( $limit <= 0 ) {
 			return false; // -1 / unlimited / unknown — let the host decide.
 		}
@@ -388,8 +388,8 @@ class IntegrityWatchController extends BaseController {
 	 * @param int $deadline Unix timestamp the tick must finish work by.
 	 * @return bool
 	 */
-	private function wptw_tick_budget_reached( $deadline ) {
-		return ( time() >= $deadline ) || $this->wptw_integrity_memory_exceeded();
+	private function tailwatch_tick_budget_reached( $deadline ) {
+		return ( time() >= $deadline ) || $this->tailwatch_integrity_memory_exceeded();
 	}
 
 	/**
@@ -397,7 +397,7 @@ class IntegrityWatchController extends BaseController {
 	 *
 	 * @return int
 	 */
-	private function wptw_integrity_memory_limit_bytes() {
+	private function tailwatch_integrity_memory_limit_bytes() {
 		$raw = ini_get( 'memory_limit' );
 		if ( false === $raw || '' === $raw ) {
 			return 0;
@@ -424,7 +424,7 @@ class IntegrityWatchController extends BaseController {
 
 	/**
 	 * Acquire the single-worker lock for the integrity scan tick. Without it, the recurring
-	 * 'wptw_files_integrity_schedule_run' cron and an injected 'wptw_files_integrity_scan'
+	 * 'tailwatch_files_integrity_schedule_run' cron and an injected 'tailwatch_files_integrity_scan'
 	 * step could run two workers on the same scan_snapshot row and clobber the cursor.
 	 * TTL is the PHP max_execution_time so it never expires mid-legitimate-tick; the
 	 * shutdown hook + finally release it on normal/timeout/fatal exit. Mirrors the backup
@@ -432,12 +432,12 @@ class IntegrityWatchController extends BaseController {
 	 *
 	 * @return bool True if this worker got the lock.
 	 */
-	private function wptw_acquire_scan_lock() {
-		if ( get_transient( 'wptw_integrity_scan_lock' ) ) {
+	private function tailwatch_acquire_scan_lock() {
+		if ( get_transient( 'tailwatch_integrity_scan_lock' ) ) {
 			return false;
 		}
-		set_transient( 'wptw_integrity_scan_lock', time(), 600 );
-		register_shutdown_function( array( $this, 'wptw_release_scan_lock' ) );
+		set_transient( 'tailwatch_integrity_scan_lock', time(), 600 );
+		register_shutdown_function( array( $this, 'tailwatch_release_scan_lock' ) );
 		return true;
 	}
 
@@ -447,8 +447,8 @@ class IntegrityWatchController extends BaseController {
 	 *
 	 * @return void
 	 */
-	public function wptw_release_scan_lock() {
-		delete_transient( 'wptw_integrity_scan_lock' );
+	public function tailwatch_release_scan_lock() {
+		delete_transient( 'tailwatch_integrity_scan_lock' );
 	}
 
 	/**
@@ -467,12 +467,12 @@ class IntegrityWatchController extends BaseController {
 	 * @param int    $deadline      Tick deadline (unix ts).
 	 * @return string
 	 */
-	private function wptw_tick_after_batch( $more_work, $err_key, $is_comparison, $deadline ) {
+	private function tailwatch_tick_after_batch( $more_work, $err_key, $is_comparison, $deadline ) {
 		if ( $this->last_tick_errored ) {
 			$errors = (int) get_transient( $err_key ) + 1;
 			if ( $errors >= self::TICK_MAX_ERRORS ) {
 				delete_transient( $err_key );
-				$this->wptw_mark_scan_failed( $is_comparison, $errors );
+				$this->tailwatch_mark_scan_failed( $is_comparison, $errors );
 				return 'stop';
 			}
 			set_transient( $err_key, $errors, HOUR_IN_SECONDS );
@@ -485,7 +485,7 @@ class IntegrityWatchController extends BaseController {
 			return 'stop'; // Completed / paused / empty.
 		}
 
-		if ( $this->wptw_tick_budget_reached( $deadline ) ) {
+		if ( $this->tailwatch_tick_budget_reached( $deadline ) ) {
 			return 'yield';
 		}
 
@@ -504,7 +504,7 @@ class IntegrityWatchController extends BaseController {
 	 * @param int  $error_count   Consecutive errors that triggered the failure.
 	 * @return void
 	 */
-	private function wptw_mark_scan_failed( $is_comparison, $error_count ) {
+	private function tailwatch_mark_scan_failed( $is_comparison, $error_count ) {
 		$existing   = $this->get_files_integrity_progress();
 		$process_id = ( is_array( $existing ) && isset( $existing['process_id'] ) )
 			? $existing['process_id']
@@ -540,19 +540,19 @@ class IntegrityWatchController extends BaseController {
 		$key               = 'default_feature_settings';
 		$option            = 'default_file_integrity_check';
 		$field_name        = 'field_1';
-		return $push_notification->wptw_notification_enable_for_feature( $key, $option, $field_name );
+		return $push_notification->tailwatch_notification_enable_for_feature( $key, $option, $field_name );
 	}
 
 	/**
 	 * Unschedule any in-flight integrity scan hook when the feature is disabled.
 	 *
-	 * Schedule/unschedule for the recurring hooks (wptw_files_integrity_schedule_run
-	 * and wptw_integrity_old_entry_cleanup) is owned by the CronJobs framework via
+	 * Schedule/unschedule for the recurring hooks (tailwatch_files_integrity_schedule_run
+	 * and tailwatch_integrity_old_entry_cleanup) is owned by the CronJobs framework via
 	 * IntegrityWatchCronJob and IntegrityEntryMaintenanceCronJob respectively. This
-	 * method only needs to kill a lingering 'wptw_files_integrity_scan' single-event
+	 * method only needs to kill a lingering 'tailwatch_files_integrity_scan' single-event
 	 * (a chained scan step) when the user disables the feature mid-scan.
 	 */
-	public function wptw_run_integrity_cron() {
+	public function tailwatch_run_integrity_cron() {
 		$get_feature = $this->get_features_options();
 		$is_enabled  = isset( $get_feature['field_1']['options']['option']['selected'] )
 			&& $get_feature['field_1']['options']['option']['selected'];
@@ -561,9 +561,9 @@ class IntegrityWatchController extends BaseController {
 			return;
 		}
 
-		$integrity_next_scheduled = wp_next_scheduled( 'wptw_files_integrity_scan' );
+		$integrity_next_scheduled = wp_next_scheduled( 'tailwatch_files_integrity_scan' );
 		if ( $integrity_next_scheduled ) {
-			wp_unschedule_event( $integrity_next_scheduled, 'wptw_files_integrity_scan' );
+			wp_unschedule_event( $integrity_next_scheduled, 'tailwatch_files_integrity_scan' );
 		}
 	}
 
@@ -584,7 +584,7 @@ class IntegrityWatchController extends BaseController {
 	 * @param array $field_name Field keys to check.
 	 * @return array{parent_enable: bool, feature_enable: bool}
 	 */
-	public function wptw_integrity_feature_enable( $field_name = array( 'field_1' ) ) {
+	public function tailwatch_integrity_feature_enable( $field_name = array( 'field_1' ) ) {
 		$feature_enable = $this->get_features_options();
 
 		if ( empty( $feature_enable ) ) {
@@ -619,7 +619,7 @@ class IntegrityWatchController extends BaseController {
 	 * @param string $post_data JSON post data with instant_scan flag.
 	 * @return array
 	 */
-	public function wptw_instant_files_integrity_check( $post_data ) {
+	public function tailwatch_instant_files_integrity_check( $post_data ) {
 		try {
 			// Refuse to start if a conflicting process is currently running.
 			$blocked = ( new ProcessGuard() )->ensure_can_start_process( 'files_integrity' );
@@ -665,9 +665,9 @@ class IntegrityWatchController extends BaseController {
 					);
 				}
 
-				$timestamp = wp_next_scheduled( 'wptw_files_integrity_schedule_run' );
+				$timestamp = wp_next_scheduled( 'tailwatch_files_integrity_schedule_run' );
 				if ( $timestamp ) {
-					wp_unschedule_event( $timestamp, 'wptw_files_integrity_schedule_run' );
+					wp_unschedule_event( $timestamp, 'tailwatch_files_integrity_schedule_run' );
 				}
 
 				// Also clear the legacy hook if it still exists in the DB.
@@ -676,12 +676,12 @@ class IntegrityWatchController extends BaseController {
 					wp_unschedule_event( $legacy_timestamp, 'file_monitoring_cron_hook' );
 				}
 
-				$remove_data = $this->wptw_remove_garbage_entries_files();
+				$remove_data = $this->tailwatch_remove_garbage_entries_files();
 				$comparison  = null;
 
 				if ( $remove_data ) {
 					$scan_type  = 'on-demand';
-					$comparison = $this->wptw_start_monitoring( $scan_type );
+					$comparison = $this->tailwatch_start_monitoring( $scan_type );
 					Log::info(
 						'Files Integrity Started',
 						array(
@@ -717,7 +717,7 @@ class IntegrityWatchController extends BaseController {
 			return $response;
 		} catch ( \Throwable $e ) {
 			Log::error(
-				'Exception in wptw_instant_files_integrity_check',
+				'Exception in tailwatch_instant_files_integrity_check',
 				array(
 					'feature' => 'files_integrity',
 					'action'  => 'files_integrity_start_failed',
@@ -743,8 +743,8 @@ class IntegrityWatchController extends BaseController {
 	 *
 	 * @return bool
 	 */
-	private function wptw_integrity_scan_starting() {
-		if ( wp_next_scheduled( 'wptw_files_integrity_scan' ) ) {
+	private function tailwatch_integrity_scan_starting() {
+		if ( wp_next_scheduled( 'tailwatch_files_integrity_scan' ) ) {
 			return true;
 		}
 
@@ -767,7 +767,7 @@ class IntegrityWatchController extends BaseController {
 	 *
 	 * @return array
 	 */
-	private function wptw_baseline_build_progress() {
+	private function tailwatch_baseline_build_progress() {
 		if ( ! file_exists( $this->progress_file ) ) {
 			return array();
 		}
@@ -795,7 +795,7 @@ class IntegrityWatchController extends BaseController {
 	 *
 	 * @return array
 	 */
-	public function wptw_verify_integrity_current_status() {
+	public function tailwatch_verify_integrity_current_status() {
 		try {
 			$path_to_monitor = $this->get_path_to_monitor();
 			if ( null === $path_to_monitor ) {
@@ -806,7 +806,7 @@ class IntegrityWatchController extends BaseController {
 					'code'       => 200,
 				);
 			}
-			$existing_entry = $this->wptw_get_is_completed();
+			$existing_entry = $this->tailwatch_get_is_completed();
 
 			if ( ! $existing_entry ) {
 				// count_baseline is still 0. A first scan may have just been requested:
@@ -815,7 +815,7 @@ class IntegrityWatchController extends BaseController {
 				// mean "nothing requested". If a scan is queued or actively running,
 				// report it as in progress so the UI keeps polling instead of flashing
 				// "files do not exist".
-				if ( $this->wptw_integrity_scan_starting() ) {
+				if ( $this->tailwatch_integrity_scan_starting() ) {
 					$response = array_merge(
 						array(
 							'isEnabled'  => false,
@@ -824,7 +824,7 @@ class IntegrityWatchController extends BaseController {
 							'message'    => __( 'Setting up file monitoring. This first scan records your current files, so later scans can detect any changes.', 'tailwatch' ),
 							'code'       => 200,
 						),
-						$this->wptw_baseline_build_progress()
+						$this->tailwatch_baseline_build_progress()
 					);
 				} else {
 					$response = array(
@@ -843,7 +843,7 @@ class IntegrityWatchController extends BaseController {
 						'message'    => __( 'Setting up file monitoring. This first scan records your current files, so later scans can detect any changes.', 'tailwatch' ),
 						'code'       => 200,
 					),
-					$this->wptw_baseline_build_progress()
+					$this->tailwatch_baseline_build_progress()
 				);
 			} elseif ( true === $existing_entry['is_completed'] ) {
 				$existing_data = $this->get_files_integrity_progress();
@@ -883,7 +883,7 @@ class IntegrityWatchController extends BaseController {
 			return $response;
 		} catch ( \Throwable $e ) {
 			Log::error(
-				'Exception in wptw_verify_integrity_current_status',
+				'Exception in tailwatch_verify_integrity_current_status',
 				array(
 					'feature' => 'files_integrity',
 					'action'  => 'files_integrity_status_verify_failed',
@@ -904,16 +904,16 @@ class IntegrityWatchController extends BaseController {
 	 * @param string $post_data JSON post data.
 	 * @return array
 	 */
-	public function wptw_files_integrity_comparison_logs( $post_data ) {
+	public function tailwatch_files_integrity_comparison_logs( $post_data ) {
 		try {
 			$get_progress = $this->get_files_integrity_progress();
 			$feature_type = 'files_integrity';
 
 			$livelogs = new LiveLogsController();
-			return $livelogs->wptw_import_live_logs( $post_data, $this->get_live_logs, $get_progress, $feature_type );
+			return $livelogs->tailwatch_import_live_logs( $post_data, $this->get_live_logs, $get_progress, $feature_type );
 		} catch ( \Throwable $e ) {
 			Log::error(
-				'Exception in wptw_files_integrity_comparison_logs',
+				'Exception in tailwatch_files_integrity_comparison_logs',
 				array(
 					'feature' => 'files_integrity',
 					'action'  => 'files_integrity_live_logs_failed',
@@ -1000,9 +1000,9 @@ class IntegrityWatchController extends BaseController {
 	 */
 	public function get_files_integrity_progress() {
 		$feature_controller = new DBModel();
-		$wptw_key           = 'default_files_integrity_check';
+		$tailwatch_key           = 'default_files_integrity_check';
 		$option             = 'files_integrity_progress';
-		$existing_data      = $feature_controller->get_recent_data( $option, $wptw_key );
+		$existing_data      = $feature_controller->get_recent_data( $option, $tailwatch_key );
 		return $existing_data;
 	}
 
@@ -1013,14 +1013,14 @@ class IntegrityWatchController extends BaseController {
 	 */
 	public function update_files_integrity_cancel_pause( array $options ) {
 		$db_model = new DBModel();
-		$wptw_key = 'default_files_integrity_check';
+		$tailwatch_key = 'default_files_integrity_check';
 		$option   = 'files_integrity_progress';
 
 		$db_data = array(
 			'value' => wp_json_encode( $options ),
 		);
 
-		$db_model->update_recent_row( $db_data, $wptw_key, $option );
+		$db_model->update_recent_row( $db_data, $tailwatch_key, $option );
 	}
 
 	/**
@@ -1028,13 +1028,13 @@ class IntegrityWatchController extends BaseController {
 	 *
 	 * @return array
 	 */
-	public function wptw_resume_files_integrity() {
+	public function tailwatch_resume_files_integrity() {
 		try {
 
 			$existing_data = $this->get_files_integrity_progress();
 
 			if ( ! empty( $existing_data ) && ! empty( $existing_data['scan_state'] ) && 'pause' === $existing_data['scan_state'] ) {
-				wp_schedule_single_event( time() + 5, 'wptw_files_integrity_scan' );
+				wp_schedule_single_event( time() + 5, 'tailwatch_files_integrity_scan' );
 
 				$existing_data['scan_state'] = 'in-progress';
 				$this->update_files_integrity_cancel_pause( $existing_data );
@@ -1076,7 +1076,7 @@ class IntegrityWatchController extends BaseController {
 			}
 		} catch ( \Throwable $e ) {
 			Log::error(
-				'Exception in wptw_resume_files_integrity',
+				'Exception in tailwatch_resume_files_integrity',
 				array(
 					'feature' => 'files_integrity',
 					'action'  => 'files_integrity_resume_failed',
@@ -1097,7 +1097,7 @@ class IntegrityWatchController extends BaseController {
 	 * @param string $post_data JSON with scan_state (pause|cancel).
 	 * @return array
 	 */
-	public function wptw_cancel_pause_integrity( $post_data ) {
+	public function tailwatch_cancel_pause_integrity( $post_data ) {
 		try {
 
 			$json_data = isset( $post_data ) ? wp_unslash( $post_data ) : '';
@@ -1110,8 +1110,8 @@ class IntegrityWatchController extends BaseController {
 				$existing_data['scan_state'] = $data['scan_state'];
 				$this->update_files_integrity_cancel_pause( $existing_data );
 
-				$timestamp = wp_next_scheduled( 'wptw_files_integrity_scan' );
-				wp_unschedule_event( $timestamp, 'wptw_files_integrity_scan' );
+				$timestamp = wp_next_scheduled( 'tailwatch_files_integrity_scan' );
+				wp_unschedule_event( $timestamp, 'tailwatch_files_integrity_scan' );
 				$process_id = isset( $existing_data['process_id'] ) ? $existing_data['process_id'] : ( $this->current_process_id ?? null );
 
 				if ( 'cancel' === $data['scan_state'] ) {
@@ -1129,8 +1129,8 @@ class IntegrityWatchController extends BaseController {
 						$this->current_process_id = null;
 					}
 					$eid = $existing_data['id'];
-					$this->wptw_delete_comparison_entry( array( $eid ), false );
-					// Optional: wp_schedule_single_event( time() + 5, 'wptw_delete_integrity_logs_file' ).
+					$this->tailwatch_delete_comparison_entry( array( $eid ), false );
+					// Optional: wp_schedule_single_event( time() + 5, 'tailwatch_delete_integrity_logs_file' ).
 				} elseif ( 'pause' === $data['scan_state'] ) {
 					$message = 'Files Integrity paused successfully. You can resume it later.';
 					Log::info(
@@ -1170,7 +1170,7 @@ class IntegrityWatchController extends BaseController {
 			}
 		} catch ( \Throwable $e ) {
 			Log::error(
-				'Exception in wptw_cancel_pause_integrity',
+				'Exception in tailwatch_cancel_pause_integrity',
 				array(
 					'feature' => 'files_integrity',
 					'action'  => 'files_integrity_cancel_pause_failed',
@@ -1190,7 +1190,7 @@ class IntegrityWatchController extends BaseController {
 	 *
 	 * @return bool
 	 */
-	public function wptw_remove_garbage_entries_files() {
+	public function tailwatch_remove_garbage_entries_files() {
 		$key    = 'default_files_integrity_check';
 		$option = 'files_integrity_progress';
 
@@ -1209,7 +1209,7 @@ class IntegrityWatchController extends BaseController {
 		// Drop any incomplete (interrupted) scans from the table + their sidecars.
 		( new FileMonModel() )->delete_incomplete_scans();
 
-		$this->wptw_delete_files_after_complete();
+		$this->tailwatch_delete_files_after_complete();
 
 		return true;
 	}
@@ -1221,7 +1221,7 @@ class IntegrityWatchController extends BaseController {
 	 * @param bool  $delete_all Whether to delete all.
 	 * @return array|false
 	 */
-	public function wptw_delete_comparison_entry( $ids = array(), $delete_all = false ) {
+	public function tailwatch_delete_comparison_entry( $ids = array(), $delete_all = false ) {
 		$file_mon = new FileMonModel();
 
 		if ( $delete_all ) {
@@ -1262,13 +1262,13 @@ class IntegrityWatchController extends BaseController {
 	 * @param string $post_data JSON with ids or is_delete.
 	 * @return array
 	 */
-	public function wptw_delete_comparison_by_id( $post_data ) {
+	public function tailwatch_delete_comparison_by_id( $post_data ) {
 		try {
 			// Block while consumers of the comparison file are running:
 			// files_integrity writes it; baseline_update rewrites the baselines
 			// it depends on; malware_scan reads comparison_status.json for the
 			// integrity-handoff and stats aggregation. Internal callers go
-			// through wptw_delete_comparison_entry directly and bypass this
+			// through tailwatch_delete_comparison_entry directly and bypass this
 			// gate, so this only affects the user AJAX entry.
 			$blocked = ( new ProcessGuard() )->ensure_can_modify_artifacts(
 				array( 'files_integrity', 'baseline_update', 'malware_scan' )
@@ -1300,7 +1300,7 @@ class IntegrityWatchController extends BaseController {
 			$delete_all = isset( $data['is_delete'] ) && true === $data['is_delete'];
 			$ids        = $delete_all ? array() : $data['ids'];
 
-			$result = $this->wptw_delete_comparison_entry( $ids, $delete_all );
+			$result = $this->tailwatch_delete_comparison_entry( $ids, $delete_all );
 
 			if ( false === $result ) {
 				Log::error(
@@ -1353,7 +1353,7 @@ class IntegrityWatchController extends BaseController {
 			return $response;
 		} catch ( \Throwable $e ) {
 			Log::error(
-				'Exception in wptw_delete_comparison_by_id',
+				'Exception in tailwatch_delete_comparison_by_id',
 				array(
 					'feature' => 'files_integrity',
 					'action'  => 'files_integrity_delete_failed',
@@ -1373,8 +1373,8 @@ class IntegrityWatchController extends BaseController {
 	 *
 	 * @return bool|void
 	 */
-	public function wptw_maintain_integrity_entry() {
-		$is_enabled = $this->wptw_integrity_feature_enable();
+	public function tailwatch_maintain_integrity_entry() {
+		$is_enabled = $this->tailwatch_integrity_feature_enable();
 
 		if ( ! $is_enabled['feature_enable'] ) {
 			return;
@@ -1429,15 +1429,15 @@ class IntegrityWatchController extends BaseController {
 	 *
 	 * @return array
 	 */
-	public function wptw_files_integrity_cron_if_failed() {
+	public function tailwatch_files_integrity_cron_if_failed() {
 		try {
 			$get_integrity_data = $this->get_files_integrity_progress();
 			$cron_running       = ( is_array( $get_integrity_data ) && isset( $get_integrity_data['cron_running'] ) )
 				? $get_integrity_data['cron_running']
 				: null;
 			if ( false === $cron_running ) {
-				if ( ! wp_next_scheduled( 'wptw_files_integrity_scan' ) ) {
-					$cron_scheduled = wp_schedule_single_event( time() + 5, 'wptw_files_integrity_scan' );
+				if ( ! wp_next_scheduled( 'tailwatch_files_integrity_scan' ) ) {
+					$cron_scheduled = wp_schedule_single_event( time() + 5, 'tailwatch_files_integrity_scan' );
 
 					if ( $cron_scheduled ) {
 						Log::info(
@@ -1520,14 +1520,14 @@ class IntegrityWatchController extends BaseController {
 	 *
 	 * @return bool|void
 	 */
-	public function wptw_stop_integrity_execution() {
+	public function tailwatch_stop_integrity_execution() {
 		$get_integrity_data = $this->get_files_integrity_progress();
 
 		if ( ! empty( $get_integrity_data['scan_state'] ) && ( 'pause' === $get_integrity_data['scan_state'] || 'cancel' === $get_integrity_data['scan_state'] ) ) {
 
-			$timestamp = wp_next_scheduled( 'wptw_files_integrity_scan' );
+			$timestamp = wp_next_scheduled( 'tailwatch_files_integrity_scan' );
 			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'wptw_files_integrity_scan' );
+				wp_unschedule_event( $timestamp, 'tailwatch_files_integrity_scan' );
 			}
 
 			if ( true === $get_integrity_data['cron_running'] ) {
@@ -1535,7 +1535,7 @@ class IntegrityWatchController extends BaseController {
 				$this->update_files_integrity_cancel_pause( $get_integrity_data );
 			}
 
-			$this->wptw_integrity_function_completed();
+			$this->tailwatch_integrity_function_completed();
 
 			return true;
 		}
@@ -1546,7 +1546,7 @@ class IntegrityWatchController extends BaseController {
 	 *
 	 * @return array|null
 	 */
-	public function wptw_get_is_completed() {
+	public function tailwatch_get_is_completed() {
 		$path_to_monitor = $this->get_path_to_monitor();
 		$count           = ( new FileMonModel() )->count_baseline( $path_to_monitor );
 
@@ -1572,17 +1572,17 @@ class IntegrityWatchController extends BaseController {
 	 * @param string $scan_type Scan type (default automatically).
 	 * @return bool|array
 	 */
-	public function wptw_start_monitoring( $scan_type = 'automatically' ) {
-		$this->log_directory = WPTW_LOGS_DIRECTORY . '/file-monitoring-log';
+	public function tailwatch_start_monitoring( $scan_type = 'automatically' ) {
+		$this->log_directory = TAILWATCH_LOGS_DIRECTORY . '/file-monitoring-log';
 		if ( ! is_dir( $this->log_directory ) ) {
 			wp_mkdir_p( $this->log_directory );
 		}
 
-		$existing_entry = $this->wptw_get_is_completed();
+		$existing_entry = $this->tailwatch_get_is_completed();
 
 		$process_id               = $this->process_manager->get_or_create_process(
 			'files_integrity',
-			'wptw_files_integrity_scan',
+			'tailwatch_files_integrity_scan',
 			array(
 				'scan_type' => $scan_type,
 			)
@@ -1609,7 +1609,7 @@ class IntegrityWatchController extends BaseController {
 		}
 		$this->process_manager->heart_beat( $process_id );
 		$this->process_manager->update_state( $process_id, 'in_progress' );
-		wp_schedule_single_event( time(), 'wptw_files_integrity_scan' );
+		wp_schedule_single_event( time(), 'tailwatch_files_integrity_scan' );
 
 		return $response;
 	}
@@ -1623,8 +1623,8 @@ class IntegrityWatchController extends BaseController {
 	 * trees crawl. A single-worker lock prevents the recurring schedule, an injected scan
 	 * step, and the healthcheck from running two workers on the same shared cursor.
 	 */
-	public function wptw_start_monitoring_files() {
-		if ( ! $this->wptw_acquire_scan_lock() ) {
+	public function tailwatch_start_monitoring_files() {
+		if ( ! $this->tailwatch_acquire_scan_lock() ) {
 			return; // Another worker is mid-tick — skip this injected run.
 		}
 
@@ -1634,19 +1634,19 @@ class IntegrityWatchController extends BaseController {
 
 		try {
 
-			$existing_entry  = $this->wptw_get_is_completed();
+			$existing_entry  = $this->tailwatch_get_is_completed();
 			$path_to_monitor = $this->get_path_to_monitor();
 
 			$this->tick_loop_active = true;
-			$deadline               = time() + $this->wptw_integrity_tick_seconds();
+			$deadline               = time() + $this->tailwatch_integrity_tick_seconds();
 
 			if ( ! $existing_entry || false === $existing_entry['is_completed'] ) {
 				// Baseline-build loop.
-				$reschedule_delay = $this->wptw_run_tick_loop(
+				$reschedule_delay = $this->tailwatch_run_tick_loop(
 					function () use ( $path_to_monitor ) {
 						return $this->generate_initial_snapshot( $path_to_monitor );
 					},
-					'wptw_fim_err_baseline',
+					'tailwatch_fim_err_baseline',
 					false,
 					$deadline
 				);
@@ -1656,7 +1656,7 @@ class IntegrityWatchController extends BaseController {
 				$existing_data = $this->get_files_integrity_progress();
 				$process_id    = isset( $existing_data['process_id'] ) ? $existing_data['process_id'] : ( $this->current_process_id ?? null );
 				if ( ! $process_id ) {
-					$process_id               = $this->process_manager->get_or_create_process( 'files_integrity', 'wptw_files_integrity_scan', array() );
+					$process_id               = $this->process_manager->get_or_create_process( 'files_integrity', 'tailwatch_files_integrity_scan', array() );
 					$this->current_process_id = $process_id;
 					if ( ! empty( $existing_data ) ) {
 						$existing_data['process_id'] = $process_id;
@@ -1675,25 +1675,25 @@ class IntegrityWatchController extends BaseController {
 				$existing_data['function_started']   = true;
 				$this->update_files_integrity_cancel_pause( $existing_data );
 
-				$reschedule_delay = $this->wptw_run_tick_loop(
+				$reschedule_delay = $this->tailwatch_run_tick_loop(
 					function () use ( $path_to_monitor ) {
 						return $this->comparison_json_verification( $path_to_monitor );
 					},
-					'wptw_fim_err_comparison',
+					'tailwatch_fim_err_comparison',
 					true,
 					$deadline
 				);
 
-				$this->wptw_integrity_function_completed();
+				$this->tailwatch_integrity_function_completed();
 			}
 		} finally {
 			$this->tick_loop_active = false;
-			$this->wptw_release_scan_lock();
+			$this->tailwatch_release_scan_lock();
 			// Reschedule AFTER releasing the lock so the next tick can acquire it.
 			// Rescheduling before release risks a fast cron loopback bailing on a
 			// still-held lock, stalling the scan until the healthcheck recovers it.
 			if ( $reschedule_delay > 0 ) {
-				wp_schedule_single_event( time() + $reschedule_delay, 'wptw_files_integrity_scan' );
+				wp_schedule_single_event( time() + $reschedule_delay, 'tailwatch_files_integrity_scan' );
 			}
 		}
 	}
@@ -1711,7 +1711,7 @@ class IntegrityWatchController extends BaseController {
 	 * @param int      $deadline       Tick deadline (unix ts).
 	 * @return int Seconds to wait before the next tick (0 = none / done).
 	 */
-	private function wptw_run_tick_loop( $batch_callable, $err_key, $is_comparison, $deadline ) {
+	private function tailwatch_run_tick_loop( $batch_callable, $err_key, $is_comparison, $deadline ) {
 		// Backstop against a non-advancing cursor spinning hot for the whole budget. Far
 		// above any real batch count for a 20s tick (batch_size files per iteration).
 		$max_iterations = 100000;
@@ -1733,7 +1733,7 @@ class IntegrityWatchController extends BaseController {
 				);
 			}
 
-			$action = $this->wptw_tick_after_batch( $more_work, $err_key, $is_comparison, $deadline );
+			$action = $this->tailwatch_tick_after_batch( $more_work, $err_key, $is_comparison, $deadline );
 			if ( 'continue' === $action ) {
 				continue;
 			}
@@ -1752,7 +1752,7 @@ class IntegrityWatchController extends BaseController {
 	/**
 	 * Marks integrity function as completed (cleanup, delete progress file).
 	 */
-	public function wptw_integrity_function_completed() {
+	public function tailwatch_integrity_function_completed() {
 		$existing_data                         = $this->get_files_integrity_progress();
 		$existing_data['function_completed']   = true;
 		$existing_data['function_started']     = false;
@@ -1789,7 +1789,7 @@ class IntegrityWatchController extends BaseController {
 		// Discovery decouple: walk once into a queue file and resume by byte offset
 		// (no per-batch full-tree re-walk). Falls back to the legacy re-walk when
 		// the queue is unavailable, so behaviour degrades gracefully.
-		$queued = $this->wptw_scan_batch_from_queue( $path_to_monitor, $progress_file, $this->batch_size );
+		$queued = $this->tailwatch_scan_batch_from_queue( $path_to_monitor, $progress_file, $this->batch_size );
 		if ( null === $queued ) {
 			$remaining_files = $this->scan_files( $path_to_monitor, $last_scanned_file, $this->batch_size );
 			$queue_offset    = null;
@@ -1830,7 +1830,7 @@ class IntegrityWatchController extends BaseController {
 				$this->current_process_id = null;
 			}
 
-			$this->wptw_delete_scan_queue( $progress_file );
+			$this->tailwatch_delete_scan_queue( $progress_file );
 
 			if ( file_exists( $this->progress_file ) ) {
 				wp_delete_file( $this->progress_file );
@@ -1840,7 +1840,7 @@ class IntegrityWatchController extends BaseController {
 		} elseif ( count( $remaining_files ) === $this->batch_size ) {
 			// The tick loop owns rescheduling; only self-reschedule when invoked outside it.
 			if ( ! $this->tick_loop_active ) {
-				wp_schedule_single_event( time() + 5, 'wptw_files_integrity_scan' );
+				wp_schedule_single_event( time() + 5, 'tailwatch_files_integrity_scan' );
 			}
 			if ( ! empty( $process_id ) ) {
 				$this->process_manager->heart_beat( $process_id );
@@ -1863,7 +1863,7 @@ class IntegrityWatchController extends BaseController {
 		$tree = array();
 
 		$base_length = strlen( $path_to_monitor );
-		$skip_large  = $this->wptw_skip_large_files();
+		$skip_large  = $this->tailwatch_skip_large_files();
 
 		foreach ( $files as $file_path ) {
 
@@ -1913,7 +1913,7 @@ class IntegrityWatchController extends BaseController {
 						}
 					}
 					if ( null === $file_hash ) {
-						$file_hash = $this->wptw_compute_file_hash_protected( $file_path, $size );
+						$file_hash = $this->tailwatch_compute_file_hash_protected( $file_path, $size );
 					}
 
 					$current_node[] = array(
@@ -1967,8 +1967,8 @@ class IntegrityWatchController extends BaseController {
 		// Persist this batch's file rows into tw_filemon_baseline (keyed on
 		// md5(file_path) — re-scans UPDATE in place). Batch-scoped, bounded memory.
 		// $is_completed is signalled separately via the progress file (see
-		// wptw_get_is_completed), so nothing per-path is stored here.
-		$this->wptw_baseline_db_upsert( $tree_structure, $path_to_monitor );
+		// tailwatch_get_is_completed), so nothing per-path is stored here.
+		$this->tailwatch_baseline_db_upsert( $tree_structure, $path_to_monitor );
 	}
 
 	/**
@@ -1982,8 +1982,8 @@ class IntegrityWatchController extends BaseController {
 	 * @param string $path_to_monitor Monitored root.
 	 * @return void
 	 */
-	private function wptw_baseline_db_upsert( $tree_structure, $path_to_monitor ) {
-		$rows = $this->wptw_baseline_rows_from_leaves( $this->map_files_by_path( $tree_structure ), $path_to_monitor );
+	private function tailwatch_baseline_db_upsert( $tree_structure, $path_to_monitor ) {
+		$rows = $this->tailwatch_baseline_rows_from_leaves( $this->map_files_by_path( $tree_structure ), $path_to_monitor );
 		if ( ! empty( $rows ) ) {
 			( new FileMonModel() )->upsert_baseline( $rows );
 		}
@@ -1997,7 +1997,7 @@ class IntegrityWatchController extends BaseController {
 	 * @param string $path_to_monitor Monitored root.
 	 * @return array
 	 */
-	private function wptw_baseline_rows_from_leaves( $leaves, $path_to_monitor ) {
+	private function tailwatch_baseline_rows_from_leaves( $leaves, $path_to_monitor ) {
 		$rows = array();
 		foreach ( (array) $leaves as $leaf ) {
 			if ( empty( $leaf['file_path'] ) ) {
@@ -2025,7 +2025,7 @@ class IntegrityWatchController extends BaseController {
 	 * @param array        $status   A comparison_status block.
 	 * @return void
 	 */
-	private function wptw_write_scan_status( $file_mon, $status ) {
+	private function tailwatch_write_scan_status( $file_mon, $status ) {
 		if ( ! isset( $status['id'] ) ) {
 			return;
 		}
@@ -2063,7 +2063,7 @@ class IntegrityWatchController extends BaseController {
 	 * @param array $folder_files Sidecar change-tree.
 	 * @return array
 	 */
-	private function wptw_scan_status_from_row( $row, $folder_files ) {
+	private function tailwatch_scan_status_from_row( $row, $folder_files ) {
 		return array(
 			'id'                   => (int) $row['scan_id'],
 			'malware_status'       => $row['malware_status'],
@@ -2090,14 +2090,14 @@ class IntegrityWatchController extends BaseController {
 	 *
 	 * @return array|null
 	 */
-	public function wptw_get_latest_comparison() {
+	public function tailwatch_get_latest_comparison() {
 		$file_mon = new FileMonModel();
 		$res      = $file_mon->list_scans( array( 'completed_only' => false, 'limit' => 1, 'offset' => 0 ) );
 		if ( empty( $res['rows'] ) ) {
 			return null;
 		}
 		$row = $res['rows'][0];
-		return $this->wptw_scan_status_from_row( $row, $file_mon->read_sidecar( (int) $row['scan_id'] ) );
+		return $this->tailwatch_scan_status_from_row( $row, $file_mon->read_sidecar( (int) $row['scan_id'] ) );
 	}
 
 	/**
@@ -2108,7 +2108,7 @@ class IntegrityWatchController extends BaseController {
 	 * @param int $period_days Window, in days, for the "period" split.
 	 * @return array{totals:array,period:array,last_comparison:?array}
 	 */
-	public function wptw_get_comparison_stats( $period_days = 30 ) {
+	public function tailwatch_get_comparison_stats( $period_days = 30 ) {
 		$period_days  = max( 1, (int) $period_days );
 		$period_start = gmdate( 'Y-m-d H:i:s', time() - ( $period_days * DAY_IN_SECONDS ) );
 
@@ -2151,7 +2151,7 @@ class IntegrityWatchController extends BaseController {
 	 * @param int $scan_id Comparison/scan id.
 	 * @return array|null
 	 */
-	public function wptw_get_comparison_by_id( $scan_id ) {
+	public function tailwatch_get_comparison_by_id( $scan_id ) {
 		$scan_id = (int) $scan_id;
 		if ( $scan_id <= 0 ) {
 			return null;
@@ -2161,7 +2161,7 @@ class IntegrityWatchController extends BaseController {
 		if ( empty( $row ) ) {
 			return null;
 		}
-		return $this->wptw_scan_status_from_row( $row, $file_mon->read_sidecar( $scan_id ) );
+		return $this->tailwatch_scan_status_from_row( $row, $file_mon->read_sidecar( $scan_id ) );
 	}
 
 	/**
@@ -2172,7 +2172,7 @@ class IntegrityWatchController extends BaseController {
 	 * @param array $fields  Whitelisted fields (see FileMonModel::update_scan).
 	 * @return bool
 	 */
-	public function wptw_update_comparison( $scan_id, array $fields ) {
+	public function tailwatch_update_comparison( $scan_id, array $fields ) {
 		$scan_id = (int) $scan_id;
 		if ( $scan_id <= 0 || empty( $fields ) ) {
 			return false;
@@ -2190,7 +2190,7 @@ class IntegrityWatchController extends BaseController {
 	 * @param array  $changes        Each: file_path (absolute), status (new|modified|deleted).
 	 * @return array stats { modified, new, deleted, skipped, errors }.
 	 */
-	public function wptw_baseline_apply_changes( $monitored_path, array $changes ) {
+	public function tailwatch_baseline_apply_changes( $monitored_path, array $changes ) {
 		$stats = array(
 			'modified' => 0,
 			'new'      => 0,
@@ -2221,7 +2221,7 @@ class IntegrityWatchController extends BaseController {
 			}
 
 			if ( 'new' === $status || 'modified' === $status ) {
-				$leaf = $this->wptw_baseline_leaf_from_path( $file_path );
+				$leaf = $this->tailwatch_baseline_leaf_from_path( $file_path );
 				if ( null === $leaf ) {
 					++$stats['skipped'];
 					continue;
@@ -2239,7 +2239,7 @@ class IntegrityWatchController extends BaseController {
 		}
 
 		if ( ! empty( $upsert_leaves ) ) {
-			$file_mon->upsert_baseline( $this->wptw_baseline_rows_from_leaves( $upsert_leaves, $monitored_path ) );
+			$file_mon->upsert_baseline( $this->tailwatch_baseline_rows_from_leaves( $upsert_leaves, $monitored_path ) );
 		}
 		if ( ! empty( $delete_hashes ) ) {
 			$file_mon->delete_by_hashes( $delete_hashes );
@@ -2256,7 +2256,7 @@ class IntegrityWatchController extends BaseController {
 	 * @param array  $file_paths     Absolute file paths.
 	 * @return array { updated, skipped }.
 	 */
-	public function wptw_baseline_upsert_paths( $monitored_path, array $file_paths ) {
+	public function tailwatch_baseline_upsert_paths( $monitored_path, array $file_paths ) {
 		$result = array(
 			'updated' => 0,
 			'skipped' => 0,
@@ -2267,7 +2267,7 @@ class IntegrityWatchController extends BaseController {
 
 		$leaves = array();
 		foreach ( $file_paths as $file_path ) {
-			$leaf = $this->wptw_baseline_leaf_from_path( (string) $file_path );
+			$leaf = $this->tailwatch_baseline_leaf_from_path( (string) $file_path );
 			if ( null === $leaf ) {
 				++$result['skipped'];
 				continue;
@@ -2276,7 +2276,7 @@ class IntegrityWatchController extends BaseController {
 			++$result['updated'];
 		}
 		if ( ! empty( $leaves ) ) {
-			( new FileMonModel() )->upsert_baseline( $this->wptw_baseline_rows_from_leaves( $leaves, $monitored_path ) );
+			( new FileMonModel() )->upsert_baseline( $this->tailwatch_baseline_rows_from_leaves( $leaves, $monitored_path ) );
 		}
 		return $result;
 	}
@@ -2288,7 +2288,7 @@ class IntegrityWatchController extends BaseController {
 	 * @param string $file_path Absolute path.
 	 * @return array|null
 	 */
-	private function wptw_baseline_leaf_from_path( $file_path ) {
+	private function tailwatch_baseline_leaf_from_path( $file_path ) {
 		if ( '' === $file_path || ! file_exists( $file_path ) || ! is_file( $file_path ) ) {
 			return null;
 		}
@@ -2297,10 +2297,10 @@ class IntegrityWatchController extends BaseController {
 			return null;
 		}
 		// Skip mode: do not record large files, so accept stays aligned with the scan.
-		if ( $this->wptw_skip_large_files() && $size > self::LARGE_FILE_BYTES ) {
+		if ( $this->tailwatch_skip_large_files() && $size > self::LARGE_FILE_BYTES ) {
 			return null;
 		}
-		$hash = $this->wptw_compute_file_hash_protected( $file_path, $size );
+		$hash = $this->tailwatch_compute_file_hash_protected( $file_path, $size );
 		if ( '' === $hash ) {
 			return null;
 		}
@@ -2323,7 +2323,7 @@ class IntegrityWatchController extends BaseController {
 	 * @param string $file_path Absolute path.
 	 * @return string 64-char hash, or '' on failure.
 	 */
-	private function wptw_compute_file_hash( $file_path ) {
+	private function tailwatch_compute_file_hash( $file_path ) {
 		// A non-file (e.g. an empty directory that slips into the walk) hashes to ''
 		// either way; guard first so hash_file() does not emit an EISDIR notice.
 		if ( ! is_file( $file_path ) ) {
@@ -2348,23 +2348,23 @@ class IntegrityWatchController extends BaseController {
 	 * @param int|false $size     filesize() result (false when unknown).
 	 * @return string Hash, oversize marker, or '' on read failure.
 	 */
-	private function wptw_compute_file_hash_protected( $file_path, $size ) {
+	private function tailwatch_compute_file_hash_protected( $file_path, $size ) {
 		if ( false === $size || $size <= self::PROTECTED_HASH_BYTES ) {
-			return $this->wptw_compute_file_hash( $file_path );
+			return $this->tailwatch_compute_file_hash( $file_path );
 		}
 
-		$key      = 'wptw_fim_bighash_' . FileMonModel::path_key( $file_path );
+		$key      = 'tailwatch_fim_bighash_' . FileMonModel::path_key( $file_path );
 		$attempts = (int) get_transient( $key );
 
 		if ( $attempts >= self::PROTECTED_HASH_MAX_ATTEMPTS ) {
 			// Repeatedly un-hashable on this host — track by size+mtime instead of stalling.
 			delete_transient( $key );
-			return $this->wptw_oversize_marker( $file_path, $size );
+			return $this->tailwatch_oversize_marker( $file_path, $size );
 		}
 
 		// Persist the attempt BEFORE the risky hash so a process-kill still counts.
 		set_transient( $key, $attempts + 1, DAY_IN_SECONDS );
-		$hash = $this->wptw_compute_file_hash( $file_path );
+		$hash = $this->tailwatch_compute_file_hash( $file_path );
 		delete_transient( $key ); // Survived → clear the streak.
 
 		return $hash;
@@ -2379,7 +2379,7 @@ class IntegrityWatchController extends BaseController {
 	 * @param int|false $size      filesize() result.
 	 * @return string
 	 */
-	private function wptw_oversize_marker( $file_path, $size ) {
+	private function tailwatch_oversize_marker( $file_path, $size ) {
 		return 'oversize:' . (int) $size . ':' . (int) filemtime( $file_path );
 	}
 
@@ -2516,8 +2516,8 @@ class IntegrityWatchController extends BaseController {
 		$skip_root_folders = $this->get_root_folders_name();
 
 		$skip_folders_in_wp_content = array(
-			str_replace( '\\', '/', WPTW_CONTENT_DIR_BASE ),
-			str_replace( '\\', '/', WPTW_LOGS_DIRECTORY ),
+			str_replace( '\\', '/', TAILWATCH_CONTENT_DIR_BASE ),
+			str_replace( '\\', '/', TAILWATCH_LOGS_DIRECTORY ),
 		);
 
 		$skip_these_folders = array_merge( $skip_root_folders, $skip_folders_in_wp_content );
@@ -2566,7 +2566,7 @@ class IntegrityWatchController extends BaseController {
 	 * @param string $progress_file Progress file this scan resumes from.
 	 * @return string
 	 */
-	private function wptw_scan_queue_path( $progress_file ) {
+	private function tailwatch_scan_queue_path( $progress_file ) {
 		return $this->log_directory . '/scan_queue_' . md5( $progress_file ) . '.txt';
 	}
 
@@ -2581,12 +2581,12 @@ class IntegrityWatchController extends BaseController {
 	 * @param string $queue_file Destination queue path.
 	 * @return int|false Number of in-scope files queued, or false on failure.
 	 */
-	private function wptw_build_scan_queue( $directory, $queue_file ) {
+	private function tailwatch_build_scan_queue( $directory, $queue_file ) {
 		$skip_these_folders = array_merge(
 			$this->get_root_folders_name(),
 			array(
-				str_replace( '\\', '/', WPTW_CONTENT_DIR_BASE ),
-				str_replace( '\\', '/', WPTW_LOGS_DIRECTORY ),
+				str_replace( '\\', '/', TAILWATCH_CONTENT_DIR_BASE ),
+				str_replace( '\\', '/', TAILWATCH_LOGS_DIRECTORY ),
 			)
 		);
 
@@ -2651,8 +2651,8 @@ class IntegrityWatchController extends BaseController {
 	 * @param int    $batch_size    Files per batch.
 	 * @return array|null { files: string[], next_offset: int } or null.
 	 */
-	private function wptw_scan_batch_from_queue( $directory, $progress_file, $batch_size ) {
-		$queue_file  = $this->wptw_scan_queue_path( $progress_file );
+	private function tailwatch_scan_batch_from_queue( $directory, $progress_file, $batch_size ) {
+		$queue_file  = $this->tailwatch_scan_queue_path( $progress_file );
 		$progress    = (array) $this->load_progress( $progress_file );
 		$offset      = isset( $progress['scan_queue_offset'] ) ? (int) $progress['scan_queue_offset'] : 0;
 		$queue_total = null; // Set only on the build tick; reused from storage afterwards.
@@ -2665,7 +2665,7 @@ class IntegrityWatchController extends BaseController {
 				return null;
 			}
 			// Start of a scan: build the queue fresh for the current tree.
-			$queue_total = $this->wptw_build_scan_queue( $directory, $queue_file );
+			$queue_total = $this->tailwatch_build_scan_queue( $directory, $queue_file );
 			if ( false === $queue_total ) {
 				return null;
 			}
@@ -2712,8 +2712,8 @@ class IntegrityWatchController extends BaseController {
 	 * @param string $progress_file Progress file the queue is keyed by.
 	 * @return void
 	 */
-	private function wptw_delete_scan_queue( $progress_file ) {
-		$queue_file = $this->wptw_scan_queue_path( $progress_file );
+	private function tailwatch_delete_scan_queue( $progress_file ) {
+		$queue_file = $this->tailwatch_scan_queue_path( $progress_file );
 		if ( file_exists( $queue_file ) ) {
 			wp_delete_file( $queue_file );
 		}
@@ -2735,7 +2735,7 @@ class IntegrityWatchController extends BaseController {
 			return false;
 		}
 
-		if ( true === $this->wptw_stop_integrity_execution() ) {
+		if ( true === $this->tailwatch_stop_integrity_execution() ) {
 			return false;
 		}
 
@@ -2775,7 +2775,7 @@ class IntegrityWatchController extends BaseController {
 
 			// Discovery decouple: walk-once queue with byte-offset resume; legacy
 			// re-walk as fallback (see generate_initial_snapshot).
-			$queued = $this->wptw_scan_batch_from_queue( $path_to_monitor, $progress_file, $this->batch_size );
+			$queued = $this->tailwatch_scan_batch_from_queue( $path_to_monitor, $progress_file, $this->batch_size );
 			if ( null === $queued ) {
 				$current_files_batch = $this->scan_files( $path_to_monitor, $last_scanned_file, $this->batch_size );
 				$queue_offset        = null;
@@ -2789,9 +2789,9 @@ class IntegrityWatchController extends BaseController {
 			// normalized path), the same key compare_files matches on. Built from the raw
 			// batch paths (not the post-build map) because the gate needs it pre-hash.
 			$batch_hashes          = array_map( array( FileMonModel::class, 'path_key' ), $current_files_batch );
-			$initial_files_for_map = $this->wptw_db_baseline_map( $file_mon, $path_to_monitor, $batch_hashes );
+			$initial_files_for_map = $this->tailwatch_db_baseline_map( $file_mon, $path_to_monitor, $batch_hashes );
 
-			$current_files       = $this->build_tree_structure( $current_files_batch, $path_to_monitor, $initial_files_for_map, $this->wptw_integrity_scan_mode() );
+			$current_files       = $this->build_tree_structure( $current_files_batch, $path_to_monitor, $initial_files_for_map, $this->tailwatch_integrity_scan_mode() );
 			$current_files_map   = $this->map_files_by_path( $current_files );
 
 			// An empty batch after files were already scanned (total an exact multiple
@@ -2819,7 +2819,7 @@ class IntegrityWatchController extends BaseController {
 			$comparison_files = $this->compare_files( $initial_files_for_map, $path_to_monitor, $current_files_map, $next_id, $file_mon );
 			$is_completed     = ( count( $current_files_batch ) < $this->batch_size );
 			if ( $is_completed ) {
-				$deleted_files    = $this->wptw_detect_deleted_files( $path_to_monitor, $next_id, $file_mon );
+				$deleted_files    = $this->tailwatch_detect_deleted_files( $path_to_monitor, $next_id, $file_mon );
 				$comparison_files = array_merge( $comparison_files, $deleted_files );
 			}
 			list( $total_captured_file, $added_count, $modified_count, $deleted_count ) = $this->count_files_by_status( $comparison_files );
@@ -2846,11 +2846,11 @@ class IntegrityWatchController extends BaseController {
 			}
 
 			// Whether to trigger an AI malware scan on the changed files. Opt-in extension point:
-			// the wptw_integrity_malware_scan filter. Free ships no listener, so it returns the
+			// the tailwatch_integrity_malware_scan filter. Free ships no listener, so it returns the
 			// default (enabled=false) -> a clean no-op; extensions hook it to run the scan and set
 			// the initial status shown in comparison logs.
 			$malware = apply_filters(
-				'wptw_integrity_malware_scan',
+				'tailwatch_integrity_malware_scan',
 				array(
 					'enabled'             => false,
 					'status'              => 'Inactive',
@@ -2868,12 +2868,12 @@ class IntegrityWatchController extends BaseController {
 			// Accumulate this batch into the comparison's row + sidecar (the table is
 			// the only store now): counts add up across batches and the change-tree
 			// merges. Insert on the first batch, update on later ones (handled inside
-			// wptw_write_scan_status). Malware fields + scan_time are set on the first
+			// tailwatch_write_scan_status). Malware fields + scan_time are set on the first
 			// batch and preserved thereafter.
 			$prior_tree  = ( null !== $prior_row ) ? $file_mon->read_sidecar( $next_id ) : array();
 			$merged_tree = $this->merge_folder_files( $prior_tree, $comparison_files );
 
-			$this->wptw_write_scan_status(
+			$this->tailwatch_write_scan_status(
 				$file_mon,
 				array(
 					'id'                   => $next_id,
@@ -2893,14 +2893,14 @@ class IntegrityWatchController extends BaseController {
 				)
 			);
 
-			$stop_execution = $this->wptw_stop_integrity_execution();
+			$stop_execution = $this->tailwatch_stop_integrity_execution();
 
 			if ( true === $stop_execution ) {
 				return false; // Paused/cancelled — stop the tick loop.
 			}
 			if ( $is_completed ) {
 				$livelogs = new LiveLogsController();
-				$livelogs->wptw_live_logs_completed( $is_completed, $this->get_live_logs );
+				$livelogs->tailwatch_live_logs_completed( $is_completed, $this->get_live_logs );
 				$this->update_integrity_logs_records( 'Scan completed successfully', 'INFO' );
 
 				// Branch the completion log on whether file changes were detected.
@@ -2962,14 +2962,14 @@ class IntegrityWatchController extends BaseController {
 					'skip_detection_check' => false,
 				);
 
-				do_action( 'wptw_after_integrity_check_completed', wp_json_encode( $integrity_data ) );
+				do_action( 'tailwatch_after_integrity_check_completed', wp_json_encode( $integrity_data ) );
 
 				// Optional: schedule cleanup event.
 				return false; // Comparison complete — no more work.
 			} elseif ( count( $current_files_batch ) === $this->batch_size ) {
 				// The tick loop owns rescheduling; only self-reschedule when invoked outside it.
 				if ( ! $this->tick_loop_active ) {
-					wp_schedule_single_event( time() + 5, 'wptw_files_integrity_scan' );
+					wp_schedule_single_event( time() + 5, 'tailwatch_files_integrity_scan' );
 				}
 				$process_id = isset( $progress_data['process_id'] ) ? $progress_data['process_id'] : ( $this->current_process_id ?? null );
 				if ( $process_id ) {
@@ -3001,17 +3001,17 @@ class IntegrityWatchController extends BaseController {
 	/**
 	 * Deletes integrity logs and progress data.
 	 */
-	public function wptw_delete_integrity_logs() {
+	public function tailwatch_delete_integrity_logs() {
 		try {
-			$this->wptw_delete_files_after_complete();
+			$this->tailwatch_delete_files_after_complete();
 
 			$feature_controller = new DBModel();
-			$wptw_key           = 'default_files_integrity_check';
+			$tailwatch_key           = 'default_files_integrity_check';
 			$option             = 'files_integrity_progress';
-			$feature_controller->delete_recent_row( $wptw_key, $option );
+			$feature_controller->delete_recent_row( $tailwatch_key, $option );
 		} catch ( \Throwable $e ) {
 			Log::error(
-				'Exception in wptw_delete_integrity_logs',
+				'Exception in tailwatch_delete_integrity_logs',
 				array(
 					'feature' => 'files_integrity',
 					'action'  => 'files_integrity_delete_failed',
@@ -3024,8 +3024,8 @@ class IntegrityWatchController extends BaseController {
 	/**
 	 * Deletes temporary files after scan complete.
 	 */
-	public function wptw_delete_files_after_complete() {
-		$this->wptw_delete_scan_queue( $this->comparison_progress_file );
+	public function tailwatch_delete_files_after_complete() {
+		$this->tailwatch_delete_scan_queue( $this->comparison_progress_file );
 
 		if ( file_exists( $this->comparison_progress_file ) ) {
 			wp_delete_file( $this->comparison_progress_file );
@@ -3145,7 +3145,7 @@ class IntegrityWatchController extends BaseController {
 	 * @param array        $batch_hashes   md5(file_path) values for this batch.
 	 * @return array<string,array>
 	 */
-	private function wptw_db_baseline_map( $file_mon, $monitored_path, array $batch_hashes ) {
+	private function tailwatch_db_baseline_map( $file_mon, $monitored_path, array $batch_hashes ) {
 		$map = array();
 		foreach ( $file_mon->lookup_by_hashes( $monitored_path, $batch_hashes ) as $row ) {
 			$map[ $row['file_path'] ] = array(
@@ -3166,12 +3166,12 @@ class IntegrityWatchController extends BaseController {
 	 * @param string $current_directory Current directory path.
 	 * @return array
 	 */
-	private function wptw_detect_deleted_files( $current_directory, $scan_id = 0, $file_mon = null ) {
+	private function tailwatch_detect_deleted_files( $current_directory, $scan_id = 0, $file_mon = null ) {
 		$deleted_files = array();
 
 		if ( $file_mon instanceof FileMonModel ) {
 			// Deleted = baseline rows for this root never seen during the scan.
-			$skip_large    = $this->wptw_skip_large_files();
+			$skip_large    = $this->tailwatch_skip_large_files();
 			$log_messages  = array();
 			$deleted_total = 0;
 			foreach ( $file_mon->get_deleted( $current_directory, $scan_id ) as $row ) {
@@ -3305,7 +3305,7 @@ class IntegrityWatchController extends BaseController {
 	 * @param string $post_data JSON with limit, page.
 	 * @return array
 	 */
-	public function wptw_get_file_logs_data( $post_data ) {
+	public function tailwatch_get_file_logs_data( $post_data ) {
 		try {
 
 			$json_data = isset( $post_data ) ? wp_unslash( $post_data ) : '';
@@ -3351,7 +3351,7 @@ class IntegrityWatchController extends BaseController {
 			);
 		} catch ( \Throwable $e ) {
 			Log::error(
-				'Exception in wptw_get_file_logs_data',
+				'Exception in tailwatch_get_file_logs_data',
 				array(
 					'feature' => 'files_integrity',
 					'action'  => 'files_integrity_entries_retrieval_failed',
@@ -3374,7 +3374,7 @@ class IntegrityWatchController extends BaseController {
 	 * @param int|null    $pid       Comparison ID.
 	 * @return array
 	 */
-	public function wptw_get_files_log_by_id( $post_data = null, $pid = null ) {
+	public function tailwatch_get_files_log_by_id( $post_data = null, $pid = null ) {
 		try {
 
 			if ( null !== $post_data ) {
@@ -3446,7 +3446,7 @@ class IntegrityWatchController extends BaseController {
 			$row      = $file_mon->get_scan( (int) $id );
 
 			$comparison_status = ( null !== $row )
-				? $this->wptw_scan_status_from_row( $row, $file_mon->read_sidecar( (int) $id ) )
+				? $this->tailwatch_scan_status_from_row( $row, $file_mon->read_sidecar( (int) $id ) )
 				: null;
 
 			// Case 1: return single comparison_status record by ID.
@@ -3532,7 +3532,7 @@ class IntegrityWatchController extends BaseController {
 			);
 		} catch ( \Throwable $e ) {
 			Log::error(
-				'Exception in wptw_get_files_log_by_id',
+				'Exception in tailwatch_get_files_log_by_id',
 				array(
 					'feature' => 'files_integrity',
 					'action'  => 'files_integrity_entry_details_by_id_failed',
@@ -3553,14 +3553,14 @@ class IntegrityWatchController extends BaseController {
 	 *
 	 * @return array
 	 */
-	public function wptw_get_file_integrity_status() {
+	public function tailwatch_get_file_integrity_status() {
 		try {
 
-			$comparison_data = $this->wptw_get_integrity_last_run();
+			$comparison_data = $this->tailwatch_get_integrity_last_run();
 			$started_time    = $comparison_data['data']['start_time'];
 			$file_exist      = $comparison_data['data']['file_exist'];
 
-			$next_scheduled          = wp_next_scheduled( 'wptw_files_integrity_schedule_run' );
+			$next_scheduled          = wp_next_scheduled( 'tailwatch_files_integrity_schedule_run' );
 			$current_time            = time();
 			$next_schedule_formatted = $next_scheduled ? gmdate( 'Y-m-d H:i:s', $next_scheduled ) : 'Not Scheduled';
 
@@ -3580,7 +3580,7 @@ class IntegrityWatchController extends BaseController {
 			);
 		} catch ( \Throwable $e ) {
 			Log::error(
-				'Exception in wptw_get_file_integrity_status',
+				'Exception in tailwatch_get_file_integrity_status',
 				array(
 					'feature' => 'files_integrity',
 					'action'  => 'files_integrity_status_failed',
@@ -3600,7 +3600,7 @@ class IntegrityWatchController extends BaseController {
 	 *
 	 * @return array
 	 */
-	public function wptw_get_integrity_last_run() {
+	public function tailwatch_get_integrity_last_run() {
 		// Latest scan time via SQL MAX over all comparisons (completed or not).
 		$file_mon = new FileMonModel();
 		if ( $file_mon->list_scans( array( 'limit' => 1 ) )['total'] > 0 ) {
@@ -3631,7 +3631,7 @@ class IntegrityWatchController extends BaseController {
 	 * @param string $malware_status Malware status string (e.g. 'Cleaned', 'Malware Found').
 	 * @return array
 	 */
-	public function wptw_update_malware_scan_status( $malware_status ) {
+	public function tailwatch_update_malware_scan_status( $malware_status ) {
 		// Mirror the malware fields onto the latest COMPLETED comparison row.
 		$file_mon = new FileMonModel();
 		$res      = $file_mon->list_scans( array( 'completed_only' => true, 'limit' => 1, 'offset' => 0 ) );

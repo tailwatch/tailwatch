@@ -46,7 +46,7 @@ class ResetByFeatureOptionController {
 	 *     @type string $message      Response message.
 	 * }
 	 */
-	public function wptw_reset_feature_by_option( $post_data ) {
+	public function tailwatch_reset_feature_by_option( $post_data ) {
 		$feature_option = null;
 		$remain_active  = false;
 
@@ -90,7 +90,7 @@ class ResetByFeatureOptionController {
 
 			$db_model      = new DBModel();
 			$options_model = new OptionsModel();
-			$defaults      = $options_model->wptw_complete_site_data();
+			$defaults      = $options_model->tailwatch_complete_site_data();
 
 			if ( ! isset( $defaults[ $feature_option ] ) ) {
 				Log::error(
@@ -165,7 +165,7 @@ class ResetByFeatureOptionController {
 			// extension target — significant on bulk activation, which
 			// calls this method N times. Backward-compatible: listeners
 			// registered without `accepted_args` ignore the extra arg.
-			do_action( 'wptw_apply_plan_features_to_db', $feature_option );
+			do_action( 'tailwatch_apply_plan_features_to_db', $feature_option );
 
 			$feature_data = $db_model->get_value( $row['option'], $row['key'] );
 

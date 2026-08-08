@@ -34,7 +34,7 @@ class GetLogs {
 	 *     @type array  $pagination Pagination info (only on success).
 	 * }
 	 */
-	public function wptw_logs_feature( $post_data ) {
+	public function tailwatch_logs_feature( $post_data ) {
 		try {
 			$json_data = isset( $post_data ) ? wp_unslash( $post_data ) : '';
 			$data      = json_decode( $json_data, true );
@@ -60,8 +60,8 @@ class GetLogs {
 			$type   = isset( $data['type'] ) ? sanitize_text_field( $data['type'] ) : null;
 
 			// Validate option is in allowed list.
-			if ( in_array( $option, $this->wptw_allowed_log_options(), true ) ) {
-				$feature_status = $this->wptw_logs_feature_status_by_type( $option, $type );
+			if ( in_array( $option, $this->tailwatch_allowed_log_options(), true ) ) {
+				$feature_status = $this->tailwatch_logs_feature_status_by_type( $option, $type );
 
 				if ( ! $feature_status['parent_enable'] || ! $feature_status['feature_enable'] ) {
 					$formatted_type = ucwords( str_replace( '_', ' ', str_replace( 'default_', '', $option ) ) );
@@ -106,7 +106,7 @@ class GetLogs {
 			}
 
 			$db_model = new DBModel();
-			$result   = $db_model->get_logs_filtered( $key, $option, $filters, WPTW_DB_LOGS_TABLE_NAME, $limit, $page );
+			$result   = $db_model->get_logs_filtered( $key, $option, $filters, TAILWATCH_DB_LOGS_TABLE_NAME, $limit, $page );
 
 			if ( false === $result ) {
 				return array(
@@ -170,7 +170,7 @@ class GetLogs {
 	 *     @type int    $code       HTTP response code.
 	 * }
 	 */
-	public function wptw_get_log_by_id( $post_data ) {
+	public function tailwatch_get_log_by_id( $post_data ) {
 		try {
 			$json_data = isset( $post_data ) ? wp_unslash( $post_data ) : '';
 			$data      = json_decode( $json_data, true );
@@ -194,7 +194,7 @@ class GetLogs {
 				);
 			}
 
-			if ( ! in_array( $option, $this->wptw_allowed_log_options(), true ) ) {
+			if ( ! in_array( $option, $this->tailwatch_allowed_log_options(), true ) ) {
 				return array(
 					'data'    => array(),
 					'message' => __( 'Invalid option provided', 'tailwatch' ),
@@ -203,7 +203,7 @@ class GetLogs {
 			}
 
 			$db_model = new DBModel();
-			$row      = $db_model->get_data_by_id( $id, WPTW_DB_LOGS_TABLE_NAME, $option );
+			$row      = $db_model->get_data_by_id( $id, TAILWATCH_DB_LOGS_TABLE_NAME, $option );
 
 			if ( empty( $row ) ) {
 				return array(
@@ -260,7 +260,7 @@ class GetLogs {
 	 * @param string $post_data JSON with `key` and `option`.
 	 * @return array data => map of facet => distinct values.
 	 */
-	public function wptw_logs_filter_options( $post_data ) {
+	public function tailwatch_logs_filter_options( $post_data ) {
 		try {
 			$data = json_decode( isset( $post_data ) ? wp_unslash( $post_data ) : '', true );
 			if ( ! is_array( $data ) || ! isset( $data['key'], $data['option'] ) ) {
@@ -277,14 +277,14 @@ class GetLogs {
 				'default_logs_activity'       => array( 'type' => 'Action', 'username' => 'User' ),
 				'default_monitoring_logs'     => array( 'type' => 'Status Code', 'type_state' => 'URL', 'ip_address' => 'IP Address' ),
 				'default_email_logs'          => array( 'type' => 'Status', 'facet_1' => 'Sent To' ),
-				'wptw_capturing_all_activity' => array( 'type' => 'Request Type', 'action' => 'Action', 'facet_2' => 'Method', 'ip_address' => 'IP Address', 'username' => 'User' ),
+				'tailwatch_capturing_all_activity' => array( 'type' => 'Request Type', 'action' => 'Action', 'facet_2' => 'Method', 'ip_address' => 'IP Address', 'username' => 'User' ),
 			);
 			if ( ! isset( $facet_map[ $option ] ) ) {
 				return array( 'data' => array(), 'message' => __( 'Invalid option provided', 'tailwatch' ), 'code' => 400 );
 			}
 
 			$db_model = new DBModel();
-			$distinct = $db_model->get_logs_distinct_facets( $key, $option, array_keys( $facet_map[ $option ] ), WPTW_DB_LOGS_TABLE_NAME );
+			$distinct = $db_model->get_logs_distinct_facets( $key, $option, array_keys( $facet_map[ $option ] ), TAILWATCH_DB_LOGS_TABLE_NAME );
 
 			$facets = array();
 			foreach ( $facet_map[ $option ] as $col => $label ) {
@@ -300,22 +300,22 @@ class GetLogs {
 		}
 	}
 
-	public function wptw_logs_feature_status_by_type( $option, $type = null ) {
+	public function tailwatch_logs_feature_status_by_type( $option, $type = null ) {
 		switch ( $option ) {
 			case 'default_logs_activity':
 				$logs_activity = new LogActivityController();
-				return $logs_activity->wptw_log_activity_is_enabled();
+				return $logs_activity->tailwatch_log_activity_is_enabled();
 
 			case 'default_monitoring_logs':
 				$field_id        = ( '404' === $type ) ? 'field_4' : null;
 				$monitoring_logs = new MonitoringLogController();
-				return $monitoring_logs->wptw_monitoring_is_enabled( $field_id );
+				return $monitoring_logs->tailwatch_monitoring_is_enabled( $field_id );
 
 			case 'default_email_logs':
 				$email_logs = new EmailLogController();
-				return $email_logs->wptw_email_log_is_enabled();
+				return $email_logs->tailwatch_email_log_is_enabled();
 
-			case 'wptw_capturing_all_activity':
+			case 'tailwatch_capturing_all_activity':
 				return array(
 					'parent_enable'  => true,
 					'feature_enable' => true,
@@ -331,17 +331,17 @@ class GetLogs {
 
 	/**
 	 * Log `option` values that may be read through the logs endpoints. Single
-	 * source for wptw_logs_feature() and wptw_get_log_by_id() so the two lists
+	 * source for tailwatch_logs_feature() and tailwatch_get_log_by_id() so the two lists
 	 * never drift.
 	 *
 	 * @return string[] Allowed log `option` values.
 	 */
-	private function wptw_allowed_log_options() {
+	private function tailwatch_allowed_log_options() {
 		return array(
 			'default_logs_activity',
 			'default_monitoring_logs',
 			'default_email_logs',
-			'wptw_capturing_all_activity',
+			'tailwatch_capturing_all_activity',
 		);
 	}
 }

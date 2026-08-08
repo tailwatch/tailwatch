@@ -37,7 +37,7 @@ class DiskSpaceController {
 	 *
 	 * @return array Usage information with status code.
 	 */
-	public function wptw_disk_and_db_usage() {
+	public function tailwatch_disk_and_db_usage() {
 		try {
 			$file_sizes    = $this->calculate_directory_sizes();
 			$database_info = $this->get_database_info();

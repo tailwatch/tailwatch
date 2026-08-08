@@ -152,32 +152,22 @@ class SearchReplaceModel {
 			return 0;
 		}
 		global $wpdb;
-		// $collation and $columns_list are code-literal fragments built from
-		// validated column names — cannot be bound via prepare(). $table binds
-		// through %i; the search value binds through %s.
-		$collation    = $case_insensitive ? 'COLLATE utf8mb4_general_ci' : 'COLLATE utf8mb4_bin';
-		$columns_list = implode(
-			', ',
-			array_map(
-				function ( $column ) {
-					return '`' . $column . '`';
-				},
-				$columns
+		$collation           = $case_insensitive ? 'COLLATE utf8mb4_general_ci' : 'COLLATE utf8mb4_bin';
+		$column_placeholders = implode( ', ', array_fill( 0, count( $columns ), '%i' ) );
+
+		// Columns and $table bind as identifiers via %i; the search value binds via %s.
+		// $collation is a code-literal COLLATE clause (chosen from two constants above) — not
+		// an identifier or value — so it is interpolated verbatim and cannot be bound.
+		// The dynamic CONCAT_WS placeholder count cannot be statically verified, so
+		// disable/enable wraps the whole statement.
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, PluginCheck.Security.DirectDB.UnescapedDBParameter -- All identifiers bind via %i and the search value via %s through prepare(); $collation is a code-literal COLLATE clause.
+		$count = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM %i WHERE CONCAT_WS(' ', $column_placeholders) LIKE %s $collation",
+				array_merge( array( $table ), $columns, array( '%' . $wpdb->esc_like( $search ) . '%' ) )
 			)
 		);
-		// $columns_list and $collation are code-literal fragments built from
-		// validated column names — they're SQL fragments, not values or
-		// identifiers, so they cannot be bound via prepare(). $table binds
-		// via %i; the search value binds via %s.
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
-		$query = $wpdb->prepare(
-			"SELECT COUNT(*) FROM %i WHERE CONCAT_WS(' ', $columns_list) LIKE %s $collation",
-			$table,
-			'%' . $wpdb->esc_like( $search ) . '%'
-		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter -- $query is built via $wpdb->prepare() above; identifier binds via %i, value via %s, dynamic SQL fragments are code-literal column-name backticks (validated by is_table_safe upstream).
-		$count = $wpdb->get_var( $query );
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, PluginCheck.Security.DirectDB.UnescapedDBParameter
 		return (int) $count;
 	}
 

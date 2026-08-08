@@ -32,7 +32,7 @@ class SslVerificationController extends BaseController {
 
 	public function __construct() {
 		$hook_controller = new HookControllers();
-		$hook_controller->add_action_hook( 'wptw_trigger_ssl_expiry_notice', array( $this, 'wptw_trigger_ssl_expiry_alert' ) );
+		$hook_controller->add_action_hook( 'tailwatch_trigger_ssl_expiry_notice', array( $this, 'tailwatch_trigger_ssl_expiry_alert' ) );
 	}
 
 	/**
@@ -40,8 +40,8 @@ class SslVerificationController extends BaseController {
 	 *
 	 * @return array
 	 */
-	protected function wptw_get_feature_status(): array {
-		return $this->wptw_ssl_is_enable();
+	protected function tailwatch_get_feature_status(): array {
+		return $this->tailwatch_ssl_is_enable();
 	}
 
 	/**
@@ -81,7 +81,7 @@ class SslVerificationController extends BaseController {
 	 * @param array|string $field_name Path to the field
 	 * @return array
 	 */
-	public function wptw_ssl_is_enable( $field_name = array( 'field_1' ) ): array {
+	public function tailwatch_ssl_is_enable( $field_name = array( 'field_1' ) ): array {
 		// Validate input
 		$field_name = (array) $field_name;
 		if ( empty( $field_name ) ) {
@@ -179,7 +179,7 @@ class SslVerificationController extends BaseController {
 	 * @return void
 	 * @throws \InvalidArgumentException If required keys are missing
 	 */
-	public function wptw_insert_ssl_status( array $ssl_data ): void {
+	public function tailwatch_insert_ssl_status( array $ssl_data ): void {
 		// Validate required keys
 		$required_keys = array(
 			'ssl_connected',
@@ -254,11 +254,11 @@ class SslVerificationController extends BaseController {
 	 *
 	 * @return array|null
 	 */
-	public function wptw_get_ssl_verification_status(): ?array {
+	public function tailwatch_get_ssl_verification_status(): ?array {
 		$db_model      = new DBModel();
-		$wptw_key      = 'default_ssl_verification';
+		$tailwatch_key      = 'default_ssl_verification';
 		$option        = 'ssl_verification_status';
-		$existing_data = $db_model->get_recent_data( $option, $wptw_key );
+		$existing_data = $db_model->get_recent_data( $option, $tailwatch_key );
 		return $existing_data;
 	}
 
@@ -275,7 +275,7 @@ class SslVerificationController extends BaseController {
 		}
 
 		$db_model = new DBModel();
-		$wptw_key = 'default_ssl_verification';
+		$tailwatch_key = 'default_ssl_verification';
 		$option   = 'ssl_verification_status';
 
 		$db_data = array(
@@ -283,7 +283,7 @@ class SslVerificationController extends BaseController {
 			'date_modified' => current_time( 'mysql' ),
 		);
 
-		$db_model->update_recent_row( $db_data, $wptw_key, $option );
+		$db_model->update_recent_row( $db_data, $tailwatch_key, $option );
 	}
 
 	/**
@@ -291,7 +291,7 @@ class SslVerificationController extends BaseController {
 	 *
 	 * @return array
 	 */
-	public function wptw_ssl_verification(): array {
+	public function tailwatch_ssl_verification(): array {
 		try {
 			$domain = wp_parse_url( home_url(), PHP_URL_HOST );
 			if ( empty( $domain ) || ! $this->validate_domain( $domain ) ) {
@@ -557,12 +557,12 @@ class SslVerificationController extends BaseController {
 			}
 
 			// Update or insert SSL status
-			$existing_data = $this->wptw_get_ssl_verification_status();
+			$existing_data = $this->tailwatch_get_ssl_verification_status();
 			if ( ! empty( $existing_data ) ) {
 				// Preserve schedule-managed flag. catch_up_fired_for_expiry_ts
 				// is owned by schedule_expiry_alerts (it records which cert
 				// expiry timestamp the one-shot catch-up was last sent for).
-				// wptw_ssl_verification builds a fresh $ssl_status that
+				// tailwatch_ssl_verification builds a fresh $ssl_status that
 				// doesn't carry this field, so without explicit preservation
 				// the next write would clear it and the catch-up anti-spam
 				// guard in schedule_expiry_alerts would re-fire every cron
@@ -604,7 +604,7 @@ class SslVerificationController extends BaseController {
 				}
 				$this->update_ssl_verification_status( $ssl_status );
 			} else {
-				$this->wptw_insert_ssl_status( $ssl_status );
+				$this->tailwatch_insert_ssl_status( $ssl_status );
 			}
 
 			return $ssl_status;
@@ -638,7 +638,7 @@ class SslVerificationController extends BaseController {
 	 *
 	 * @return array
 	 */
-	public function wptw_verify_ssl_connection(): array {
+	public function tailwatch_verify_ssl_connection(): array {
 		$domain        = null;
 		$ssl_connected = false;
 		$expiry_time   = null;
@@ -646,7 +646,7 @@ class SslVerificationController extends BaseController {
 		try {
 			$domain = wp_parse_url( home_url(), PHP_URL_HOST );
 
-			$ssl_status = $this->wptw_ssl_verification();
+			$ssl_status = $this->tailwatch_ssl_verification();
 
 			if ( isset( $ssl_status['ssl_connected'] ) ) {
 				$ssl_connected = $ssl_status['ssl_connected'];
@@ -782,24 +782,24 @@ class SslVerificationController extends BaseController {
 	 * @param int|null $days_threshold Days threshold for alert
 	 * @return void
 	 */
-	public function wptw_trigger_ssl_expiry_alert( ?int $days_threshold = null ): void {
+	public function tailwatch_trigger_ssl_expiry_alert( ?int $days_threshold = null ): void {
 		try {
 			// Feature gate: drop the alert silently if the user has disabled
 			// Smart SSL since this event was scheduled. Single events stay in
 			// wp-cron until they fire; without this check, a disabled feature
 			// still pushes notifications to the user, which they would rightly
 			// consider a bug.
-			$enabled = $this->wptw_ssl_is_enable( array( 'field_1' ) );
+			$enabled = $this->tailwatch_ssl_is_enable( array( 'field_1' ) );
 			if ( empty( $enabled['feature_enable'] ) ) {
 				return;
 			}
 
 			// Fetch thresholds from settings
-			$alert_days_str = $this->wptw_ssl_is_enable( array( 'field_1', 'sub_options', 'field_3' ) )['feature_value'] ?? '30,14,7,1';
+			$alert_days_str = $this->tailwatch_ssl_is_enable( array( 'field_1', 'sub_options', 'field_3' ) )['feature_value'] ?? '30,14,7,1';
 			$alert_days     = array_map( 'intval', explode( ',', $alert_days_str ) );
 			rsort( $alert_days ); // Sort descending (e.g., 30, 14, 7, 3, 1)
 
-			$ssl_status = $this->wptw_get_ssl_verification_status();
+			$ssl_status = $this->tailwatch_get_ssl_verification_status();
 
 			if ( empty( $ssl_status ) || empty( $ssl_status['expiry_time'] ) ) {
 				return;
@@ -936,12 +936,12 @@ class SslVerificationController extends BaseController {
 	 *
 	 * @return bool
 	 */
-	public function wptw_ssl_push_notification_status(): bool {
+	public function tailwatch_ssl_push_notification_status(): bool {
 		$key               = 'default_feature_settings';
 		$option            = 'default_verify_ssl';
 		$field_name        = 'field_1';
 		$push_notification = new PushNotificationController();
-		return $push_notification->wptw_notification_enable_for_feature( $key, $option, $field_name );
+		return $push_notification->tailwatch_notification_enable_for_feature( $key, $option, $field_name );
 	}
 
 	/**
@@ -949,9 +949,9 @@ class SslVerificationController extends BaseController {
 	 *
 	 * @return array
 	 */
-	public function wptw_return_ssl_verify_status(): array {
+	public function tailwatch_return_ssl_verify_status(): array {
 		try {
-			$existing_data = $this->wptw_get_ssl_verification_status();
+			$existing_data = $this->tailwatch_get_ssl_verification_status();
 			if ( ! empty( $existing_data ) ) {
 				return array(
 					'ssl_connected'       => $existing_data['ssl_connected'],
@@ -1141,7 +1141,7 @@ class SslVerificationController extends BaseController {
 		}
 
 		$current_time = time();
-		$event_hook   = 'wptw_trigger_ssl_expiry_notice';
+		$event_hook   = 'tailwatch_trigger_ssl_expiry_notice';
 
 		// Clear existing hooks to prevent duplicates
 		wp_clear_scheduled_hook( $event_hook );
@@ -1157,7 +1157,7 @@ class SslVerificationController extends BaseController {
 		}
 
 		// Get alert days from settings
-		$alert_days_str = $this->wptw_ssl_is_enable( array( 'field_1', 'sub_options', 'field_3' ) )['feature_value'] ?? '30,14,7,1';
+		$alert_days_str = $this->tailwatch_ssl_is_enable( array( 'field_1', 'sub_options', 'field_3' ) )['feature_value'] ?? '30,14,7,1';
 		$alert_days     = array_map( 'intval', explode( ',', $alert_days_str ) );
 
 		// Schedule each alert
@@ -1196,7 +1196,7 @@ class SslVerificationController extends BaseController {
 			}
 		}
 		if ( $largest_passed > 0 && $days_remaining > 0 ) {
-			$existing             = $this->wptw_get_ssl_verification_status();
+			$existing             = $this->tailwatch_get_ssl_verification_status();
 			$already_fired_for_ts = isset( $existing['catch_up_fired_for_expiry_ts'] )
 				? (int) $existing['catch_up_fired_for_expiry_ts']
 				: 0;

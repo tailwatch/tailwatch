@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import Modal from "../../../Components/Modal/Modal";
 import { onResumeBackup } from "../BackupServices/BackupServices";
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 const ResumeModal = ({
   setOperationLoading,

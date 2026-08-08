@@ -14,7 +14,7 @@ use Tailwatch\Admin\App\Api\Traits\ContextAuthorizationTrait;
  * ## Authorization model
  *
  * These methods are reachable through the wp-admin AJAX router
- * (AjaxRequestController) — the upstream gate verifies `wp_ajax_nonce` AND
+ * (AjaxRequestController) — the upstream gate verifies `tailwatch_ajax_nonce` AND
  * `current_user_can('manage_options')` before dispatch.
  *
  * Each public method also calls `is_authorized_request()` (provided by
@@ -29,7 +29,7 @@ class UserDeletionController {
 	 * @param string $post_data JSON string containing user_id and optional reassign_id
 	 * @return array Response with success status
 	 */
-	public function wptw_delete_user( $post_data ) {
+	public function tailwatch_delete_user( $post_data ) {
 		try {
 			if ( ! $this->is_authorized_request() ) {
 				return $this->unauthorized_response();
@@ -148,12 +148,12 @@ class UserDeletionController {
 			// administrator role too, so a naive count of administrators would mis-treat
 			// them as guarantees of admin presence — they expire, get revoked, or hit
 			// their usage limit. Real-admin presence is "administrator role AND
-			// _wptw_user_status !== 'without_password'". Two conditions in this check:
+			// _tailwatch_user_status !== 'without_password'". Two conditions in this check:
 			//   1. The TARGET must be a real admin — deleting a temp admin doesn't
 			//      reduce real-admin count, so no last-admin gate applies to them.
 			//   2. After exclusion, real_admin_count must be > 1.
 			if ( in_array( 'administrator', $user->roles, true ) ) {
-				$target_status        = get_user_meta( $user_id, '_wptw_user_status', true );
+				$target_status        = get_user_meta( $user_id, '_tailwatch_user_status', true );
 				$target_is_real_admin = ( 'without_password' !== $target_status );
 
 				if ( $target_is_real_admin ) {
@@ -165,11 +165,11 @@ class UserDeletionController {
 								'meta_query' => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Admin-only listing endpoint; bounded result set.
 									'relation' => 'OR',
 									array(
-										'key'     => '_wptw_user_status',
+										'key'     => '_tailwatch_user_status',
 										'compare' => 'NOT EXISTS',
 									),
 									array(
-										'key'     => '_wptw_user_status',
+										'key'     => '_tailwatch_user_status',
 										'value'   => 'without_password',
 										'compare' => '!=',
 									),
@@ -239,7 +239,7 @@ class UserDeletionController {
 			$user_roles = implode( ', ', $user->roles );
 
 			// Allow plugins to perform actions before deletion
-			do_action( 'wptw_before_delete_user', $user_id, $reassign_id, $user );
+			do_action( 'tailwatch_before_delete_user', $user_id, $reassign_id, $user );
 
 			// Resolve reassign: must be null (delete path) or a valid positive ID (reassign path).
 			// Never pass 0 — WP core treats any non-null as reassign and would corrupt posts to author=0.
@@ -288,7 +288,7 @@ class UserDeletionController {
 			);
 
 			// Allow plugins to perform actions after deletion
-			do_action( 'wptw_after_delete_user', $user_id, $reassign_id, $username, $user_email );
+			do_action( 'tailwatch_after_delete_user', $user_id, $reassign_id, $username, $user_email );
 
 			return array(
 				'success' => true,
@@ -327,7 +327,7 @@ class UserDeletionController {
 	 * @param string $post_data JSON string containing array of user_ids and optional reassign_id
 	 * @return array Response with success status and results for each user
 	 */
-	public function wptw_bulk_delete_users( $post_data ) {
+	public function tailwatch_bulk_delete_users( $post_data ) {
 		try {
 			if ( ! $this->is_authorized_request() ) {
 				return $this->unauthorized_response();
@@ -423,7 +423,7 @@ class UserDeletionController {
 				// the real-admin count, and the gate only fires when the target itself
 				// is a real admin (deleting a temp admin doesn't reduce real presence).
 				if ( in_array( 'administrator', $user->roles, true ) ) {
-					$target_status        = get_user_meta( $user_id, '_wptw_user_status', true );
+					$target_status        = get_user_meta( $user_id, '_tailwatch_user_status', true );
 					$target_is_real_admin = ( 'without_password' !== $target_status );
 
 					if ( $target_is_real_admin ) {
@@ -435,11 +435,11 @@ class UserDeletionController {
 									'meta_query' => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Admin-only listing endpoint; bounded result set.
 										'relation' => 'OR',
 										array(
-											'key'     => '_wptw_user_status',
+											'key'     => '_tailwatch_user_status',
 											'compare' => 'NOT EXISTS',
 										),
 										array(
-											'key'     => '_wptw_user_status',
+											'key'     => '_tailwatch_user_status',
 											'value'   => 'without_password',
 											'compare' => '!=',
 										),
@@ -547,7 +547,7 @@ class UserDeletionController {
 	 * @param string $post_data JSON string containing user_id
 	 * @return array Response with content summary per post type
 	 */
-	public function wptw_get_user_content_summary( $post_data ) {
+	public function tailwatch_get_user_content_summary( $post_data ) {
 		try {
 			if ( ! $this->is_authorized_request() ) {
 				return $this->unauthorized_response();

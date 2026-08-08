@@ -1,11 +1,11 @@
 
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 const getImagePath = (imageName) => {
-    if (process.env.NODE_ENV === "development" && window.wptw_ajax?.images) {
-        return `${wptw_ajax.images}${imageName}`;
+    if (process.env.NODE_ENV === "development" && window.tailwatch_ajax?.images) {
+        return `${tailwatch_ajax.images}${imageName}`;
     }
-    return `${wptw_ajax.asset_url}${imageName}`;
+    return `${tailwatch_ajax.asset_url}${imageName}`;
 };
 
 // Export individual images

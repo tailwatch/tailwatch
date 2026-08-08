@@ -35,7 +35,7 @@ class OptionsModel {
 	 */
 	public function __construct() {
 		$hook_controller = new HookControllers();
-		$hook_controller->add_action_hook( 'wptw_inserting_rows_into_database', array( $this, 'insert_site_data' ) );
+		$hook_controller->add_action_hook( 'tailwatch_inserting_rows_into_database', array( $this, 'insert_site_data' ) );
 	}
 
 	/**
@@ -45,12 +45,12 @@ class OptionsModel {
 	 *
 	 * @return void
 	 */
-	public function wptw_upon_activation() {
+	public function tailwatch_upon_activation() {
 		global $wpdb;
-		$settings_table_name = $wpdb->prefix . WPTW_DB_TABLE_NAME;
-		$logs_table_name     = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
-		$baseline_table  	 = $wpdb->prefix . WPTW_DB_FILEMON_BASELINE_TABLE;
-		$scans_table         = $wpdb->prefix . WPTW_DB_FILEMON_SCANS_TABLE;
+		$settings_table_name = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
+		$logs_table_name     = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
+		$baseline_table  	 = $wpdb->prefix . TAILWATCH_DB_FILEMON_BASELINE_TABLE;
+		$scans_table         = $wpdb->prefix . TAILWATCH_DB_FILEMON_SCANS_TABLE;
 		$charset_collate     = $wpdb->get_charset_collate();
 
 		// dbDelta() requires the table name to be interpolated directly into the
@@ -151,24 +151,24 @@ class OptionsModel {
 		// current one. dbDelta re-parses every CREATE TABLE definition to diff it
 		// against the live tables on each call, so gating it keeps routine
 		// re-activations from repeating that work once the schema is already current.
-		if ( get_option( 'wptw_db_version' ) !== WPTW_DB_VERSION ) {
+		if ( get_option( 'tailwatch_db_version' ) !== TAILWATCH_DB_VERSION ) {
 			require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
 			foreach ( $create_tables as $sql ) {
 				dbDelta( $sql );
 			}
 
-			update_option( 'wptw_db_version', WPTW_DB_VERSION, false );
+			update_option( 'tailwatch_db_version', TAILWATCH_DB_VERSION, false );
 		}
 
-		add_option( 'wptw_plugin_activation_redirect', true, '', false );
+		add_option( 'tailwatch_plugin_activation_redirect', true, '', false );
 
 		// Seed operational options as NON-autoloaded. They are read only on specific
 		// admin screens (Cron Manager), so they must not load on every page request.
 		// Creating them here means later update_option() calls preserve the non-autoload
 		// state (autoload is only re-evaluated on creation).
-		add_option( 'wptw_paused_cron_jobs', array(), '', false );
-		add_option( 'wptw_custom_schedules', array(), '', false );
+		add_option( 'tailwatch_paused_cron_jobs', array(), '', false );
+		add_option( 'tailwatch_custom_schedules', array(), '', false );
 	}
 
 	/**
@@ -178,7 +178,7 @@ class OptionsModel {
 	 */
 	public function get_wp_admin_slug() {
 		if ( empty( $this->wp_admin_slug ) ) {
-			$this->wp_admin_slug = $this->wptw_generate_random_string();
+			$this->wp_admin_slug = $this->tailwatch_generate_random_string();
 		}
 		return $this->wp_admin_slug;
 	}
@@ -190,7 +190,7 @@ class OptionsModel {
 	 */
 	public function get_wp_param_slug() {
 		if ( empty( $this->wp_param_slug ) ) {
-			$this->wp_param_slug = $this->wptw_generate_random_string();
+			$this->wp_param_slug = $this->tailwatch_generate_random_string();
 		}
 		return $this->wp_param_slug;
 	}
@@ -202,7 +202,7 @@ class OptionsModel {
 	 */
 	public function get_wp_author_slug() {
 		if ( empty( $this->wp_author_slug ) ) {
-			$this->wp_author_slug = $this->wptw_generate_random_string();
+			$this->wp_author_slug = $this->tailwatch_generate_random_string();
 		}
 		return $this->wp_author_slug;
 	}
@@ -213,7 +213,7 @@ class OptionsModel {
 	 * @param int $length Length of the string. Default 6.
 	 * @return string Generated random string.
 	 */
-	public function wptw_generate_random_string( $length = 6 ) {
+	public function tailwatch_generate_random_string( $length = 6 ) {
 		$characters        = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 		$characters_length = strlen( $characters );
 		$random_string     = '';
@@ -230,9 +230,9 @@ class OptionsModel {
 	 *
 	 * @return array Site settings and configuration data.
 	 */
-	public function wptw_complete_site_data() {
+	public function tailwatch_complete_site_data() {
 		$roles_controller = new UserRolesController();
-		$role_options     = $roles_controller->wptw_generate_role_options();
+		$role_options     = $roles_controller->tailwatch_generate_role_options();
 		$user_id          = get_current_user_id();
 
 		return array(
@@ -2211,7 +2211,7 @@ class OptionsModel {
 								'description'       => 'Turn on to scan your site for broken links periodically.',
 								'placeholder'       => '',
 								'required'          => true,
-								'register'          => 'wptw_broken_link_checker',
+								'register'          => 'tailwatch_broken_link_checker',
 								'values'            => array(
 									'option' => array(
 										'value'    => '',
@@ -2228,7 +2228,7 @@ class OptionsModel {
 										'description' => 'Choose how often to scan for broken links.',
 										'placeholder' => '',
 										'required'    => true,
-										'register'    => 'wptw_broken_link_scan_frequency',
+										'register'    => 'tailwatch_broken_link_scan_frequency',
 										'values'      => array(
 											'option4' => array(
 												'value'    => '15 Days',
@@ -2521,7 +2521,7 @@ class OptionsModel {
 									),
 								),
 								'preview'     => array(
-									'action'   => 'wptw_preview_block_page',
+									'action'   => 'tailwatch_preview_block_page',
 									'variants'  => array(
 										array(
 											'key'   => 'temporary',
@@ -2565,22 +2565,6 @@ class OptionsModel {
 											'option' => array(
 												'value'    => '#764ba2',
 												'selected' => true,
-											),
-										),
-									),
-									'field_3' => array(
-										'key'         => 'block_page_background_image',
-										'id'          => 'block_page_background_image',
-										'type'        => 'file',
-										'label'       => 'Background Image',
-										'description' => 'Optional image shown behind the block page. When set, it is used instead of the background colors.',
-										'placeholder' => 'Upload a background image',
-										'required'    => false,
-										'register'    => 'block_page_background_image',
-										'values'      => array(
-											'option' => array(
-												'value'    => '',
-												'selected' => false,
 											),
 										),
 									),
@@ -3025,34 +3009,34 @@ class OptionsModel {
 	}
 
 	public function insert_site_data() {
-		$get_data = json_decode( get_option( WPTW_VISIT_DATA ), true );
+		$get_data = json_decode( get_option( TAILWATCH_VISIT_DATA ), true );
 		if ( is_array( $get_data ) ) {
 			$get_data['db_initialize']['cron_running']       = true;
 			$get_data['db_initialize']['function_started']   = true;
 			$get_data['db_initialize']['function_completed'] = false;
-			update_option( WPTW_VISIT_DATA, wp_json_encode( $get_data ) );
+			update_option( TAILWATCH_VISIT_DATA, wp_json_encode( $get_data ) );
 		}
 
 		$user_id = get_current_user_id();
 
-		$this->insert_rows_batch_wise( $this->wptw_complete_site_data(), $user_id );
+		$this->insert_rows_batch_wise( $this->tailwatch_complete_site_data(), $user_id );
 
-		$get_data = json_decode( get_option( WPTW_VISIT_DATA ), true );
+		$get_data = json_decode( get_option( TAILWATCH_VISIT_DATA ), true );
 		if ( is_array( $get_data ) ) {
 			$get_data['db_initialize']['function_started']     = false;
 			$get_data['db_initialize']['function_completed']   = true;
 			$get_data['db_initialize']['completion_timestamp'] = time();
-			update_option( WPTW_VISIT_DATA, wp_json_encode( $get_data ) );
+			update_option( TAILWATCH_VISIT_DATA, wp_json_encode( $get_data ) );
 		}
 	}
 
 	public function insert_rows_batch_wise( $insert_rows, $user_id ) {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 
 		$batch_size = 10;
 
-		$get_data = $this->wptw_get_initialization_data();
+		$get_data = $this->tailwatch_get_initialization_data();
 
 		$last_inserted_index = $this->get_last_insert_index();
 
@@ -3088,7 +3072,7 @@ class OptionsModel {
 				array(
 					'user_id'       => $user_id,
 					'child_of'      => 0,
-					'key'           => 'wptw_insert_rows',
+					'key'           => 'tailwatch_insert_rows',
 					'option'        => 'plugin_data_initialize',
 					'value'         => wp_json_encode( $store_value ),
 					'type'          => 'json',
@@ -3102,41 +3086,41 @@ class OptionsModel {
 			$get_data['last_inserted_index'] = $new_last_inserted_index;
 			$get_data['progress_percentage'] = $progress_percentage;
 			$get_data['progress_message']    = $progress_message;
-			$this->wptw_update_initialization_data( $get_data );
+			$this->tailwatch_update_initialization_data( $get_data );
 		}
 
 		if ( $new_last_inserted_index < count( $insert_rows ) ) {
-			wp_schedule_single_event( time() + 5, 'wptw_inserting_rows_into_database' );
+			wp_schedule_single_event( time() + 5, 'tailwatch_inserting_rows_into_database' );
 			return;
 		}
 
-		$get_data                         = $this->wptw_get_initialization_data();
+		$get_data                         = $this->tailwatch_get_initialization_data();
 		$get_data['initialize_completed'] = true;
 		$get_data['progress_message']     = 'All rows have been processed successfully.';
-		$this->wptw_update_initialization_data( $get_data );
+		$this->tailwatch_update_initialization_data( $get_data );
 
-		$visit_data = json_decode( get_option( WPTW_VISIT_DATA ), true );
+		$visit_data = json_decode( get_option( TAILWATCH_VISIT_DATA ), true );
 		if ( is_array( $visit_data ) ) {
 			$visit_data['db_initialize']['is_completed'] = true;
-			update_option( WPTW_VISIT_DATA, wp_json_encode( $visit_data ) );
+			update_option( TAILWATCH_VISIT_DATA, wp_json_encode( $visit_data ) );
 		}
 	}
 
 	public function get_last_insert_index() {
-		$get_data = $this->wptw_get_initialization_data();
+		$get_data = $this->tailwatch_get_initialization_data();
 		return ! empty( $get_data ) ? $get_data['last_inserted_index'] : 0;
 	}
 
-	public function wptw_get_initialization_data() {
-		$key      = 'wptw_insert_rows';
+	public function tailwatch_get_initialization_data() {
+		$key      = 'tailwatch_insert_rows';
 		$option   = 'plugin_data_initialize';
 		$db_model = new DBModel();
 		$result   = $db_model->get_value( $option, $key );
 		return ! empty( $result ) ? $result : null;
 	}
 
-	public function wptw_update_initialization_data( $get_data ) {
-		$key      = 'wptw_insert_rows';
+	public function tailwatch_update_initialization_data( $get_data ) {
+		$key      = 'tailwatch_insert_rows';
 		$option   = 'plugin_data_initialize';
 		$db_model = new DBModel();
 		$db_data  = array(
@@ -3151,7 +3135,7 @@ class OptionsModel {
 		$db_model->update_rows( $db_data, $where );
 	}
 
-	public function wptw_get_formatted_plugins() {
+	public function tailwatch_get_formatted_plugins() {
 		if ( ! function_exists( 'get_plugins' ) ) {
 			require_once ABSPATH . 'wp-admin/includes/plugin.php';
 		}
@@ -3184,7 +3168,7 @@ class OptionsModel {
 		return $formatted_plugins;
 	}
 
-	public function wptw_get_formatted_themes() {
+	public function tailwatch_get_formatted_themes() {
 		$all_themes       = wp_get_themes();
 		$formatted_themes = array();
 		$i                = 0;

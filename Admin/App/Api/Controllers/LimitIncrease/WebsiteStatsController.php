@@ -414,7 +414,7 @@ class WebsiteStatsController {
 	 * @param string $post_data JSON encoded post data containing sections parameter.
 	 * @return array Formatted stats suitable for frontend display.
 	 */
-	public function wptw_get_formatted_website_stats( $post_data ) {
+	public function tailwatch_get_formatted_website_stats( $post_data ) {
 		try {
 			if ( ! empty( $post_data ) ) {
 				$json_data = is_string( $post_data ) ? wp_unslash( $post_data ) : $post_data;

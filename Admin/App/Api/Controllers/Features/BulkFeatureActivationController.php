@@ -15,7 +15,7 @@ use Tailwatch\Admin\App\Api\Logging\Log;
  * Activates multiple feature options in a single request by delegating
  * each one to ResetByFeatureOptionController with remain_active=true.
  * Add-ons can register additional activatable feature keys via the
- * `wptw_bulk_activate_available_features` filter; unknown keys are
+ * `tailwatch_bulk_activate_available_features` filter; unknown keys are
  * recorded as `status: 'skipped'` rather than `'failed'` so the
  * response cleanly distinguishes "not handled by this build" from
  * "tried and errored".
@@ -56,7 +56,7 @@ class BulkFeatureActivationController {
 	 *     summary: array{ successful:int, failed:int, skipped:int, total:int }
 	 * }
 	 */
-	public function wptw_activate_features_bulk( $post_data ) {
+	public function tailwatch_activate_features_bulk( $post_data ) {
 		try {
 			$json_data = isset( $post_data ) ? wp_unslash( $post_data ) : '';
 			$data      = json_decode( $json_data, true );
@@ -74,7 +74,7 @@ class BulkFeatureActivationController {
 			// (e.g. add-on plugins) may hook the filter to register additional
 			// activatable feature keys; the default list is whatever the free
 			// plugin ships and knows how to enable on its own.
-			$available_features = (array) apply_filters( 'wptw_bulk_activate_available_features', self::get_free_features() );
+			$available_features = (array) apply_filters( 'tailwatch_bulk_activate_available_features', self::get_free_features() );
 
 			$reset_controller = new ResetByFeatureOptionController();
 
@@ -125,7 +125,7 @@ class BulkFeatureActivationController {
 				}
 
 				// Activate the feature
-				$result = $reset_controller->wptw_reset_feature_by_option(
+				$result = $reset_controller->tailwatch_reset_feature_by_option(
 					wp_json_encode(
 						array(
 							'feature_option' => $feature_option,
@@ -199,7 +199,7 @@ class BulkFeatureActivationController {
 
 	/**
 	 * Feature option keys the bulk activator recognises by default.
-	 * Extensions can add to this list via wptw_bulk_activate_available_features.
+	 * Extensions can add to this list via tailwatch_bulk_activate_available_features.
 	 *
 	 * @return string[]
 	 */

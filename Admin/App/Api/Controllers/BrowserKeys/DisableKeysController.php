@@ -23,7 +23,7 @@ class DisableKeysController {
 
 	public function __construct() {
 		$hook_controller = new HookControllers();
-		$hook_controller->add_action_hook( 'wp_enqueue_scripts', array( $this, 'wptw_disable_keys_options' ) );
+		$hook_controller->add_action_hook( 'wp_enqueue_scripts', array( $this, 'tailwatch_disable_keys_options' ) );
 	}
 
 	/**
@@ -42,30 +42,30 @@ class DisableKeysController {
 	/**
 	 * Enqueue disable-keys script and pass options to JS.
 	 */
-	public function wptw_disable_keys_options() {
+	public function tailwatch_disable_keys_options() {
 		$get_feature = $this->get_features_options();
 
 		if ( $get_feature ) {
 			wp_enqueue_style(
-				'wptw-toast-css',
-				WPTW_URI . 'Admin/Assets/css/wptw-toast.css',
+				'tailwatch-toast-css',
+				TAILWATCH_URI . 'Admin/Assets/css/tailwatch-toast.css',
 				array(),
-				WPTW_VERSION
+				TAILWATCH_VERSION
 			);
 
 			wp_enqueue_script(
-				'wptw-toast-js',
-				WPTW_URI . 'Admin/Assets/js/wptw-toast.js',
+				'tailwatch-toast-js',
+				TAILWATCH_URI . 'Admin/Assets/js/tailwatch-toast.js',
 				array(),
-				WPTW_VERSION,
+				TAILWATCH_VERSION,
 				true
 			);
 
 			wp_enqueue_script(
-				'wptw-disable-keys-js',
-				WPTW_URI . 'Admin/Assets/js/wptw-disable-keys.js',
-				array( 'wptw-toast-js' ),
-				WPTW_VERSION,
+				'tailwatch-disable-keys-js',
+				TAILWATCH_URI . 'Admin/Assets/js/tailwatch-disable-keys.js',
+				array( 'tailwatch-toast-js' ),
+				TAILWATCH_VERSION,
 				true
 			);
 
@@ -77,7 +77,7 @@ class DisableKeysController {
 				'dragDrop'       => isset( $get_feature['field_5']['options']['option']['selected'] ) && $get_feature['field_5']['options']['option']['selected'],
 			);
 
-			wp_localize_script( 'wptw-disable-keys-js', 'wptwDisableKeysOptions', $disable_keys_options );
+			wp_localize_script( 'tailwatch-disable-keys-js', 'tailwatchDisableKeysOptions', $disable_keys_options );
 		}
 	}
 }

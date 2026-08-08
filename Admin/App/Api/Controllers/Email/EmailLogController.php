@@ -63,7 +63,7 @@ class EmailLogController {
 	 *
 	 * @return array Status array with parent and feature enablement.
 	 */
-	public function wptw_email_log_is_enabled() {
+	public function tailwatch_email_log_is_enabled() {
 		$feature_settings = $this->get_features_options();
 
 		if ( empty( $feature_settings ) ) {
@@ -102,7 +102,7 @@ class EmailLogController {
 		$push_notification = new PushNotificationController();
 		$key               = 'default_feature_settings';
 		$option            = 'default_email_configure';
-		return $push_notification->wptw_notification_enable_for_feature( $key, $option, $field_name );
+		return $push_notification->tailwatch_notification_enable_for_feature( $key, $option, $field_name );
 	}
 
 	/**
@@ -222,7 +222,7 @@ class EmailLogController {
 					);
 
 					$monitoring_log = new MonitoringLogController();
-					$email_record_id = $monitoring_log->wptw_send_log_report( $data, 'default_email_logs', 'failed_email_log', null, '', array( 'facet_1' => $to ) );
+					$email_record_id = $monitoring_log->tailwatch_send_log_report( $data, 'default_email_logs', 'failed_email_log', null, '', array( 'facet_1' => $to ) );
 
 					// Log email failure using unified logging system.
 					// Headers / attachments / email_data are kept in the log
@@ -361,7 +361,7 @@ class EmailLogController {
 				);
 
 				$monitoring_log = new MonitoringLogController();
-				$email_record_id = $monitoring_log->wptw_send_log_report( $data, 'default_email_logs', 'success_email_log', null, '', array( 'facet_1' => $sent_to ) );
+				$email_record_id = $monitoring_log->tailwatch_send_log_report( $data, 'default_email_logs', 'success_email_log', null, '', array( 'facet_1' => $sent_to ) );
 
 				// Log email success using unified logging system.
 				// meta_data carries only the minimum the mobile app needs for

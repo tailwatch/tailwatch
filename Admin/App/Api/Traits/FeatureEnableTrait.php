@@ -22,16 +22,16 @@ trait FeatureEnableTrait {
 
 	/**
 	 * Public method for AjaxRequestController to call
-	 * This wraps the protected wptw_get_feature_status()
+	 * This wraps the protected tailwatch_get_feature_status()
 	 *
 	 * @param string|null $method_name The name of the method being called (optional)
 	 * @return array Feature status with 'feature_enable' key
 	 */
-	public function wptw_check_feature_enabled( $method_name = null ) {
+	public function tailwatch_check_feature_enabled( $method_name = null ) {
 		// Check for whitelist in the controller
-		// Controllers can define protected $wptw_feature_check_exemptions = ['method_name'];
-		if ( $method_name && isset( $this->wptw_feature_check_exemptions ) && is_array( $this->wptw_feature_check_exemptions ) ) {
-			if ( in_array( $method_name, $this->wptw_feature_check_exemptions ) ) {
+		// Controllers can define protected $tailwatch_feature_check_exemptions = ['method_name'];
+		if ( $method_name && isset( $this->tailwatch_feature_check_exemptions ) && is_array( $this->tailwatch_feature_check_exemptions ) ) {
+			if ( in_array( $method_name, $this->tailwatch_feature_check_exemptions ) ) {
 				return array(
 					'feature_enable' => true,
 					'parent_enable'  => true,
@@ -40,7 +40,7 @@ trait FeatureEnableTrait {
 			}
 		}
 
-		return $this->wptw_get_feature_status();
+		return $this->tailwatch_get_feature_status();
 	}
 
 	/**
@@ -49,8 +49,8 @@ trait FeatureEnableTrait {
 	 *
 	 * @return array|null
 	 */
-	protected function wptw_validate_feature_enabled() {
-		$status = $this->wptw_get_feature_status();
+	protected function tailwatch_validate_feature_enabled() {
+		$status = $this->tailwatch_get_feature_status();
 
 		if ( ! $status['feature_enable'] ) {
 			return array(
@@ -69,5 +69,5 @@ trait FeatureEnableTrait {
 	 *
 	 * @return array
 	 */
-	abstract protected function wptw_get_feature_status();
+	abstract protected function tailwatch_get_feature_status();
 }
