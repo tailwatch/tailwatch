@@ -1,22 +1,22 @@
 import axios from "axios";
 import { toast } from 'react-toastify';
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 export const blockUser = async ({ payload, setLoading, onClose, getData }) => {
   setLoading?.(true);
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_block_user');
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_block_user');
     formData.append('data', JSON.stringify(payload));
-    formData.append('nonce', wptw_ajax.nonce);
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    formData.append('nonce', tailwatch_ajax.nonce);
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     if (response?.data?.data?.code === 200) {
       toast.success(response.data.data.message || 'User blocked successfully');
       onClose?.();
-      // Wait for the user list (wptw_get_user_status) to refetch before resolving,
+      // Wait for the user list (tailwatch_get_user_status) to refetch before resolving,
       // so the caller's loading state stays active until the row reflects the new block.
       await getData?.();
       return true;
@@ -35,16 +35,16 @@ export const unblockUser = async ({ payload, setLoading, getData }) => {
   setLoading?.(true);
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_unblock_user');
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_unblock_user');
     formData.append('data', JSON.stringify(payload));
-    formData.append('nonce', wptw_ajax.nonce);
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    formData.append('nonce', tailwatch_ajax.nonce);
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     if (response?.data?.data?.code === 200) {
       toast.success(response.data.data.message || 'User unblocked successfully');
-      // Wait for wptw_get_user_status to refetch so the badge + menu reflect
+      // Wait for tailwatch_get_user_status to refetch so the badge + menu reflect
       // the unblocked state by the time this promise resolves.
       await getData?.();
       return true;
@@ -62,12 +62,12 @@ export const unblockUser = async ({ payload, setLoading, getData }) => {
 export const fetchUserData = async ({ setUserData, setLoading,setPagination, page = 1, limit = 10  }) => {
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_get_user_status');
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_get_user_status');
     formData.append('data', JSON.stringify({page,limit }));
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -91,12 +91,12 @@ export const fetchTempLoginData = async ({  setTempLoginData, setLoading,setFeat
   setLoading(true);
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_get_all_temporary_logins');
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_get_all_temporary_logins');
     formData.append('data', JSON.stringify({page,limit }));
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -152,11 +152,11 @@ export const fetchTempLoginData = async ({  setTempLoginData, setLoading,setFeat
 export const tempUserRoles = async ({ setTempRoles, setTempLang, setTempSlug, setLoading }) => {
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_get_roles_and_languages');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_get_roles_and_languages');
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -180,11 +180,11 @@ export const tempUserRoles = async ({ setTempRoles, setTempLang, setTempSlug, se
 export const fetchRoles = async ({ setRoles }) => {
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_get_all_roles');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_get_all_roles');
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -203,12 +203,12 @@ export const fetchRoles = async ({ setRoles }) => {
 export const userRoleChangeSubmit = async (userId, newRole, setUserData, setShowRoleChangePopup) => {
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_change_user_role');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_change_user_role');
+    formData.append('nonce', tailwatch_ajax.nonce);
     formData.append('data', JSON.stringify({ 'user_id': userId, 'new_role': newRole }));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
@@ -236,12 +236,12 @@ export const userRoleChangeSubmit = async (userId, newRole, setUserData, setShow
 export const updateTwoFa = async ({ userId, username, state, setUserData, setLoading }) => {
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_update_2fa_authentication_status');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_update_2fa_authentication_status');
+    formData.append('nonce', tailwatch_ajax.nonce);
     formData.append('data', JSON.stringify({ user_id: userId, is_enabled: state }));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -268,12 +268,12 @@ export const updateTwoFa = async ({ userId, username, state, setUserData, setLoa
 export const createTempUser = async (userData) => {
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_create_new_user');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_create_new_user');
+    formData.append('nonce', tailwatch_ajax.nonce);
     formData.append('data', JSON.stringify(userData));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -289,12 +289,12 @@ export const createTempUser = async (userData) => {
 export const updateTempUser = async (userData) => {
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_update_temporary_user');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_update_temporary_user');
+    formData.append('nonce', tailwatch_ajax.nonce);
     formData.append('data', JSON.stringify(userData));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -310,12 +310,12 @@ export const updateTempUser = async (userData) => {
 export const manageLoginStatus = async ({ user_id, enable, expiry_time, reset_login_count }) => {
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_manage_login_status');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_manage_login_status');
+    formData.append('nonce', tailwatch_ajax.nonce);
     formData.append('data', JSON.stringify({ user_id, enable, expiry_time, reset_login_count })); // ✅ added
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -332,12 +332,12 @@ export const deleteTempUsers = async ({ setIsDeleting, payload, fetchUserTempDat
   setIsDeleting(true);
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_delete_temporary_login');
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_delete_temporary_login');
     formData.append('data', JSON.stringify( payload ));
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -360,12 +360,12 @@ export const deleteTempUsers = async ({ setIsDeleting, payload, fetchUserTempDat
 export const getTemporaryUsers = async ({ user_id }) => {
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_get_temporary_user');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_get_temporary_user');
+    formData.append('nonce', tailwatch_ajax.nonce);
     formData.append('data', JSON.stringify({ user_id }));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -387,12 +387,12 @@ export const getTemporaryUsers = async ({ user_id }) => {
 export const updateRestrictLogin = async (userData) => {
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_update_user_expiry_status');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_update_user_expiry_status');
+    formData.append('nonce', tailwatch_ajax.nonce);
     formData.append('data', JSON.stringify(userData));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -408,12 +408,12 @@ export const updateRestrictLogin = async (userData) => {
 export const getUserContentSummary = async (user_id) => {
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_get_user_content_summary');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_get_user_content_summary');
+    formData.append('nonce', tailwatch_ajax.nonce);
     formData.append('data', JSON.stringify({ user_id }));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
@@ -426,12 +426,12 @@ export const getUserContentSummary = async (user_id) => {
 export const deleteUser = async (payload) => {
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_delete_user');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_delete_user');
+    formData.append('nonce', tailwatch_ajax.nonce);
     formData.append('data', JSON.stringify(payload));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
@@ -444,12 +444,12 @@ export const deleteUser = async (payload) => {
 export const bulkDeleteUsers = async (payload) => {
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_bulk_delete_users');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_bulk_delete_users');
+    formData.append('nonce', tailwatch_ajax.nonce);
     formData.append('data', JSON.stringify(payload));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
@@ -462,12 +462,12 @@ export const bulkDeleteUsers = async (payload) => {
 export const createUser = async (userData) => {
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_create_user');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_create_user');
+    formData.append('nonce', tailwatch_ajax.nonce);
     formData.append('data', JSON.stringify(userData));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
@@ -480,12 +480,12 @@ export const createUser = async (userData) => {
 export const updateUser = async (userData) => {
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_update_user');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_update_user');
+    formData.append('nonce', tailwatch_ajax.nonce);
     formData.append('data', JSON.stringify(userData));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
@@ -498,12 +498,12 @@ export const updateUser = async (userData) => {
 export const generateLoginLink = async ({ user_id }) => {
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_login_as_another_user');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_login_as_another_user');
+    formData.append('nonce', tailwatch_ajax.nonce);
     formData.append('data', JSON.stringify({ user_id }));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

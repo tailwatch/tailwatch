@@ -21,8 +21,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class BackupDbController {
 
-	private $get_live_logs = WPTW_LOGS_DIRECTORY . '/backup-logs/create_backup.json';
-	private $log_directory = WPTW_LOGS_DIRECTORY . '/backup-logs';
+	private $get_live_logs = TAILWATCH_LOGS_DIRECTORY . '/backup-logs/create_backup.json';
+	private $log_directory = TAILWATCH_LOGS_DIRECTORY . '/backup-logs';
 	private $process_manager;
 	private $backup_model;
 
@@ -41,22 +41,22 @@ class BackupDbController {
 		$this->process_manager = new ProcessManager();
 		$this->backup_model    = new BackupModel();
 		$hook_controller       = new HookControllers();
-		$hook_controller->add_action_hook( 'wptw_scan_db_tables_cron', array( $this, 'wptw_scan_db_tables' ) );
-		$hook_controller->add_action_hook( 'wptw_create_db_backup_cron', array( $this, 'wptw_create_db_backup' ) );
+		$hook_controller->add_action_hook( 'tailwatch_scan_db_tables_cron', array( $this, 'tailwatch_scan_db_tables' ) );
+		$hook_controller->add_action_hook( 'tailwatch_create_db_backup_cron', array( $this, 'tailwatch_create_db_backup' ) );
 	}
 
 	/**
 	 * Cron callback: scans DB tables and schedules create_db_backup cron.
 	 *
 	 */
-	public function wptw_scan_db_tables() {
+	public function tailwatch_scan_db_tables() {
 		try {
 			$feature_controller = new DBModel();
-			$wptw_key           = 'default_backup_scan';
+			$tailwatch_key           = 'default_backup_scan';
 			$option             = 'scan_backp';
 
 			$backup_controller = new BackupController();
-			$cancel_pause      = $backup_controller->wptw_backup_cancel_pause_data();
+			$cancel_pause      = $backup_controller->tailwatch_backup_cancel_pause_data();
 			if ( isset( $cancel_pause['scan_state'] ) && 'failed' === $cancel_pause['scan_state'] ) {
 				return; // terminal — mark_backup_failed already stopped everything; don't revive the DB phase.
 			}
@@ -65,14 +65,14 @@ class BackupDbController {
 				return;
 			}
 
-			$process_id = isset( $cancel_pause['process_id'] ) ? $cancel_pause['process_id'] : $this->process_manager->get_or_create_process( 'backup', 'wptw_backup_daily_scan' );
+			$process_id = isset( $cancel_pause['process_id'] ) ? $cancel_pause['process_id'] : $this->process_manager->get_or_create_process( 'backup', 'tailwatch_backup_daily_scan' );
 			$this->process_manager->heart_beat( $process_id );
 			$this->process_manager->update_state( $process_id, 'in_progress' );
 
-			$existing_data    = $feature_controller->get_recent_data( $option, $wptw_key );
+			$existing_data    = $feature_controller->get_recent_data( $option, $tailwatch_key );
 			$folder_date      = isset( $existing_data['folderDate'] ) ? $existing_data['folderDate'] : current_time( 'Y-m-d' );
 			$sql_id           = $existing_data['zipId'];
-			$backup_directory = WPTW_BACKUP_DIR . '/database/';
+			$backup_directory = TAILWATCH_BACKUP_DIR . '/database/';
 			if ( ! $existing_data ) {
 				$existing_data = array(
 					'tables'        => array(),
@@ -99,10 +99,10 @@ class BackupDbController {
 				$backup_controller->update_logs_records( 'Found ' . count( $tables ) . ' ' . $table_label . ' to backup' );
 
 				$db_data = array( 'value' => wp_json_encode( $existing_data ) );
-				$feature_controller->update_recent_row( $db_data, $wptw_key, $option );
+				$feature_controller->update_recent_row( $db_data, $tailwatch_key, $option );
 			}
 
-			wp_schedule_single_event( time() + 5, 'wptw_create_db_backup_cron' );
+			wp_schedule_single_event( time() + 5, 'tailwatch_create_db_backup_cron' );
 		} catch ( \Throwable $e ) {
 			if ( ! empty( $process_id ) ) {
 				$this->process_manager->mark_failed( $process_id, $e->getMessage() );
@@ -118,16 +118,16 @@ class BackupDbController {
 		}
 	}
 
-	public function wptw_create_db_backup() {
+	public function tailwatch_create_db_backup() {
 		try {
 			$feature_controller = new DBModel();
-			$wptw_key           = 'default_backup_scan';
+			$tailwatch_key           = 'default_backup_scan';
 			$option             = 'scan_backp';
 
 			$backup_controller = new BackupController();
 
-			$existing_data = $backup_controller->wptw_get_scan_backup_data();
-			$cancel_pause  = $backup_controller->wptw_backup_cancel_pause_data();
+			$existing_data = $backup_controller->tailwatch_get_scan_backup_data();
+			$cancel_pause  = $backup_controller->tailwatch_backup_cancel_pause_data();
 
 			// Terminal 'failed' run: bail BEFORE re-setting cron_running / re-activating the
 			// process row below (this worker would otherwise actively undo mark_backup_failed).
@@ -140,10 +140,10 @@ class BackupDbController {
 				$backup_controller->update_backup_cancel_pause( $cancel_pause );
 			}
 
-			$backup_controller->wptw_backup_function_started();
+			$backup_controller->tailwatch_backup_function_started();
 
 			$folder_date      = isset( $existing_data['folderDate'] ) ? $existing_data['folderDate'] : current_time( 'Y-m-d' );
-			$backup_directory = WPTW_BACKUP_DIR . '/';
+			$backup_directory = TAILWATCH_BACKUP_DIR . '/';
 			$this->create_backup_directories( $backup_directory, $folder_date );
 
 			if ( isset( $cancel_pause['scan_state'] ) && ( 'cancel' === $cancel_pause['scan_state'] || 'pause' === $cancel_pause['scan_state'] ) ) {
@@ -151,7 +151,7 @@ class BackupDbController {
 				return;
 			}
 
-			$process_id = isset( $cancel_pause['process_id'] ) ? $cancel_pause['process_id'] : $this->process_manager->get_or_create_process( 'backup', 'wptw_backup_daily_scan' );
+			$process_id = isset( $cancel_pause['process_id'] ) ? $cancel_pause['process_id'] : $this->process_manager->get_or_create_process( 'backup', 'tailwatch_backup_daily_scan' );
 
 			$this->process_manager->heart_beat( $process_id );
 			$this->process_manager->update_state( $process_id, 'in_progress' );
@@ -161,17 +161,17 @@ class BackupDbController {
 				$backup_controller->update_logs_records( 'Database backup complete', 'SUCCESS' );
 
 				$get_backup_option = new BackupMaintainController();
-				$backup_data       = $get_backup_option->wptw_get_backup_settings();
+				$backup_data       = $get_backup_option->tailwatch_get_backup_settings();
 				$get_backup_type   = ! empty( $backup_data['backupType'] ) ? $backup_data['backupType'] : null;
 
 				if ( 'Complete Backup' === $get_backup_type ) {
-					wp_schedule_single_event( time() + 5, 'wptw_backup_daily_scan' );
+					wp_schedule_single_event( time() + 5, 'tailwatch_backup_daily_scan' );
 				}
-				$backup_controller->wptw_backup_function_complete();
+				$backup_controller->tailwatch_backup_function_complete();
 				return;
 			}
 
-			$current_chunk   = (int) ( ( $existing_data['tables']['db_tables'][ $current_table ]['rows_processed'] ?? 0 ) / $this->wptw_db_chunk_size( $current_table, $existing_data ) );
+			$current_chunk   = (int) ( ( $existing_data['tables']['db_tables'][ $current_table ]['rows_processed'] ?? 0 ) / $this->tailwatch_db_chunk_size( $current_table, $existing_data ) );
 			$database_backup = $backup_directory . 'database/' . $folder_date . '/';
 
 			// ~20s yield deadline for this cron's chunk loop (paired with the size backstop below).
@@ -187,7 +187,7 @@ class BackupDbController {
 			$db_stuck    = ( $db_last === $db_position ) ? ( $db_stuck + 1 ) : 0;
 			if ( $db_stuck >= 3 ) {
 				$backup_controller->update_logs_records( "Database backup stalled on {$current_table} (chunk {$current_chunk}) — a row is likely too large to export within the host limit; aborting backup", 'ERROR' );
-				$backup_controller->wptw_mark_backup_failed( "db_chunk_no_progress:{$current_table}:{$current_chunk}" );
+				$backup_controller->tailwatch_mark_backup_failed( "db_chunk_no_progress:{$current_table}:{$current_chunk}" );
 				return;
 			}
 			$existing_data['tables']['db_last_position'] = $db_position;
@@ -198,7 +198,7 @@ class BackupDbController {
 			// deep) until a budget is hit or the backup finishes. Each pass re-picks the chunk from
 			// the updated in-memory state and honors a mid-run cancel/pause/failed + heartbeat.
 			while ( true ) {
-				$continue = $this->wptw_backup_table_in_chunks( $current_table, $database_backup, $existing_data, $backup_controller, $current_chunk );
+				$continue = $this->tailwatch_backup_table_in_chunks( $current_table, $database_backup, $existing_data, $backup_controller, $current_chunk );
 				if ( ! $continue ) {
 					break; // a budget was hit; the chunk method already rescheduled the next cron
 				}
@@ -212,9 +212,9 @@ class BackupDbController {
 				if ( ! $current_table ) {
 					break; // defensive: handle_backup_completion returns true only while work remains
 				}
-				$current_chunk = (int) ( ( $existing_data['tables']['db_tables'][ $current_table ]['rows_processed'] ?? 0 ) / $this->wptw_db_chunk_size( $current_table, $existing_data ) );
+				$current_chunk = (int) ( ( $existing_data['tables']['db_tables'][ $current_table ]['rows_processed'] ?? 0 ) / $this->tailwatch_db_chunk_size( $current_table, $existing_data ) );
 
-				$cancel_pause = $backup_controller->wptw_backup_cancel_pause_data();
+				$cancel_pause = $backup_controller->tailwatch_backup_cancel_pause_data();
 				if ( isset( $cancel_pause['scan_state'] ) && 'failed' === $cancel_pause['scan_state'] ) {
 					return; // another process marked the run failed — don't revive it
 				}
@@ -226,7 +226,7 @@ class BackupDbController {
 			}
 
 			$this->process_manager->heart_beat( $process_id );
-			$backup_controller->wptw_backup_function_complete();
+			$backup_controller->tailwatch_backup_function_complete();
 		} catch ( \Throwable $e ) {
 			if ( ! empty( $process_id ) ) {
 				$this->process_manager->mark_failed( $process_id, $e->getMessage() );
@@ -252,7 +252,7 @@ class BackupDbController {
 	 * @param array  $existing_data Run state (by reference; caches the result).
 	 * @return int Rows per chunk (1..500).
 	 */
-	private function wptw_db_chunk_size( $current_table, &$existing_data ) {
+	private function tailwatch_db_chunk_size( $current_table, &$existing_data ) {
 		$ref = &$existing_data['tables']['db_tables'][ $current_table ];
 		if ( isset( $ref['chunk_size'] ) ) {
 			return (int) $ref['chunk_size'];
@@ -277,13 +277,13 @@ class BackupDbController {
 		return $size;
 	}
 
-	public function wptw_backup_table_in_chunks( $current_table, $database_backup, &$existing_data, $backup_controller, $current_chunk = 0 ) {
+	public function tailwatch_backup_table_in_chunks( $current_table, $database_backup, &$existing_data, $backup_controller, $current_chunk = 0 ) {
 		// Backstop only — the ~20s deadline below is the primary pacer. SQL is streamed to disk per
 		// chunk (FILE_APPEND) so a bigger per-cron volume isn't held in memory; 50MB matches the
 		// .sql part size, so a cap-bounded cron is ~one part.
 		$max_size_per_cron = 50 * 1024 * 1024; // 50 MB backstop.
 
-		$chunk_size = $this->wptw_db_chunk_size( $current_table, $existing_data );
+		$chunk_size = $this->tailwatch_db_chunk_size( $current_table, $existing_data );
 
 		$is_options_table = $this->backup_model->is_options_table( $current_table );
 		$table_ref        = &$existing_data['tables']['db_tables'][ $current_table ];
@@ -383,7 +383,7 @@ class BackupDbController {
 		if ( $existing_data['tables']['db_size_process'] >= $max_size_per_cron || $time_budget_hit ) {
 			$existing_data['tables']['db_size_process'] = 0;
 			$backup_controller->update_backup_data( $existing_data );
-			wp_schedule_single_event( time() + 3, 'wptw_create_db_backup_cron' );
+			wp_schedule_single_event( time() + 3, 'tailwatch_create_db_backup_cron' );
 			return false;
 		}
 
@@ -391,7 +391,7 @@ class BackupDbController {
 	}
 
 	public function handle_backup_completion( &$existing_data, $backup_controller, $process_id ) {
-		$cancel_pause = $backup_controller->wptw_backup_cancel_pause_data();
+		$cancel_pause = $backup_controller->tailwatch_backup_cancel_pause_data();
 
 		// "Any incomplete table left?" — INCLUDING the current one if it still has chunks pending.
 		// get_next_table() only looked at tables AFTER the current, so a multi-chunk LAST table was
@@ -405,7 +405,7 @@ class BackupDbController {
 			}
 
 			// More chunks remain → tell the caller's loop to pack the next one. This used to
-			// self-recurse (handle → wptw_create_db_backup, one stack frame per chunk; a wide
+			// self-recurse (handle → tailwatch_create_db_backup, one stack frame per chunk; a wide
 			// table could nest hundreds deep), which is what blocked raising the per-cron budget.
 			// The loop keeps the stack flat. Yielding is owned by the chunk method, which
 			// reschedules the next cron and returns false when the 10MB/20s budget is hit.
@@ -413,7 +413,7 @@ class BackupDbController {
 		}
 
 		$get_backup_option = new BackupMaintainController();
-		$backup_data       = $get_backup_option->wptw_get_backup_settings();
+		$backup_data       = $get_backup_option->tailwatch_get_backup_settings();
 		$get_backup_type   = ! empty( $backup_data['backupType'] ) ? $backup_data['backupType'] : null;
 
 		$backup_controller->update_logs_records( 'Database backup complete', 'SUCCESS' );
@@ -426,7 +426,7 @@ class BackupDbController {
 				$this->cancel_or_pause_backup( $cancel_pause, $backup_controller );
 				return false;
 			}
-			wp_schedule_single_event( time() + 5, 'wptw_backup_daily_scan' );
+			wp_schedule_single_event( time() + 5, 'tailwatch_backup_daily_scan' );
 		} else {
 			$existing_data['completed']  = true;
 			$existing_data['scan_state'] = 'completed';
@@ -440,16 +440,16 @@ class BackupDbController {
 			}
 
 			$live_logs = new LiveLogsController();
-			$live_logs->wptw_live_logs_completed( true, $backup_controller->wptw_get_log_file_path() );
+			$live_logs->tailwatch_live_logs_completed( true, $backup_controller->tailwatch_get_log_file_path() );
 		}
 
 		return false;
 	}
 
 	public function cancel_or_pause_backup( $cancel_pause, $backup_controller ) {
-		$timestamp = wp_next_scheduled( 'wptw_create_db_backup_cron' );
+		$timestamp = wp_next_scheduled( 'tailwatch_create_db_backup_cron' );
 		if ( $timestamp ) {
-			wp_unschedule_event( $timestamp, 'wptw_create_db_backup_cron' );
+			wp_unschedule_event( $timestamp, 'tailwatch_create_db_backup_cron' );
 		}
 
 		if ( true === $cancel_pause['cron_running'] ) {
@@ -487,7 +487,7 @@ class BackupDbController {
 	/**
 	 * Get the list of tables to back up.
 	 *
-	 * When $malware_scan_only is true, fires the 'wptw_malware_scan_tables' filter
+	 * When $malware_scan_only is true, fires the 'tailwatch_malware_scan_tables' filter
 	 * so the pro plugin can supply the malware-scan-targeted table list. Falls back
 	 * to all tables if the filter returns an empty array (e.g. pro plugin inactive).
 	 *
@@ -496,7 +496,7 @@ class BackupDbController {
 	 */
 	public function get_tables_list( $malware_scan_only = false ) {
 		if ( $malware_scan_only ) {
-			$tables = apply_filters( 'wptw_malware_scan_tables', array() );
+			$tables = apply_filters( 'tailwatch_malware_scan_tables', array() );
 			if ( ! empty( $tables ) ) {
 				return $tables;
 			}
@@ -582,7 +582,19 @@ class BackupDbController {
 			}
 
 			$columns       = array_keys( $data[0] );
-			$insert_header = "INSERT INTO `$table_name` (`" . implode( '`, `', $columns ) . '`) VALUES ';
+			// Mysqldump-style serializer: the INSERT statements built here are written
+			// to a .sql backup file (via tailwatch_save_db_in_file below) and are never
+			// executed through $wpdb, so wpdb::prepare()/%i do not apply. $table_name and
+			// $columns are schema-derived; identifiers are backtick-escaped the same way
+			// mysqldump and phpMyAdmin escape them.
+			$escaped_table   = str_replace( '`', '``', $table_name );
+			$escaped_columns = array_map(
+				static function ( $column ) {
+					return '`' . str_replace( '`', '``', $column ) . '`';
+				},
+				$columns
+			);
+			$insert_header = 'INSERT INTO `' . $escaped_table . '` (' . implode( ', ', $escaped_columns ) . ') VALUES ';
 
 			$values  = array();
 			$search  = array( "\x00", "\x0a", "\x0d", "\x1a" ); // Special characters.
@@ -628,19 +640,19 @@ class BackupDbController {
 					// Flush current chunk if any.
 					if ( ! empty( $current_chunk ) ) {
 						$chunk_sql = $insert_header . implode( ",\n", $current_chunk ) . ";\n";
-						$this->wptw_save_db_in_file( $database_backup, $table_name, $chunk_sql, $existing_data, $backup_controller );
+						$this->tailwatch_save_db_in_file( $database_backup, $table_name, $chunk_sql, $existing_data, $backup_controller );
 						$total_size   += strlen( $chunk_sql );
 						$current_chunk = array();
 					}
 					// Write oversized row separately (one row per chunk).
 					$chunk_sql = $insert_header . $row . ";\n";
-					$this->wptw_save_db_in_file( $database_backup, $table_name, $chunk_sql, $existing_data, $backup_controller );
+					$this->tailwatch_save_db_in_file( $database_backup, $table_name, $chunk_sql, $existing_data, $backup_controller );
 					$total_size += strlen( $chunk_sql );
 				} else {
 					$current_chunk_size = strlen( $chunk_buffer . ( $chunk_buffer ? ",\n" : '' ) . $row );
 					if ( count( $current_chunk ) >= $chunk_max_rows || $current_chunk_size > $chunk_max_size ) {
 						$chunk_sql = $insert_header . implode( ",\n", $current_chunk ) . ";\n";
-						$this->wptw_save_db_in_file( $database_backup, $table_name, $chunk_sql, $existing_data, $backup_controller );
+						$this->tailwatch_save_db_in_file( $database_backup, $table_name, $chunk_sql, $existing_data, $backup_controller );
 						$total_size   += strlen( $chunk_sql );
 						$current_chunk = array();
 						$chunk_buffer  = '';
@@ -653,7 +665,7 @@ class BackupDbController {
 			// Flush remaining chunk.
 			if ( ! empty( $current_chunk ) ) {
 				$chunk_sql = $insert_header . implode( ",\n", $current_chunk ) . ";\n";
-				$this->wptw_save_db_in_file( $database_backup, $table_name, $chunk_sql, $existing_data, $backup_controller );
+				$this->tailwatch_save_db_in_file( $database_backup, $table_name, $chunk_sql, $existing_data, $backup_controller );
 				$total_size += strlen( $chunk_sql );
 			}
 		}
@@ -682,7 +694,7 @@ class BackupDbController {
 	 * @param object $backup_controller BackupController instance.
 	 * @return bool True on success.
 	 */
-	public function wptw_save_db_in_file( $database_backup, $table_name, $sql, &$existing_data, $backup_controller ) {
+	public function tailwatch_save_db_in_file( $database_backup, $table_name, $sql, &$existing_data, $backup_controller ) {
 		$max_file_size = 50 * 1024 * 1024; // 50 MB.
 
 		// Skip if $sql is null or empty.

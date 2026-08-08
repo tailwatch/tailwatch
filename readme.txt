@@ -109,7 +109,7 @@ This plugin connects to several external services. Each service, the data sent, 
 Used for license verification, push notification delivery, and optional deactivation feedback submission. License verification and push notification delivery are active only after you connect a free Tailwatch account from the plugin's License screen. The deactivation feedback submission is independent of any account connection and is sent only if you voluntarily submit it (see below).
 
 What is sent and when:
-- License verification: your anonymized Tailwatch user identifier and your site URL (query string), plus an `X-WPTW-Header-Key` request header containing the license credential issued when you connected your account. Sent on dashboard visits (throttled by a short server-side cache) and on demand when you click "Verify License". No system metadata is included in this request;
+- License verification: your anonymized Tailwatch user identifier and your site URL (query string), plus an `X-Tailwatch-Header-Key` request header containing the license credential issued when you connected your account. Sent on dashboard visits (throttled by a short server-side cache) and on demand when you click "Verify License". No system metadata is included in this request;
 - Mobile push notifications: anonymized user identifier, your site domain, and the notification type/severity tag (the plugin no longer sends a pre-written title or body; the Tailwatch service composes those from the event context below, and the request goes to a single relay endpoint authenticated with a per-site routing token request header). When mobile notifications are enabled, an additional event-context payload is also stored on api.wptailwatch.com so the mobile app can render notification details when you tap a push. This event-context payload contains: the event name and feature, the action and any state-change narrative (before/after) describing what occurred, the timestamp, the requesting admin's own forensic baseline (IP address and user agent at the time of the event), and per-event fields needed for the mobile app's detail view (for example, for Email / SMTP events the recipient address and subject line so the notification is actionable). It does NOT include message bodies, credentials, tokens, license keys, or any other secret. The event-context payload is held on api.wptailwatch.com only; it is NOT forwarded to Firebase Cloud Messaging (see below) — Firebase only ever receives the slim title/body/type payload.
 - Deactivation feedback: site domain, deactivation reason, plugin version, your "keep data / delete data" choice from the deactivation modal, and optional free-form comments — sent only if you voluntarily click "Submit & Deactivate" (the "Skip & Deactivate" button avoids any transmission).
 
@@ -185,21 +185,21 @@ No JavaScript library is loaded from a remote CDN at runtime; the bundle is serv
 
 == Privacy Policy ==
 
-Tailwatch stores all logs and operational data locally in your WordPress database (custom tables `{prefix}tw_settings`, `{prefix}tw_logs`, `{prefix}tw_filemon_baseline`, and `{prefix}tw_filemon_scans`) and on disk under `uploads/tailwatch/wptw-logs/` (logs and generated data) and `wp-content/tailwatch/wptw-backup/` (backup archives). Both directories are sealed with deny files (.htaccess, index.php, web.config) so their contents are not reachable over the web.
+Tailwatch stores all logs and operational data locally in your WordPress database (custom tables `{prefix}tw_settings`, `{prefix}tw_logs`, `{prefix}tw_filemon_baseline`, and `{prefix}tw_filemon_scans`) and on disk under `uploads/tailwatch/tailwatch-logs/` (logs and generated data) and `wp-content/tailwatch/tailwatch-backup/` (backup archives). Both directories are sealed with deny files (.htaccess, index.php, web.config) so their contents are not reachable over the web.
 
 Data stored locally:
 
 – **Activity logs** — login/logout events, failed login attempts (including the username submitted and the originating IP address), registrations, password reset events
 – **HTTP error logs** — 4xx / 5xx responses captured during the request lifecycle
 – **Email logs** — SMTP send results for outbound site mail
-– **Backup metadata** — backup catalogue entries (filenames, sizes, timestamps); the actual archives live in `wp-content/tailwatch/wptw-backup/`
+– **Backup metadata** — backup catalogue entries (filenames, sizes, timestamps); the actual archives live in `wp-content/tailwatch/tailwatch-backup/`
 – **File integrity baselines** — file path + hash snapshots used to detect added / modified / deleted files
 – **Broken link / redirection records** — URLs detected on your site and any redirects you have configured
 – **System configuration data** — every plugin feature toggle, schedule, and threshold lives in `{prefix}tw_settings`
 – **Client IP addresses** — captured for security-relevant events (failed logins, rate-limited requests, redirection hits) so the dashboard and audit trail can show where the event came from
 – **Login Defender state** — IP addresses temporarily locked out after repeated failed logins, throttling counters, and the per-IP activity history that drives the lockout decisions
 – **Geo-blocking lists** — IPs and IP ranges you have explicitly allow-listed or block-listed via the Geo-blocking screen, plus the timestamp and admin who created each rule
-– **Visit / usage telemetry** — a local-only counter in the `wptw_visit_data` option, used to drive in-dashboard onboarding hints; never transmitted
+– **Visit / usage telemetry** — a local-only counter in the `tailwatch_visit_data` option, used to drive in-dashboard onboarding hints; never transmitted
 
 No user data, logs, or PII is transmitted to external servers unless an optional feature is explicitly enabled by the site administrator. The full list of outbound transmissions is documented in the "External Services" section above.
 

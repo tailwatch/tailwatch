@@ -130,7 +130,7 @@ class CronJobManager {
 	     *
 		 * @param array $cron_jobs Array of registered cron jobs.
 		 */
-		$this->cron_jobs = apply_filters( 'wptw_register_cron_jobs', $this->cron_jobs );
+		$this->cron_jobs = apply_filters( 'tailwatch_register_cron_jobs', $this->cron_jobs );
 	}
 
 	/**
@@ -218,7 +218,7 @@ class CronJobManager {
 		 * Fires after all cron jobs have been scheduled.
 		 *
 		 */
-		do_action( 'wptw_all_crons_scheduled' );
+		do_action( 'tailwatch_all_crons_scheduled' );
 	}
 
 	/**
@@ -237,7 +237,7 @@ class CronJobManager {
 		 * Fires after all cron jobs have been unscheduled.
 		 *
 		 */
-		do_action( 'wptw_all_crons_unscheduled' );
+		do_action( 'tailwatch_all_crons_unscheduled' );
 	}
 
 	/**
@@ -295,7 +295,7 @@ class CronJobManager {
 	 *
 		 * @param array $results Sync results for each cron job.
 		 */
-		do_action( 'wptw_all_crons_synced', $results );
+		do_action( 'tailwatch_all_crons_synced', $results );
 
 		return $results;
 	}
@@ -304,7 +304,7 @@ class CronJobManager {
 	 * Get all registered cron hook names.
 	 *
 	 * Useful for cleanup during plugin uninstallation. Pro / extension plugins
-	 * can append their own cron hook names via the 'wptw_register_cron_hooks'
+	 * can append their own cron hook names via the 'tailwatch_register_cron_hooks'
 	 * filter so their scheduled events get swept from wp_options on uninstall
 	 * without needing to edit this file.
 	 *
@@ -313,52 +313,52 @@ class CronJobManager {
 	public static function get_all_cron_hooks() {
 		$hooks = array(
 			// Smart SSL.
-			'wptw_verify_ssl',
-			'wptw_trigger_ssl_expiry_notice',
+			'tailwatch_verify_ssl',
+			'tailwatch_trigger_ssl_expiry_notice',
 
 			// Database Optimizer (recurring + chained steps).
-			'wptw_start_database_optimization',
-			'wptw_auto_db_optimize',
+			'tailwatch_start_database_optimization',
+			'tailwatch_auto_db_optimize',
 
 			// Visit Features.
-			'wptw_activate_recommended_features',
-			'wptw_inserting_rows_into_database',
+			'tailwatch_activate_recommended_features',
+			'tailwatch_inserting_rows_into_database',
 
 			// Backup (recurring schedule + chained single events).
-			'wptw_backup_schedule_run',
-			'wptw_backup_daily_scan',
+			'tailwatch_backup_schedule_run',
+			'tailwatch_backup_daily_scan',
 
 			// Files Integrity (recurring schedule + chained single events).
-			'wptw_files_integrity_schedule_run',
-			'wptw_files_integrity_scan',
-			'wptw_integrity_old_entry_cleanup',
+			'tailwatch_files_integrity_schedule_run',
+			'tailwatch_files_integrity_scan',
+			'tailwatch_integrity_old_entry_cleanup',
 			'file_monitoring_cron_hook', // Legacy hook name.
 
 			// Hardening Audit (recurring schedule + chained single events + retention cleanup).
-			'wptw_hardening_audit_schedule_run',
-			'wptw_hardening_audit_scan',
-			'wptw_hardening_audit_report_cleanup',
+			'tailwatch_hardening_audit_schedule_run',
+			'tailwatch_hardening_audit_scan',
+			'tailwatch_hardening_audit_report_cleanup',
 
 			// Broken Link Checker (recurring schedule + chained single events).
-			'wptw_broken_link_checker_schedule',
-			'wptw_broken_link_checker',
+			'tailwatch_broken_link_checker_schedule',
+			'tailwatch_broken_link_checker',
 
 			// License Verification.
-			'wptw_license_verify_cron',
+			'tailwatch_license_verify_cron',
 
 			// Process Monitor Cleanup (weekly maintenance).
-			'wptw_process_monitor_cleanup',
+			'tailwatch_process_monitor_cleanup',
 
 			// Backup Cleanup (every 30 minutes maintenance).
-			'wptw_backup_cleanup_cron',
+			'tailwatch_backup_cleanup_cron',
 
 			// Process Recovery Watchdog (3-minute watchdog, scheduled outside the framework
 			// by ProcessRecoveryController — see its class docblock for rationale).
-			'wptw_process_recovery_monitor',
+			'tailwatch_process_recovery_monitor',
 
 			// Login Defender maintenance.
-			'wptw_login_defender_cleanup_expired',
-			'wptw_login_defender_cleanup',
+			'tailwatch_login_defender_cleanup_expired',
+			'tailwatch_login_defender_cleanup',
 
 			// Legacy unprefixed names — keep in the uninstall sweep for one release cycle.
 			'login_defender_cleanup_expired',
@@ -370,12 +370,12 @@ class CronJobManager {
 		 *
 		 * Pro / extension plugins should append their own cron hook names via
 		 * this filter so their scheduled events are cleaned from wp_options
-		 * when the free plugin is uninstalled. Mirrors the 'wptw_register_cron_jobs'
+		 * when the free plugin is uninstalled. Mirrors the 'tailwatch_register_cron_jobs'
 		 * pattern used to extend the job registry.
 	 	 *
 		 * @param array $hooks Cron hook names to clear on uninstall.
 		 */
-		return apply_filters( 'wptw_register_cron_hooks', $hooks );
+		return apply_filters( 'tailwatch_register_cron_hooks', $hooks );
 	}
 
 	/**
@@ -403,7 +403,7 @@ class CronJobManager {
 	     *
 		 * @param int $hooks_cleared Number of cron events that were cleared.
 		 */
-		do_action( 'wptw_all_cron_events_cleared', $hooks_cleared );
+		do_action( 'tailwatch_all_cron_events_cleared', $hooks_cleared );
 
 		return $hooks_cleared;
 	}

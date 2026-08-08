@@ -53,7 +53,7 @@ class RecoveryService {
 		);
 
 		if ( ! $process_data ) {
-			$this->debug_trace( '[WPTW Recovery] attempt_recovery: process not found — ID: ' . $process_id );
+			$this->debug_trace( '[TAILWATCH Recovery] attempt_recovery: process not found — ID: ' . $process_id );
 			return array(
 				'success' => false,
 				'message' => __( 'Process not found', 'tailwatch' ),
@@ -63,7 +63,7 @@ class RecoveryService {
 		// Step 1: Verify process is actually stuck.
 		if ( ! $this->processManager->is_process_stuck( $process_id ) ) {
 			$this->debug_trace( sprintf(
-				'[WPTW Recovery] attempt_recovery: process NOT stuck — ID: %s | State: %s | Last heartbeat: %s',
+				'[TAILWATCH Recovery] attempt_recovery: process NOT stuck — ID: %s | State: %s | Last heartbeat: %s',
 				$process_id,
 				$process_data['state'] ?? 'unknown',
 				$process_data['last_heartbeat'] ?? 'unknown'
@@ -86,7 +86,7 @@ class RecoveryService {
 
 			if ( $time_since_last_recovery < $required_wait_time ) {
 				$this->debug_trace( sprintf(
-					'[WPTW Recovery] attempt_recovery THROTTLED — ID: %s | Retry #%d | Last attempt: %s | Must wait %ds more',
+					'[TAILWATCH Recovery] attempt_recovery THROTTLED — ID: %s | Retry #%d | Last attempt: %s | Must wait %ds more',
 					$process_id,
 					$retry_count,
 					$last_recovery_attempt,
@@ -103,7 +103,7 @@ class RecoveryService {
 		// Step 3: Check if we can retry (max 3 attempts).
 		if ( ! $this->processManager->can_retry( $process_id ) ) {
 			$this->debug_trace( sprintf(
-				'[WPTW Recovery] attempt_recovery: MAX RETRIES reached — ID: %s | Type: %s | Retries: %d',
+				'[TAILWATCH Recovery] attempt_recovery: MAX RETRIES reached — ID: %s | Type: %s | Retries: %d',
 				$process_id,
 				$process_data['process_type'] ?? 'unknown',
 				$retry_count
@@ -123,7 +123,7 @@ class RecoveryService {
 
 			// Let the owning feature react to a permanent give-up (e.g. backup moves
 			// its UI state to 'failed' so the spinner resolves). Generic by design.
-			do_action( 'wptw_recovery_process_failed', $process_data );
+			do_action( 'tailwatch_recovery_process_failed', $process_data );
 
 			return array(
 				'success' => false,
@@ -141,7 +141,7 @@ class RecoveryService {
 		$stuck_duration = $now - $last_heartbeat;
 
 		$this->debug_trace( sprintf(
-			'[WPTW Recovery] Attempting recovery — ID: %s | Type: %s | State: %s | Stuck for: %ds | Retry attempt: %d | Cron: %s',
+			'[TAILWATCH Recovery] Attempting recovery — ID: %s | Type: %s | State: %s | Stuck for: %ds | Retry attempt: %d | Cron: %s',
 			$process_id,
 			$process_data['process_type'] ?? 'unknown',
 			$process_data['state'] ?? 'unknown',
@@ -211,7 +211,7 @@ class RecoveryService {
 		// Step 9: Log activity/error for visibility.
 		if ( $recovery_result['success'] ) {
 			$this->debug_trace( sprintf(
-				'[WPTW Recovery] SUCCESS — ID: %s | Attempt: %d | Action: %s',
+				'[TAILWATCH Recovery] SUCCESS — ID: %s | Attempt: %d | Action: %s',
 				$process_id,
 				$retry_attempt,
 				$recovery_result['action'] ?? 'unknown'
@@ -226,7 +226,7 @@ class RecoveryService {
 			);
 		} else {
 			$this->debug_trace( sprintf(
-				'[WPTW Recovery] FAILED — ID: %s | Attempt: %d | Action: %s | Reason: %s',
+				'[TAILWATCH Recovery] FAILED — ID: %s | Attempt: %d | Action: %s | Reason: %s',
 				$process_id,
 				$retry_attempt,
 				$recovery_result['action'] ?? 'unknown',
@@ -303,7 +303,7 @@ class RecoveryService {
 		// Allow consumers / pro plugin to register custom recovery handlers
 		// for their own process types via a filter. Returning a non-null array
 		// short-circuits the generic recovery path. Default null = use generic.
-		$custom = apply_filters( 'wptw_recover_process', null, $process_type, $process_data );
+		$custom = apply_filters( 'tailwatch_recover_process', null, $process_type, $process_data );
 		if ( is_array( $custom ) && isset( $custom['success'] ) ) {
 			return $custom;
 		}
@@ -314,7 +314,7 @@ class RecoveryService {
 		// migration, malware_scan, restore, etc.).
 		$cron_hook = $process_data['current_cron'] ?? null;
 		$this->debug_trace( sprintf(
-			'[WPTW Recovery] recover_generic_process — ID: %s | Type: %s | Cron hook: %s',
+			'[TAILWATCH Recovery] recover_generic_process — ID: %s | Type: %s | Cron hook: %s',
 			$process_data['process_id'] ?? 'unknown',
 			$process_type,
 			$cron_hook ?? 'MISSING'
@@ -350,7 +350,7 @@ class RecoveryService {
 			// Route the resume through the backup-type handler first; the generic branches
 			// below assume a database phase that not every backup type has.
 			$backup_type  = isset( $backup_data['backupType'] ) ? $backup_data['backupType'] : '';
-			$type_handled = apply_filters( 'wptw_handle_premium_backup_cron', false, $backup_type, $backup_data );
+			$type_handled = apply_filters( 'tailwatch_handle_premium_backup_cron', false, $backup_type, $backup_data );
 			if ( false !== $type_handled ) {
 				return array(
 					'success' => true,
@@ -366,22 +366,22 @@ class RecoveryService {
 			$cron_to_schedule = null;
 
 			if ( isset( $backup_data['database_optimize'] ) && $backup_data['database_optimize'] === true && isset( $backup_data['optimize_completed'] ) && $backup_data['optimize_completed'] === false ) {
-				$cron_to_schedule = 'wptw_auto_db_optimize';
+				$cron_to_schedule = 'tailwatch_auto_db_optimize';
 			}
 
 			if ( ! $cron_to_schedule && $db_in_scope && ! isset( $backup_data['tables'] ) ) {
-				$cron_to_schedule = 'wptw_scan_db_tables_cron';
+				$cron_to_schedule = 'tailwatch_scan_db_tables_cron';
 			}
 
 			if ( ! $cron_to_schedule && $db_in_scope && isset( $backup_data['tables'] ) ) {
 				$tables_completed = isset( $backup_data['tables']['completed'] ) ? $backup_data['tables']['completed'] : false;
 				if ( $tables_completed === false ) {
-					$cron_to_schedule = 'wptw_create_db_backup_cron';
+					$cron_to_schedule = 'tailwatch_create_db_backup_cron';
 				}
 			}
 
 			if ( ! $cron_to_schedule ) {
-				$cron_to_schedule = 'wptw_backup_daily_scan';
+				$cron_to_schedule = 'tailwatch_backup_daily_scan';
 			}
 
 			// Schedule the cron.
@@ -446,7 +446,7 @@ class RecoveryService {
 		try {
 			if ( ! wp_next_scheduled( $cron_hook ) ) {
 				wp_schedule_single_event( time() + 10, $cron_hook );
-				$this->debug_trace( '[WPTW Recovery] Cron RESCHEDULED — hook: ' . $cron_hook . ' (runs in 10s)' );
+				$this->debug_trace( '[TAILWATCH Recovery] Cron RESCHEDULED — hook: ' . $cron_hook . ' (runs in 10s)' );
 				Log::info(
 					'Scheduled ' . $cron_hook . ' to run in 10 seconds',
 					array(
@@ -462,14 +462,14 @@ class RecoveryService {
 				);
 			}
 
-			$this->debug_trace( '[WPTW Recovery] Cron ALREADY SCHEDULED — hook: ' . $cron_hook . ' (no reschedule needed)' );
+			$this->debug_trace( '[TAILWATCH Recovery] Cron ALREADY SCHEDULED — hook: ' . $cron_hook . ' (no reschedule needed)' );
 			return array(
 				'success' => true,
 				'action'  => 'Cron already scheduled',
 				'message' => __( 'Process cron already scheduled', 'tailwatch' ),
 			);
 		} catch ( \Exception $e ) {
-			$this->debug_trace( '[WPTW Recovery] Exception in recover_generic_process — ' . $e->getMessage() );
+			$this->debug_trace( '[TAILWATCH Recovery] Exception in recover_generic_process — ' . $e->getMessage() );
 			return array(
 				'success' => false,
 				'action'  => 'Exception occurred',

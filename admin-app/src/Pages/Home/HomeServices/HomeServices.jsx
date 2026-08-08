@@ -1,16 +1,16 @@
 import axios from "axios";
 import { toast } from "react-toastify";
 import { updateLocalStorage } from "../../../Components/Utils/HelperFunctions/LocalStorageHelper";
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 export const pieChartData = async () => {
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_disk_and_db_usage');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_disk_and_db_usage');
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -48,11 +48,11 @@ export const logsCount = async (setWidgetData, setLoadingLogs) => {
   setLoadingLogs(true);
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_dashboard_logs_count');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_dashboard_logs_count');
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -80,11 +80,11 @@ export const verifySslDetail = async (setVerifysslData, setLoadingVerify, setIsD
   setLoadingVerify(true);
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_return_ssl_verify_status');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_return_ssl_verify_status');
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -122,11 +122,11 @@ export const instantVerifySsl = async (setLoading, verifySslDetail, setVerifyssl
   setLoading(true);
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_verify_ssl_connection');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_verify_ssl_connection');
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -149,11 +149,11 @@ export const instantVerifySsl = async (setLoading, verifySslDetail, setVerifyssl
 export const startSecurityFeature = async () => {
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_start_security_features_process');    
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_start_security_features_process');    
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -171,12 +171,12 @@ export const activateFeatures = async (setIsLoading, payload) => {
   setIsLoading(true);
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_activate_features_bulk');
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_activate_features_bulk');
     formData.append('data', JSON.stringify({feature_options:payload}));
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -197,11 +197,11 @@ export const activateFeatures = async (setIsLoading, payload) => {
 export const graphData = async (setLoadingGraph, setValue, setNotificationsData) => {  
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_features_calculate_score');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_features_calculate_score');
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -236,11 +236,11 @@ export const scanningFeaturesDetails = async (setScanningFeatures, setLoadingSca
   setLoadingScanning(true);
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_scanning_feature_detail');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_scanning_feature_detail');
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -267,11 +267,11 @@ export const executeCronIfFailed = async () => {
 
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_execute_security_features_cron_if_failed");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_execute_security_features_cron_if_failed");
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
    

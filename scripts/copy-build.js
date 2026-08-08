@@ -17,7 +17,7 @@
  * this rewrite the flag SVGs (and any other bundled media) 404 at runtime.
  *
  * The hand-authored Admin/View/Static/images/ folder (logos referenced through
- * the wptw_ajax.asset_url localized variable) is intentionally left untouched.
+ * the tailwatch_ajax.asset_url localized variable) is intentionally left untouched.
  *
  * Invoked automatically by `npm run build` from the repo root.
  */

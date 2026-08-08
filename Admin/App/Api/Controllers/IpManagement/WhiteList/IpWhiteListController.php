@@ -24,11 +24,11 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class IpWhiteListController extends BaseController {
 
-	protected $wptw_feature_check_exemptions = array();
+	protected $tailwatch_feature_check_exemptions = array();
 
-	protected function wptw_get_feature_status() {
+	protected function tailwatch_get_feature_status() {
 		$controller = new IpManagementController();
-		$status     = $controller->wptw_ips_managment_is_enabled();
+		$status     = $controller->tailwatch_ips_managment_is_enabled();
 		return array(
 			'feature_enable' => $status['whitelist_feature'],
 			'parent_enable'  => $status['parent_enable'],
@@ -44,15 +44,15 @@ class IpWhiteListController extends BaseController {
 		$this->whitelist_model = new WhitelistModel();
 	}
 
-	public function wptw_handle_add_ip_whitelist( $postData ) {
+	public function tailwatch_handle_add_ip_whitelist( $postData ) {
 		try {
-			$validation = FieldsValidationController::wptw_validate_json_and_fields( $postData, array( 'ip_ranges', 'exemption' ) );
+			$validation = FieldsValidationController::tailwatch_validate_json_and_fields( $postData, array( 'ip_ranges', 'exemption' ) );
 			if ( ! $validation['success'] ) {
 				Log::error(
 					'IP whitelist addition validation failed',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_add_ip_whitelist',
+						'action'  => 'tailwatch_handle_add_ip_whitelist',
 						'title'  => 'IP Management',
 						'detail'  => $validation['message'],
 					)
@@ -69,7 +69,7 @@ class IpWhiteListController extends BaseController {
 					'Invalid exemption type for IP whitelist',
 					array(
 						'feature'   => 'ip_management',
-						'action'    => 'wptw_handle_add_ip_whitelist',
+						'action'    => 'tailwatch_handle_add_ip_whitelist',
 						'title'  => 'IP Management',
 						'exemption' => $exemption,
 					)
@@ -85,7 +85,7 @@ class IpWhiteListController extends BaseController {
 					'No IP ranges provided for whitelist',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_add_ip_whitelist',
+						'action'  => 'tailwatch_handle_add_ip_whitelist',
 						'title'  => 'IP Management',
 					)
 				);
@@ -106,7 +106,7 @@ class IpWhiteListController extends BaseController {
 					'Invalid IP ranges for whitelist',
 					array(
 						'feature'        => 'ip_management',
-						'action'         => 'wptw_handle_add_ip_whitelist',
+						'action'         => 'tailwatch_handle_add_ip_whitelist',
 						'title'  => 'IP Management',
 						'invalid_ranges' => implode( ', ', $invalid_ranges ),
 					)
@@ -133,7 +133,7 @@ class IpWhiteListController extends BaseController {
 					'IP whitelist addition failed',
 					array(
 						'feature'   => 'ip_management',
-						'action'    => 'wptw_handle_add_ip_whitelist',
+						'action'    => 'tailwatch_handle_add_ip_whitelist',
 						'title'  => 'IP Management',
 						'ip_ranges' => implode( ', ', $ip_ranges ),
 					)
@@ -149,7 +149,7 @@ class IpWhiteListController extends BaseController {
 				'IP whitelist created',
 				array(
 					'feature'   => 'ip_management',
-					'action'    => 'wptw_handle_add_ip_whitelist',
+					'action'    => 'tailwatch_handle_add_ip_whitelist',
 					'title'  => 'IP Management',
 					'ip_ranges' => implode( ', ', $ip_ranges ),
 					'exemption' => $exemption,
@@ -166,7 +166,7 @@ class IpWhiteListController extends BaseController {
 				'IP whitelist addition exception',
 				array(
 					'feature'   => 'ip_management',
-					'action'    => 'wptw_handle_add_ip_whitelist',
+					'action'    => 'tailwatch_handle_add_ip_whitelist',
 					'title'  => 'IP Management',
 					'exception' => $e,
 				)
@@ -178,15 +178,15 @@ class IpWhiteListController extends BaseController {
 		}
 	}
 
-	public function wptw_handle_update_ip_whitelist( $postData ) {
+	public function tailwatch_handle_update_ip_whitelist( $postData ) {
 		try {
-			$validation = FieldsValidationController::wptw_validate_json_and_fields( $postData, array( 'ip_ranges', 'exemption' ) );
+			$validation = FieldsValidationController::tailwatch_validate_json_and_fields( $postData, array( 'ip_ranges', 'exemption' ) );
 			if ( ! $validation['success'] ) {
 				Log::error(
 					'IP whitelist update validation failed',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_update_ip_whitelist',
+						'action'  => 'tailwatch_handle_update_ip_whitelist',
 						'title'  => 'IP Management',
 						'detail'  => $validation['message'],
 					)
@@ -201,7 +201,7 @@ class IpWhiteListController extends BaseController {
 					'Invalid exemption type for IP whitelist update',
 					array(
 						'feature'   => 'ip_management',
-						'action'    => 'wptw_handle_update_ip_whitelist',
+						'action'    => 'tailwatch_handle_update_ip_whitelist',
 						'title'  => 'IP Management',
 						'exemption' => $exemption,
 					)
@@ -216,7 +216,7 @@ class IpWhiteListController extends BaseController {
 					'No IP ranges provided for whitelist update',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_update_ip_whitelist',
+						'action'  => 'tailwatch_handle_update_ip_whitelist',
 						'title'  => 'IP Management',
 					)
 				);
@@ -236,7 +236,7 @@ class IpWhiteListController extends BaseController {
 					'Invalid IP ranges for whitelist update',
 					array(
 						'feature'        => 'ip_management',
-						'action'         => 'wptw_handle_update_ip_whitelist',
+						'action'         => 'tailwatch_handle_update_ip_whitelist',
 						'title'  => 'IP Management',
 						'invalid_ranges' => implode( ', ', $invalid_ranges ),
 					)
@@ -252,7 +252,7 @@ class IpWhiteListController extends BaseController {
 					'IP whitelist update failed',
 					array(
 						'feature'   => 'ip_management',
-						'action'    => 'wptw_handle_update_ip_whitelist',
+						'action'    => 'tailwatch_handle_update_ip_whitelist',
 						'title'  => 'IP Management',
 						'ip_ranges' => implode( ', ', $ip_ranges ),
 					)
@@ -266,7 +266,7 @@ class IpWhiteListController extends BaseController {
 				'IP whitelist updated',
 				array(
 					'feature'   => 'ip_management',
-					'action'    => 'wptw_handle_update_ip_whitelist',
+					'action'    => 'tailwatch_handle_update_ip_whitelist',
 					'title'  => 'IP Management',
 					'ip_ranges' => implode( ', ', $ip_ranges ),
 					'exemption' => $exemption,
@@ -281,7 +281,7 @@ class IpWhiteListController extends BaseController {
 				'IP whitelist update exception',
 				array(
 					'feature'   => 'ip_management',
-					'action'    => 'wptw_handle_update_ip_whitelist',
+					'action'    => 'tailwatch_handle_update_ip_whitelist',
 					'title'  => 'IP Management',
 					'exception' => $e,
 				)
@@ -293,15 +293,15 @@ class IpWhiteListController extends BaseController {
 		}
 	}
 
-	public function wptw_handle_delete_ip_whitelist( $postData ) {
+	public function tailwatch_handle_delete_ip_whitelist( $postData ) {
 		try {
-			$validation = FieldsValidationController::wptw_validate_json_and_fields( $postData, array( 'is_delete' ) );
+			$validation = FieldsValidationController::tailwatch_validate_json_and_fields( $postData, array( 'is_delete' ) );
 			if ( ! $validation['success'] ) {
 				Log::error(
 					'IP whitelist deletion validation failed',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_delete_ip_whitelist',
+						'action'  => 'tailwatch_handle_delete_ip_whitelist',
 						'title'  => 'IP Management',
 						'detail'  => $validation['message'],
 					)
@@ -319,7 +319,7 @@ class IpWhiteListController extends BaseController {
 						'No IP ranges provided for whitelist deletion',
 						array(
 							'feature' => 'ip_management',
-							'action'  => 'wptw_handle_delete_ip_whitelist',
+							'action'  => 'tailwatch_handle_delete_ip_whitelist',
 							'title'  => 'IP Management',
 						)
 					);
@@ -340,7 +340,7 @@ class IpWhiteListController extends BaseController {
 						'Invalid IP ranges for whitelist deletion',
 						array(
 							'feature'        => 'ip_management',
-							'action'         => 'wptw_handle_delete_ip_whitelist',
+							'action'         => 'tailwatch_handle_delete_ip_whitelist',
 							'title'  => 'IP Management',
 							'invalid_ranges' => implode( ', ', $invalid_ranges ),
 						)
@@ -358,7 +358,7 @@ class IpWhiteListController extends BaseController {
 					'IP whitelist deletion failed',
 					array(
 						'feature'   => 'ip_management',
-						'action'    => 'wptw_handle_delete_ip_whitelist',
+						'action'    => 'tailwatch_handle_delete_ip_whitelist',
 						'title'  => 'IP Management',
 						'is_delete' => $is_delete,
 						'ip_ranges' => $is_delete ? 'all' : implode( ', ', $ip_ranges ),
@@ -374,7 +374,7 @@ class IpWhiteListController extends BaseController {
 				'IP whitelist deleted',
 				array(
 					'feature'   => 'ip_management',
-					'action'    => 'wptw_handle_delete_ip_whitelist',
+					'action'    => 'tailwatch_handle_delete_ip_whitelist',
 					'title'  => 'IP Management',
 					'is_delete' => $is_delete,
 					'ip_ranges' => $is_delete ? 'all' : implode( ', ', $ip_ranges ),
@@ -389,7 +389,7 @@ class IpWhiteListController extends BaseController {
 				'IP whitelist deletion exception',
 				array(
 					'feature'   => 'ip_management',
-					'action'    => 'wptw_handle_delete_ip_whitelist',
+					'action'    => 'tailwatch_handle_delete_ip_whitelist',
 					'title'  => 'IP Management',
 					'exception' => $e,
 				)
@@ -401,15 +401,15 @@ class IpWhiteListController extends BaseController {
 		}
 	}
 
-	public function wptw_handle_get_ip_whitelists( $postData ) {
+	public function tailwatch_handle_get_ip_whitelists( $postData ) {
 		try {
-			$validation = FieldsValidationController::wptw_validate_json_and_fields( $postData, array() );
+			$validation = FieldsValidationController::tailwatch_validate_json_and_fields( $postData, array() );
 			if ( ! $validation['success'] ) {
 				Log::error(
 					'IP whitelist retrieval validation failed',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_get_ip_whitelists',
+						'action'  => 'tailwatch_handle_get_ip_whitelists',
 						'title'  => 'IP Management',
 						'detail'  => $validation['message'],
 					)
@@ -427,7 +427,7 @@ class IpWhiteListController extends BaseController {
 				'IP whitelist retrieved',
 				array(
 					'feature' => 'ip_management',
-					'action'  => 'wptw_handle_get_ip_whitelists',
+					'action'  => 'tailwatch_handle_get_ip_whitelists',
 					'title'  => 'IP Management',
 					'limit'   => $limit ?? 'all',
 					'page'    => $page ?? 1,
@@ -449,7 +449,7 @@ class IpWhiteListController extends BaseController {
 				'IP whitelist retrieval exception',
 				array(
 					'feature'   => 'ip_management',
-					'action'    => 'wptw_handle_get_ip_whitelists',
+					'action'    => 'tailwatch_handle_get_ip_whitelists',
 					'title'  => 'IP Management',
 					'exception' => $e,
 				)

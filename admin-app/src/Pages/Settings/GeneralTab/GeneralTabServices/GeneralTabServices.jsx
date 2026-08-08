@@ -1,7 +1,7 @@
 import axios from "axios";
 import { toast } from 'react-toastify';
 import { alertService } from "../../../../Components/AlertService/AlertService";
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 // Reset All Settings
 
@@ -17,12 +17,12 @@ const executeCronIfFailed = async (reset_id) => {
         isCronExecuting = true;
 
         const formData = new FormData();
-        formData.append("action", "wptw_global_ajax_handler");
-        formData.append("action_type", "wptw_reset_cron_if_failed");
+        formData.append("action", "tailwatch_global_ajax_handler");
+        formData.append("action_type", "tailwatch_reset_cron_if_failed");
         formData.append('data', JSON.stringify({ reset_id: reset_id }));
-        formData.append("nonce", wptw_ajax.nonce);
+        formData.append("nonce", tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
 
@@ -64,16 +64,16 @@ export const resetAllSettings = async ({ setIsReset, setLoading, setResetId, res
     setIsReset(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_start_reset_all_settings');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_start_reset_all_settings');
         // Always send both keys as real booleans — omitting reset_settings makes the backend default it to true.
         formData.append('data', JSON.stringify({
             reset_settings: Boolean(resetSettings),
             reset_data: Boolean(resetData),
         }));
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
 
@@ -105,15 +105,15 @@ export const resetAllSettings = async ({ setIsReset, setLoading, setResetId, res
 export const resetSettingStatus = async (newResetId) => {
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_reset_all_settings_status');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_reset_all_settings_status');
         if (newResetId) {
             formData.append('data', JSON.stringify({ reset_id: newResetId }));
         }
 
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         const { cron_running, reset_id } = response.data.data;
@@ -145,11 +145,11 @@ export const verifyRunningProcess = async ({ setIsRunning }) => {
     try {
         setIsRunning(true);
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_verify_import_and_reset_status');
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_verify_import_and_reset_status');
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         

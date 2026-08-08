@@ -1,12 +1,12 @@
 /*
  * Tailwatch Toast — small in-house toast component.
- * Used by frontend feature scripts (e.g. wptw-disable-keys.js) to surface
+ * Used by frontend feature scripts (e.g. tailwatch-disable-keys.js) to surface
  * brief warning messages to visitors. No external dependencies.
  *
  * Backgrounds meet WCAG 2.1 AA contrast (>= 4.5:1) against the white text.
  */
 
-.wptw-toast-container {
+.tailwatch-toast-container {
 	position: fixed;
 	top: 20px;
 	right: 20px;
@@ -15,7 +15,7 @@
 	max-width: 360px;
 }
 
-.wptw-toast {
+.tailwatch-toast {
 	display: block;
 	margin-bottom: 8px;
 	padding: 12px 18px;
@@ -31,20 +31,20 @@
 	word-wrap: break-word;
 }
 
-.wptw-toast.is-visible {
+.tailwatch-toast.is-visible {
 	opacity: 1;
 	transform: translateX(0);
 }
 
-.wptw-toast--warning { background: #b45309; }
-.wptw-toast--error   { background: #b91c1c; }
-.wptw-toast--success { background: #15803d; }
-.wptw-toast--info    { background: #1d4ed8; }
+.tailwatch-toast--warning { background: #b45309; }
+.tailwatch-toast--error   { background: #b91c1c; }
+.tailwatch-toast--success { background: #15803d; }
+.tailwatch-toast--info    { background: #1d4ed8; }
 
 /* Narrow phones — full-width with side gutters so the toast doesn't
  * crowd the right edge or get clipped. */
 @media (max-width: 480px) {
-	.wptw-toast-container {
+	.tailwatch-toast-container {
 		top: 12px;
 		right: 12px;
 		left: 12px;
@@ -54,11 +54,11 @@
 
 /* Honor reduced-motion: keep the fade but skip the slide. */
 @media (prefers-reduced-motion: reduce) {
-	.wptw-toast {
+	.tailwatch-toast {
 		transition: opacity 0.15s linear;
 		transform: none;
 	}
-	.wptw-toast.is-visible {
+	.tailwatch-toast.is-visible {
 		transform: none;
 	}
 }

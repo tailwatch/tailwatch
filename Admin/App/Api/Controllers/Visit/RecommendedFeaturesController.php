@@ -52,7 +52,7 @@ class RecommendedFeaturesController {
 		$this->processManager = new ProcessManager();
 		$this->register_process_monitoring();
 		$hook_controller = new HookControllers();
-		$hook_controller->add_action_hook( 'wptw_activate_recommended_features', array( $this, 'wptw_implement_and_verify_features' ) );
+		$hook_controller->add_action_hook( 'tailwatch_activate_recommended_features', array( $this, 'tailwatch_implement_and_verify_features' ) );
 	}
 
 	/**
@@ -63,7 +63,7 @@ class RecommendedFeaturesController {
 		ProcessManager::register_process(
 			array(
 				'process_type'    => 'recommended_features',
-				'cron_hooks'      => array( 'wptw_activate_recommended_features' ),
+				'cron_hooks'      => array( 'tailwatch_activate_recommended_features' ),
 				'stuck_threshold' => 300,
 				'max_retries'     => 3,
 			)
@@ -75,7 +75,7 @@ class RecommendedFeaturesController {
 	 *
 	 * @return array Feature implementation status data.
 	 */
-	public function wptw_get_feature_implement_status() {
+	public function tailwatch_get_feature_implement_status() {
 		return $this->get_feature_data( 'start_features_implement' );
 	}
 
@@ -84,7 +84,7 @@ class RecommendedFeaturesController {
 	 *
 	 * @param array $options Status data to update.
 	 */
-	public function wptw_update_feature_implement_status( $options ) {
+	public function tailwatch_update_feature_implement_status( $options ) {
 		$this->update_feature_data( 'start_features_implement', $options );
 	}
 
@@ -92,12 +92,12 @@ class RecommendedFeaturesController {
 	 * Get feature data from database
 	 *
 	 * @param string $option   Option name.
-	 * @param string $wptw_key Key identifier.
+	 * @param string $tailwatch_key Key identifier.
 	 * @return array Feature data.
 	 */
-	private function get_feature_data( $option, $wptw_key = 'verify_visit_options' ) {
+	private function get_feature_data( $option, $tailwatch_key = 'verify_visit_options' ) {
 		$db_model = new DBModel();
-		return $db_model->get_recent_data( $option, $wptw_key );
+		return $db_model->get_recent_data( $option, $tailwatch_key );
 	}
 
 	/**
@@ -105,12 +105,12 @@ class RecommendedFeaturesController {
 	 *
 	 * @param string $option   Option name.
 	 * @param array  $data     Data to update.
-	 * @param string $wptw_key Key identifier.
+	 * @param string $tailwatch_key Key identifier.
 	 */
-	private function update_feature_data( $option, $data, $wptw_key = 'verify_visit_options' ) {
+	private function update_feature_data( $option, $data, $tailwatch_key = 'verify_visit_options' ) {
 		$db_model = new DBModel();
 		$db_data  = array( 'value' => wp_json_encode( $data ) );
-		$db_model->update_recent_row( $db_data, $wptw_key, $option );
+		$db_model->update_recent_row( $db_data, $tailwatch_key, $option );
 	}
 
 	/**
@@ -119,7 +119,7 @@ class RecommendedFeaturesController {
 	 * @param string $post_data JSON encoded post data.
 	 * @return array Response with status code and message.
 	 */
-	public function wptw_start_features_implementation( $post_data ) {
+	public function tailwatch_start_features_implementation( $post_data ) {
 		$setup_configuration = null;
 
 		try {
@@ -221,14 +221,14 @@ class RecommendedFeaturesController {
 
 			$db_model->insert_row( $db_data, $db_data_format );
 
-			$get_data = json_decode( get_option( WPTW_VISIT_DATA ), true );
+			$get_data = json_decode( get_option( TAILWATCH_VISIT_DATA ), true );
 			if ( isset( $get_data['recommended_features'] ) && is_array( $get_data['recommended_features'] ) ) {
 				$get_data['recommended_features']['is_completed'] = true;
 			}
 
-			update_option( WPTW_VISIT_DATA, wp_json_encode( $get_data ) );
+			update_option( TAILWATCH_VISIT_DATA, wp_json_encode( $get_data ) );
 
-			$scheduled = wp_schedule_single_event( time() + 10, 'wptw_activate_recommended_features' );
+			$scheduled = wp_schedule_single_event( time() + 10, 'tailwatch_activate_recommended_features' );
 
 			if ( false === $scheduled ) {
 				Log::error(
@@ -298,8 +298,8 @@ class RecommendedFeaturesController {
 	 *
 	 * @return array Process status information.
 	 */
-	public function wptw_recommended_features_process() {
-		$process_status = $this->wptw_get_feature_implement_status();
+	public function tailwatch_recommended_features_process() {
+		$process_status = $this->tailwatch_get_feature_implement_status();
 
 		return array(
 			'cron_running'         => isset( $process_status['cron_running'] ) ? $process_status['cron_running'] : false,
@@ -317,62 +317,62 @@ class RecommendedFeaturesController {
 	/**
 	 * Implement and verify recommended features
 	 */
-	public function wptw_implement_and_verify_features() {
-		$process_id    = $this->processManager->get_or_create_process( 'recommended_features', 'wptw_activate_recommended_features', array() );
+	public function tailwatch_implement_and_verify_features() {
+		$process_id    = $this->processManager->get_or_create_process( 'recommended_features', 'tailwatch_activate_recommended_features', array() );
 		$this->processManager->update_state( $process_id, 'in_progress' );
 
-		$progress_data = $this->wptw_get_feature_implement_status();
+		$progress_data = $this->tailwatch_get_feature_implement_status();
 
 		if ( false === $progress_data['cron_running'] ) {
 			$progress_data['cron_running'] = true;
-			$this->wptw_update_feature_implement_status( $progress_data );
+			$this->tailwatch_update_feature_implement_status( $progress_data );
 		}
 
 		$progress_data['function_started']   = true;
 		$progress_data['function_completed'] = false;
-		$this->wptw_update_feature_implement_status( $progress_data );
+		$this->tailwatch_update_feature_implement_status( $progress_data );
 
 		if ( 'default_settings' === $progress_data['setup_configuration'] ) {
 			if ( false === $progress_data['update_default_settings'] ) {
-				$this->wptw_implement_recommended_features();
-				$this->wptw_recommended_feature_complete();
+				$this->tailwatch_implement_recommended_features();
+				$this->tailwatch_recommended_feature_complete();
 				return;
 			}
 		} elseif ( 'custom_settings' === $progress_data['setup_configuration'] ) {
 			if ( true !== $progress_data['recommended_completed'] ) {
 				$progress_data['recommended_completed'] = true;
-				$this->wptw_update_feature_implement_status( $progress_data );
+				$this->tailwatch_update_feature_implement_status( $progress_data );
 			}
 		}
 
 		if ( true === $progress_data['recommended_completed'] ) {
 			$progress_data['is_completed'] = true;
-			$this->wptw_update_feature_implement_status( $progress_data );
+			$this->tailwatch_update_feature_implement_status( $progress_data );
 
-			$visit_data = json_decode( get_option( WPTW_VISIT_DATA ), true );
+			$visit_data = json_decode( get_option( TAILWATCH_VISIT_DATA ), true );
 			if ( isset( $visit_data['features_implemented'] ) && is_array( $visit_data['features_implemented'] ) ) {
 				$visit_data['features_implemented']['is_completed'] = true;
 			}
-			update_option( WPTW_VISIT_DATA, wp_json_encode( $visit_data ) );
+			update_option( TAILWATCH_VISIT_DATA, wp_json_encode( $visit_data ) );
 
 			$this->processManager->mark_completed( $process_id );
 		} else {
 			$this->processManager->heart_beat( $process_id );
-			wp_schedule_single_event( time() + 5, 'wptw_activate_recommended_features' );
+			wp_schedule_single_event( time() + 5, 'tailwatch_activate_recommended_features' );
 		}
 
-		$this->wptw_recommended_feature_complete();
+		$this->tailwatch_recommended_feature_complete();
 	}
 
 	/**
 	 * Mark recommended feature implementation as complete
 	 */
-	public function wptw_recommended_feature_complete() {
-		$progress_data                         = $this->wptw_get_feature_implement_status();
+	public function tailwatch_recommended_feature_complete() {
+		$progress_data                         = $this->tailwatch_get_feature_implement_status();
 		$progress_data['completion_timestamp'] = time();
 		$progress_data['function_completed']   = true;
 		$progress_data['function_started']     = false;
-		$this->wptw_update_feature_implement_status( $progress_data );
+		$this->tailwatch_update_feature_implement_status( $progress_data );
 	}
 
 	/**
@@ -380,7 +380,7 @@ class RecommendedFeaturesController {
 	 *
 	 * @return array Response with status and message.
 	 */
-	public function wptw_run_feature_implement_cron_if_failed() {
+	public function tailwatch_run_feature_implement_cron_if_failed() {
 		try {
 			// Verify user capability.
 			if ( ! current_user_can( 'manage_options' ) ) {
@@ -403,11 +403,11 @@ class RecommendedFeaturesController {
 				);
 			}
 
-			$progress_data = $this->wptw_get_feature_implement_status();
+			$progress_data = $this->tailwatch_get_feature_implement_status();
 
 			if ( false === $progress_data['cron_running'] ) {
-				if ( ! wp_next_scheduled( 'wptw_activate_recommended_features' ) ) {
-					$cron_scheduled = wp_schedule_single_event( time() + 5, 'wptw_activate_recommended_features' );
+				if ( ! wp_next_scheduled( 'tailwatch_activate_recommended_features' ) ) {
+					$cron_scheduled = wp_schedule_single_event( time() + 5, 'tailwatch_activate_recommended_features' );
 
 					if ( $cron_scheduled ) {
 						Log::info(
@@ -486,9 +486,9 @@ class RecommendedFeaturesController {
 	/**
 	 * Implement recommended features in batches
 	 */
-	public function wptw_implement_recommended_features() {
+	public function tailwatch_implement_recommended_features() {
 		$recommended_features = self::$recommended_features;
-		$progress_data        = $this->wptw_get_feature_implement_status();
+		$progress_data        = $this->tailwatch_get_feature_implement_status();
 		$processed            = isset( $progress_data['processed_features'] ) && is_array( $progress_data['processed_features'] ) ? $progress_data['processed_features'] : array();
 		$batch_size           = 5;
 		$to_process           = array();
@@ -506,11 +506,11 @@ class RecommendedFeaturesController {
 
 		if ( empty( $to_process ) ) {
 			// All features processed.
-			$this->wptw_update_progress_status( $total_features, $total_features );
+			$this->tailwatch_update_progress_status( $total_features, $total_features );
 			$progress_data['processed_features']      = $recommended_features;
 			$progress_data['recommended_completed']   = true;
 			$progress_data['update_default_settings'] = true;
-			$this->wptw_update_feature_implement_status( $progress_data );
+			$this->tailwatch_update_feature_implement_status( $progress_data );
 			return;
 		}
 
@@ -520,23 +520,23 @@ class RecommendedFeaturesController {
 				'feature_option' => $feature,
 				'remain_active'  => false,
 			);
-			$reset_feature->wptw_reset_feature_by_option( wp_json_encode( $feature_data ) );
+			$reset_feature->tailwatch_reset_feature_by_option( wp_json_encode( $feature_data ) );
 			$processed[] = $feature;
 			++$completed_features;
 		}
 
-		$this->wptw_update_progress_status( $completed_features, $total_features );
-		$progress_data                       = $this->wptw_get_feature_implement_status();
+		$this->tailwatch_update_progress_status( $completed_features, $total_features );
+		$progress_data                       = $this->tailwatch_get_feature_implement_status();
 		$progress_data['processed_features'] = $processed;
-		$this->wptw_update_feature_implement_status( $progress_data );
+		$this->tailwatch_update_feature_implement_status( $progress_data );
 
 		if ( $completed_features < $total_features ) {
-			wp_schedule_single_event( time() + 5, 'wptw_activate_recommended_features' );
+			wp_schedule_single_event( time() + 5, 'tailwatch_activate_recommended_features' );
 		} else {
 			$progress_data['recommended_completed']   = true;
 			$progress_data['update_default_settings'] = true;
-			$this->wptw_update_feature_implement_status( $progress_data );
-			wp_schedule_single_event( time() + 5, 'wptw_activate_recommended_features' );
+			$this->tailwatch_update_feature_implement_status( $progress_data );
+			wp_schedule_single_event( time() + 5, 'tailwatch_activate_recommended_features' );
 		}
 	}
 
@@ -546,17 +546,17 @@ class RecommendedFeaturesController {
 	 * @param int $completed_features Number of completed features.
 	 * @param int $total_features     Total number of features.
 	 */
-	public function wptw_update_progress_status( $completed_features, $total_features ) {
+	public function tailwatch_update_progress_status( $completed_features, $total_features ) {
 		$progress_percentage = ( $total_features > 0 ) ? round( ( $completed_features / $total_features ) * 50 ) : 0;
 		$is_completed        = ( $completed_features === $total_features );
 
-		$progress_data             = $this->wptw_get_feature_implement_status();
+		$progress_data             = $this->tailwatch_get_feature_implement_status();
 		$progress_data['progress'] = $progress_percentage;
 
 		if ( $is_completed ) {
 			$progress_data['recommended_completed'] = $is_completed;
 		}
-		$this->wptw_update_feature_implement_status( $progress_data );
+		$this->tailwatch_update_feature_implement_status( $progress_data );
 	}
 
 	/**
@@ -566,14 +566,14 @@ class RecommendedFeaturesController {
 	 * @param bool $is_active Current active status.
 	 * @return bool Success status.
 	 */
-	public function wptw_update_parent_active_status( $id, $is_active ) {
+	public function tailwatch_update_parent_active_status( $id, $is_active ) {
 		if ( ! $is_active ) {
 			$feature_data        = array(
 				'featureId' => $id,
 				'is_active' => true,
 			);
 			$features_controller = new FeaturesController();
-			$response            = $features_controller->wptw_update_feature_status( null, $feature_data );
+			$response            = $features_controller->tailwatch_update_feature_status( null, $feature_data );
 			return ! empty( $response['feature_data'] ) && 200 === $response['code'];
 		}
 
@@ -586,7 +586,7 @@ class RecommendedFeaturesController {
 	 * @param string $option Feature option name.
 	 * @return array|null Feature ID and active status.
 	 */
-	public function wptw_get_feature_id( $option ) {
+	public function tailwatch_get_feature_id( $option ) {
 		$db_model     = new DBModel();
 		$key          = 'default_feature_settings';
 		$feature_data = $db_model->get_log_value( $key, $option );

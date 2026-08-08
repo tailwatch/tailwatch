@@ -40,45 +40,45 @@ class SecureDirectoryService {
 	 * (not just existence). Bumping this also lets us detect older deny files
 	 * written by previous service versions if we ever need to migrate.
 	 */
-	private const HTACCESS_MARKER = '# WPTW-SecureDirectory v1';
+	private const HTACCESS_MARKER = '# TAILWATCH-SecureDirectory v1';
 
 	/**
 	 * Marker string in index.php used by is_protected() to verify content.
 	 */
-	private const INDEX_MARKER = '// WPTW-SecureDirectory v1';
+	private const INDEX_MARKER = '// TAILWATCH-SecureDirectory v1';
 
 	/**
 	 * Marker string in web.config used by is_protected() to verify content.
 	 */
-	private const WEBCONFIG_MARKER = '<!-- WPTW-SecureDirectory v1 -->';
+	private const WEBCONFIG_MARKER = '<!-- TAILWATCH-SecureDirectory v1 -->';
 
 	/**
 	 * .htaccess body. Combines Apache 2.4 (Require all denied), Apache 2.2
 	 * (Order allow,deny / Deny from all), and Options -Indexes for the case
 	 * where authz directives are ignored but Indexes can still be turned off.
 	 */
-	private const HTACCESS_CONTENT = "# WPTW-SecureDirectory v1 — do not edit; managed by the plugin.\nOptions -Indexes\n<IfModule mod_authz_core.c>\n\tRequire all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n\tOrder allow,deny\n\tDeny from all\n</IfModule>\n";
+	private const HTACCESS_CONTENT = "# TAILWATCH-SecureDirectory v1 — do not edit; managed by the plugin.\nOptions -Indexes\n<IfModule mod_authz_core.c>\n\tRequire all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n\tOrder allow,deny\n\tDeny from all\n</IfModule>\n";
 
 	/**
 	 * index.php body. Server-agnostic — content doesn't matter beyond
 	 * preventing a directory-listing "index of /" page.
 	 */
-	private const INDEX_CONTENT = "<?php\n// WPTW-SecureDirectory v1 — Silence is golden.\n";
+	private const INDEX_CONTENT = "<?php\n// TAILWATCH-SecureDirectory v1 — Silence is golden.\n";
 
 	/**
 	 * web.config body. IIS authorization deny-all.
 	 */
-	private const WEBCONFIG_CONTENT = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- WPTW-SecureDirectory v1 -->\n<configuration>\n\t<system.webServer>\n\t\t<authorization>\n\t\t\t<deny users=\"*\" />\n\t\t</authorization>\n\t</system.webServer>\n</configuration>\n";
+	private const WEBCONFIG_CONTENT = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- TAILWATCH-SecureDirectory v1 -->\n<configuration>\n\t<system.webServer>\n\t\t<authorization>\n\t\t\t<deny users=\"*\" />\n\t\t</authorization>\n\t</system.webServer>\n</configuration>\n";
 
 	/**
 	 * Create directory if missing.
 	 *
-	 * For the ROOT of a private directory tree (e.g. tailwatch/wptw-backup/
+	 * For the ROOT of a private directory tree (e.g. tailwatch/tailwatch-backup/
 	 * under wp-content), pass $drop_deny_files = true to also drop .htaccess +
 	 * index.php + web.config.
 	 *
 	 * For SUBDIRECTORIES under an already-protected root (e.g.
-	 * tailwatch/wptw-backup/files/temporary_xxx/), leave $drop_deny_files
+	 * tailwatch/tailwatch-backup/files/temporary_xxx/), leave $drop_deny_files
 	 * as the default false — the ancestor .htaccess already covers them under
 	 * Apache, and adding per-subdir deny files just clutters the tree.
 	 *

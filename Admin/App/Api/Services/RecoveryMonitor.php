@@ -18,7 +18,7 @@ class RecoveryMonitor {
 	/**
 	 * @var string Transient key for throttling.
 	 */
-	private $throttle_key = 'wptw_recovery_monitor_last_run';
+	private $throttle_key = 'tailwatch_recovery_monitor_last_run';
 
 	/**
 	 * @var int Minimum seconds between checks (default: 120 = 2 minutes).
@@ -124,7 +124,7 @@ class RecoveryMonitor {
 			$stuck_secs   = isset( $process['last_heartbeat'] ) ? ( current_time( 'timestamp' ) - strtotime( $process['last_heartbeat'] ) ) : 'unknown';
 
 			$this->debug_trace( sprintf(
-				'[WPTW Recovery] Stuck process detected — ID: %s | Type: %s | State: %s | Stuck for: %ss | Retries: %d | Last heartbeat: %s',
+				'[TAILWATCH Recovery] Stuck process detected — ID: %s | Type: %s | State: %s | Stuck for: %ss | Retries: %d | Last heartbeat: %s',
 				$process_id,
 				$process_type,
 				$process['state'] ?? 'unknown',
@@ -137,7 +137,7 @@ class RecoveryMonitor {
 			$result = $this->recoveryService->attempt_recovery( $process_id );
 
 			$this->debug_trace( sprintf(
-				'[WPTW Recovery] Recovery result for %s (%s) — success: %s | action: %s | message: %s',
+				'[TAILWATCH Recovery] Recovery result for %s (%s) — success: %s | action: %s | message: %s',
 				$process_id,
 				$process_type,
 				( $result['success'] ?? false ) ? 'YES' : 'NO',
@@ -189,7 +189,7 @@ class RecoveryMonitor {
 	}
 
 	public function force_check() {
-		$this->debug_trace( '[WPTW Recovery] force_check triggered — bypassing throttle and running immediately' );
+		$this->debug_trace( '[TAILWATCH Recovery] force_check triggered — bypassing throttle and running immediately' );
 		// Delete throttle transient to allow immediate run.
 		delete_transient( $this->throttle_key );
 

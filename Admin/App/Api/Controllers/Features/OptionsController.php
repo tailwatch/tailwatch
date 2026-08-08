@@ -100,7 +100,7 @@ class OptionsController {
 	public function get_features_options( $key, $option, $is_active ) {
 		// Defensive: if the constant isn't defined yet (e.g. pro plugin loads before
 		// free plugin's Constants::init() runs), fall back to the literal option name.
-		$option_name = defined( 'WPTW_VISIT_DATA' ) ? WPTW_VISIT_DATA : 'wptw_visit_data';
+		$option_name = defined( 'TAILWATCH_VISIT_DATA' ) ? TAILWATCH_VISIT_DATA : 'tailwatch_visit_data';
 		$visit_data  = json_decode( get_option( $option_name ), true );
 
 		if ( ! ( $visit_data['features_implemented']['is_completed'] ?? false ) ) {
@@ -123,7 +123,7 @@ class OptionsController {
 
 		// Level 3: Query database.
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 
 		$query = $wpdb->prepare(
 			'SELECT value FROM %i WHERE `key` = %s AND `option` = %s AND `is_active` = %s',
@@ -180,11 +180,11 @@ class OptionsController {
 				// `pro_managed: true` is a marker that some
 				// companion plugin owns this entry's lifecycle.
 				// If no listener is currently hooked to the
-				// `wptw_options_processed_field` filter, the
+				// `tailwatch_options_processed_field` filter, the
 				// owning plugin is gone (deactivated, uninstalled,
 				// force-deleted) and the entry is stale — render
 				// nothing rather than the stale data.
-				if ( ! empty( $field_data['pro_managed'] ) && ! has_filter( 'wptw_options_processed_field' ) ) {
+				if ( ! empty( $field_data['pro_managed'] ) && ! has_filter( 'tailwatch_options_processed_field' ) ) {
 					continue;
 				}
 
@@ -259,7 +259,7 @@ class OptionsController {
 				 * @param string $field_key       Map key for this field (e.g. 'field_1').
 				 */
 				$extracted[ $field_key ] = apply_filters(
-					'wptw_options_processed_field',
+					'tailwatch_options_processed_field',
 					$extracted[ $field_key ],
 					$field_data,
 					$field_key

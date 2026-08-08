@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class ProcessMonitoringController {
 
-	public function wptw_get_process_monitoring_status() {
+	public function tailwatch_get_process_monitoring_status() {
 		try {
 			$processManager  = new ProcessManager();
 			$recoveryMonitor = new RecoveryMonitor();
@@ -61,7 +61,7 @@ class ProcessMonitoringController {
 		}
 	}
 
-	public function wptw_mobile_get_process_status() {
+	public function tailwatch_mobile_get_process_status() {
 		try {
 			$processManager = new ProcessManager();
 
@@ -170,7 +170,7 @@ class ProcessMonitoringController {
 		if ( isset( $process_data['process_type'] ) && $process_data['process_type'] === 'backup' ) {
 			try {
 				$backup_controller = new BackupController();
-				$cancel_pause      = $backup_controller->wptw_backup_cancel_pause_data();
+				$cancel_pause      = $backup_controller->tailwatch_backup_cancel_pause_data();
 				return isset( $cancel_pause['progress'] ) ? intval( $cancel_pause['progress'] ) : 0;
 			} catch ( \Exception $e ) {
 				return 0;
@@ -180,7 +180,7 @@ class ProcessMonitoringController {
 		if ( isset( $process_data['process_type'] ) && $process_data['process_type'] === 'db_optimize' ) {
 			try {
 				$db_controller = new DatabaseOptimizerController();
-				$cancel_pause  = $db_controller->wptw_optimization_cancel_pause();
+				$cancel_pause  = $db_controller->tailwatch_optimization_cancel_pause();
 				return isset( $cancel_pause['progress'] ) ? intval( $cancel_pause['progress'] ) : 0;
 			} catch ( \Exception $e ) {
 				return 0;
@@ -252,7 +252,7 @@ class ProcessMonitoringController {
 		if ( isset( $process_data['process_type'] ) && $process_data['process_type'] === 'recommended_features' ) {
 			try {
 				$controller = new RecommendedFeaturesController();
-				$status     = $controller->wptw_recommended_features_process();
+				$status     = $controller->tailwatch_recommended_features_process();
 				return isset( $status['progress'] ) ? intval( $status['progress'] ) : 0;
 			} catch ( \Exception $e ) {
 				return 0;

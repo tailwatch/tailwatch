@@ -37,7 +37,7 @@ class TwoFASecurityValidator {
 			return array( 'skip' => false );
 		}
 
-		$transient_key = 'wptw_2fa_pending_' . $current_user_id;
+		$transient_key = 'tailwatch_2fa_pending_' . $current_user_id;
 		$pending       = get_transient( $transient_key );
 
 		if ( ! is_array( $pending ) || empty( $pending['skip_other_security'] ) || true !== $pending['skip_other_security'] ) {
@@ -97,7 +97,7 @@ class TwoFASecurityValidator {
 	 * @return bool True if within rate limit, false otherwise.
 	 */
 	public static function check_2fa_rate_limit( $user_id, $context = 'security' ) {
-		$rate_limit_key = 'wptw_2fa_attempts_' . $user_id;
+		$rate_limit_key = 'tailwatch_2fa_attempts_' . $user_id;
 		$attempts       = get_transient( $rate_limit_key ) ?: 0;
 
 		if ( $attempts >= 5 ) {

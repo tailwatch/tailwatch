@@ -10,7 +10,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
 import VisitCards from './VisitCards/VisitCards';
 import ProgressStep from './ProgressStep/ProgressStep';
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 const VisitFeatures = () => {
     const navigate = useNavigate();
@@ -89,7 +89,7 @@ const VisitFeatures = () => {
         setConnecting(true);
         try {
             await handleConnect({
-                setLoading: setIsLoading, wptw_ajax,
+                setLoading: setIsLoading, tailwatch_ajax,
                 successCallback: async () => {
                     await getVisitFeatures(setFeatures, setIsLoading);
                 },

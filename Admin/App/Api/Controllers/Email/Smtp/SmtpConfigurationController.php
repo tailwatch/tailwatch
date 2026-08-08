@@ -31,7 +31,7 @@ class SmtpConfigurationController {
 		new EmailLogController();
 	}
 
-	public function wptw_get_smtp_configuration() {
+	public function tailwatch_get_smtp_configuration() {
 		$key                = 'default_feature_settings';
 		$option             = 'default_email_configure';
 		$is_active          = true;
@@ -39,9 +39,9 @@ class SmtpConfigurationController {
 		return $options_controller->get_features_options( $key, $option, $is_active );
 	}
 
-	public function wptw_get_smtp_configure_settings() {
+	public function tailwatch_get_smtp_configure_settings() {
 		try {
-			$config = $this->wptw_get_smtp_configuration();
+			$config = $this->tailwatch_get_smtp_configuration();
 			if ( empty( $config ) ) {
 				// Feature is disabled or not yet configured — this is normal, not an error.
 				return new \stdClass();
@@ -121,7 +121,7 @@ class SmtpConfigurationController {
 			}
 
 			// Allow premium plugin to extend settings with additional providers.
-			$settings = apply_filters( 'wptw_extend_smtp_settings', $settings, $provider );
+			$settings = apply_filters( 'tailwatch_extend_smtp_settings', $settings, $provider );
 
 			return $settings;
 		} catch ( \Throwable $e ) {
@@ -141,7 +141,7 @@ class SmtpConfigurationController {
 
 	public function configure_smtp( $phpmailer ) {
 		try {
-			$settings = $this->wptw_get_smtp_configure_settings();
+			$settings = $this->tailwatch_get_smtp_configure_settings();
 			if ( empty( $settings ) || empty( $settings->smtp_provider ) ) {
 				// Feature disabled or not configured — let WordPress (and any other
 				// mail plugin) handle email natively. We intentionally do NOT remove
@@ -211,7 +211,7 @@ class SmtpConfigurationController {
 			}
 
 			// Allow premium plugin to handle premium SMTP providers.
-			$premium_handled = apply_filters( 'wptw_handle_premium_smtp_provider', false, $provider, $settings, $phpmailer );
+			$premium_handled = apply_filters( 'tailwatch_handle_premium_smtp_provider', false, $provider, $settings, $phpmailer );
 			if ( $premium_handled !== false ) {
 				// Validate hook response format
 				if ( is_array( $premium_handled ) && isset( $premium_handled['success'] ) ) {
@@ -246,7 +246,7 @@ class SmtpConfigurationController {
 			}
 
 			try {
-				$phpmailer->XMailer  = 'WPTW SMTP Mailer';
+				$phpmailer->XMailer  = 'TAILWATCH SMTP Mailer';
 				$phpmailer->CharSet  = 'UTF-8';
 				$phpmailer->Encoding = 'base64';
 				$phpmailer->Timeout  = 30;
@@ -275,7 +275,7 @@ class SmtpConfigurationController {
 						break;
 					default:
 						// Allow premium plugin to handle unknown providers.
-						$premium_result = apply_filters( 'wptw_smtp_unknown_provider', null, $provider, $settings, $phpmailer );
+						$premium_result = apply_filters( 'tailwatch_smtp_unknown_provider', null, $provider, $settings, $phpmailer );
 						if ( $premium_result === null ) {
 							throw new \Exception( "Unsupported SMTP provider: {$provider}" );
 						}
@@ -347,7 +347,7 @@ class SmtpConfigurationController {
 	public function process_email( $null, $args ) {
 		try {
 			$this->current_email = $args;
-			$settings            = $this->wptw_get_smtp_configure_settings();
+			$settings            = $this->tailwatch_get_smtp_configure_settings();
 
 			if ( empty( $settings ) || empty( $settings->smtp_provider ) ) {
 				// Feature disabled or not configured — let WordPress handle natively.
@@ -357,7 +357,7 @@ class SmtpConfigurationController {
 			$provider = $settings->smtp_provider;
 
 			// Allow premium plugin to handle premium email processing.
-			$premium_processed = apply_filters( 'wptw_handle_premium_email_processing', null, $provider, $args, $settings );
+			$premium_processed = apply_filters( 'tailwatch_handle_premium_email_processing', null, $provider, $args, $settings );
 			if ( $premium_processed !== null ) {
 				return $premium_processed; // Premium plugin handled the email
 			}
@@ -382,7 +382,7 @@ class SmtpConfigurationController {
 
 	public function process_email_headers( $args ) {
 		try {
-			$settings = $this->wptw_get_smtp_configure_settings();
+			$settings = $this->tailwatch_get_smtp_configure_settings();
 			if ( empty( $settings ) || empty( $settings->smtp_provider ) ) {
 				// Feature disabled or not configured — leave email headers untouched
 				// so Tailwatch never changes core/other plugins' mail formatting
@@ -509,7 +509,7 @@ class SmtpConfigurationController {
 	}
 
 	private function configure_dkim( $phpmailer, $provider ) {
-		$settings = $this->wptw_get_smtp_configure_settings();
+		$settings = $this->tailwatch_get_smtp_configure_settings();
 		if ( $settings->$provider->smtp_dkim_domain ?? '' && $settings->$provider->smtp_dkim_private_key ?? '' ) {
 			$phpmailer->DKIM_domain     = $settings->$provider->smtp_dkim_domain;
 			$phpmailer->DKIM_private    = $settings->$provider->smtp_dkim_private_key;
@@ -520,7 +520,7 @@ class SmtpConfigurationController {
 	}
 
 	private function get_decrypted_password( $provider, $option_name ) {
-		$settings = $this->wptw_get_smtp_configure_settings();
+		$settings = $this->tailwatch_get_smtp_configure_settings();
 		$password = $settings->$provider->$option_name ?? '';
 
 		if ( empty( $password ) ) {
@@ -586,7 +586,7 @@ class SmtpConfigurationController {
 	 * @return string A valid configured From address, or '' for no override.
 	 */
 	private function get_configured_from_email() {
-		$settings = $this->wptw_get_smtp_configure_settings();
+		$settings = $this->tailwatch_get_smtp_configure_settings();
 		if ( empty( $settings ) || empty( $settings->smtp_provider ) ) {
 			return '';
 		}
@@ -605,7 +605,7 @@ class SmtpConfigurationController {
 	 * @return string Configured From name, or '' to leave WordPress default.
 	 */
 	private function get_configured_from_name() {
-		$settings = $this->wptw_get_smtp_configure_settings();
+		$settings = $this->tailwatch_get_smtp_configure_settings();
 		if ( empty( $settings ) || empty( $settings->smtp_provider ) ) {
 			return '';
 		}

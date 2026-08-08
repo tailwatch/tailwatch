@@ -231,7 +231,7 @@ class ProcessStatusService {
 	/**
 	 * Layer 2 — module-specific verify fallback.
 	 *
-	 * Each module owns its predicate via the wptw_process_status_fallbacks
+	 * Each module owns its predicate via the tailwatch_process_status_fallbacks
 	 * filter. This service ships built-in entries for free-plugin types
 	 * (db_optimize, files_integrity); the pro plugin hooks the filter to add
 	 * its own (malware_scan, migration, restore, …).
@@ -269,7 +269,7 @@ class ProcessStatusService {
 
 	/**
 	 * Built-in Layer-2 fallbacks for free-plugin process types, plus the
-	 * wptw_process_status_fallbacks filter for pro-plugin and other extensions.
+	 * tailwatch_process_status_fallbacks filter for pro-plugin and other extensions.
 	 *
 	 * @return array<string,callable>
 	 */
@@ -293,9 +293,9 @@ class ProcessStatusService {
 		 *
 		 * Pro-plugin example:
 		 *
-		 *     add_filter( 'wptw_process_status_fallbacks', function ( $f ) {
+		 *     add_filter( 'tailwatch_process_status_fallbacks', function ( $f ) {
 		 *         $f['malware_scan'] = function () {
-		 *             $s = ( new MalwareScannerController() )->wptw_malware_scanner_verify_status();
+		 *             $s = ( new MalwareScannerController() )->tailwatch_malware_scanner_verify_status();
 		 *             return isset( $s['scan_state'] ) && 'in-progress' === $s['scan_state'];
 		 *         };
 		 *         return $f;
@@ -303,7 +303,7 @@ class ProcessStatusService {
 	     *
 		 * @param array<string,callable> $fallbacks Built-in fallback map.
 		 */
-		return apply_filters( 'wptw_process_status_fallbacks', $fallbacks );
+		return apply_filters( 'tailwatch_process_status_fallbacks', $fallbacks );
 	}
 
 	/**
@@ -313,7 +313,7 @@ class ProcessStatusService {
 	 */
 	private function fallback_db_optimize() {
 		$controller = new DatabaseOptimizerController();
-		$status     = $controller->wptw_verify_db_optimize_status();
+		$status     = $controller->tailwatch_verify_db_optimize_status();
 
 		return isset( $status['scan_state'] ) && 'in-progress' === $status['scan_state'];
 	}
@@ -329,7 +329,7 @@ class ProcessStatusService {
 	 */
 	private function fallback_files_integrity() {
 		$controller = new IntegrityWatchController();
-		$status     = $controller->wptw_verify_integrity_current_status();
+		$status     = $controller->tailwatch_verify_integrity_current_status();
 
 		if ( isset( $status['scan_state'] ) && 'in-progress' === $status['scan_state'] ) {
 			return true;
@@ -345,7 +345,7 @@ class ProcessStatusService {
 	 */
 	private function fallback_backup() {
 		$controller = new BackupController();
-		$status     = $controller->wptw_verify_backup_status();
+		$status     = $controller->tailwatch_verify_backup_status();
 
 		return isset( $status['scan_state'] ) && 'in-progress' === $status['scan_state'];
 	}
@@ -365,7 +365,7 @@ class ProcessStatusService {
 	 */
 	private function fallback_search_replace() {
 		$controller = new SearchReplaceController();
-		$status     = $controller->wptw_verify_search_replace_status();
+		$status     = $controller->tailwatch_verify_search_replace_status();
 
 		if ( ! isset( $status['scan_state'] ) ) {
 			return false;
@@ -384,7 +384,7 @@ class ProcessStatusService {
 	 */
 	private function fallback_broken_link_checker() {
 		$controller = new BrokenLinkStatus();
-		$status     = $controller->wptw_verify_broken_link_status();
+		$status     = $controller->tailwatch_verify_broken_link_status();
 
 		return isset( $status['scan_state'] ) && 'in-progress' === $status['scan_state'];
 	}
@@ -401,7 +401,7 @@ class ProcessStatusService {
 	 */
 	private function fallback_hardening_audit() {
 		$controller = new HardeningAuditController();
-		$status     = $controller->wptw_verify_hardening_audit_status();
+		$status     = $controller->tailwatch_verify_hardening_audit_status();
 
 		return isset( $status['scan_state'] ) && 'in-progress' === $status['scan_state'];
 	}
@@ -449,7 +449,7 @@ class ProcessStatusService {
 
 	/**
 	 * Built-in completion checkers for free-plugin process types, plus the
-	 * wptw_process_completion_fallbacks filter for pro-plugin extensions.
+	 * tailwatch_process_completion_fallbacks filter for pro-plugin extensions.
 	 *
 	 * Each callable returns true ONLY when the module's own state file
 	 * explicitly declares the work finished — not on missing state, not on
@@ -479,9 +479,9 @@ class ProcessStatusService {
 		 *
 		 * Pro-plugin example:
 		 *
-		 *     add_filter( 'wptw_process_completion_fallbacks', function ( $f ) {
+		 *     add_filter( 'tailwatch_process_completion_fallbacks', function ( $f ) {
 		 *         $f['malware_scan'] = function () {
-		 *             $s = ( new MalwareScannerController() )->wptw_malware_scanner_verify_status();
+		 *             $s = ( new MalwareScannerController() )->tailwatch_malware_scanner_verify_status();
 		 *             return isset( $s['scan_state'] ) && 'completed' === $s['scan_state'];
 		 *         };
 		 *         return $f;
@@ -489,7 +489,7 @@ class ProcessStatusService {
 	     *
 		 * @param array<string,callable> $fallbacks Built-in completion fallback map.
 		 */
-		return apply_filters( 'wptw_process_completion_fallbacks', $fallbacks );
+		return apply_filters( 'tailwatch_process_completion_fallbacks', $fallbacks );
 	}
 
 	/**
@@ -499,7 +499,7 @@ class ProcessStatusService {
 	 */
 	private function completion_db_optimize() {
 		$controller = new DatabaseOptimizerController();
-		$status     = $controller->wptw_verify_db_optimize_status();
+		$status     = $controller->tailwatch_verify_db_optimize_status();
 
 		return isset( $status['scan_state'] ) && 'completed' === $status['scan_state'];
 	}
@@ -511,7 +511,7 @@ class ProcessStatusService {
 	 */
 	private function completion_files_integrity() {
 		$controller = new IntegrityWatchController();
-		$status     = $controller->wptw_verify_integrity_current_status();
+		$status     = $controller->tailwatch_verify_integrity_current_status();
 
 		return isset( $status['scan_state'] ) && 'completed' === $status['scan_state'];
 	}
@@ -523,7 +523,7 @@ class ProcessStatusService {
 	 */
 	private function completion_backup() {
 		$controller = new BackupController();
-		$status     = $controller->wptw_verify_backup_status();
+		$status     = $controller->tailwatch_verify_backup_status();
 
 		return isset( $status['scan_state'] ) && 'completed' === $status['scan_state'];
 	}
@@ -535,7 +535,7 @@ class ProcessStatusService {
 	 */
 	private function completion_search_replace() {
 		$controller = new SearchReplaceController();
-		$status     = $controller->wptw_verify_search_replace_status();
+		$status     = $controller->tailwatch_verify_search_replace_status();
 
 		return isset( $status['scan_state'] ) && 'completed' === $status['scan_state'];
 	}
@@ -547,7 +547,7 @@ class ProcessStatusService {
 	 */
 	private function completion_broken_link_checker() {
 		$controller = new BrokenLinkStatus();
-		$status     = $controller->wptw_verify_broken_link_status();
+		$status     = $controller->tailwatch_verify_broken_link_status();
 
 		return isset( $status['scan_state'] ) && 'completed' === $status['scan_state'];
 	}
@@ -557,7 +557,7 @@ class ProcessStatusService {
 	 *
 	 * Returns true ONLY when scan_state is explicitly 'completed' (set by
 	 * the controller after a successful run finishes). The idle / never-run
-	 * branch of wptw_verify_hardening_audit_status returns an array WITHOUT
+	 * branch of tailwatch_verify_hardening_audit_status returns an array WITHOUT
 	 * a scan_state field — the isset() guard correctly returns false there,
 	 * preventing a false-heal on a process that just registered but hasn't
 	 * yet written its first scan_state value.
@@ -566,7 +566,7 @@ class ProcessStatusService {
 	 */
 	private function completion_hardening_audit() {
 		$controller = new HardeningAuditController();
-		$status     = $controller->wptw_verify_hardening_audit_status();
+		$status     = $controller->tailwatch_verify_hardening_audit_status();
 
 		return isset( $status['scan_state'] ) && 'completed' === $status['scan_state'];
 	}

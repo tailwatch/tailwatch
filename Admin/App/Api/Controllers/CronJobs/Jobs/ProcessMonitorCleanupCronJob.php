@@ -34,8 +34,8 @@ class ProcessMonitorCleanupCronJob extends AbstractCronJob {
 	 *
 	 */
 	public function __construct() {
-		$this->cron_hook_name   = 'wptw_process_monitor_cleanup';
-		$this->schedule_name    = 'wptw_process_monitor_cleanup_schedule';
+		$this->cron_hook_name   = 'tailwatch_process_monitor_cleanup';
+		$this->schedule_name    = 'tailwatch_process_monitor_cleanup_schedule';
 		$this->default_interval = 'Weekly';
 
 		parent::__construct();

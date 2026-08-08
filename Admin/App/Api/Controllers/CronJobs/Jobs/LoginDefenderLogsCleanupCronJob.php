@@ -41,8 +41,8 @@ class LoginDefenderLogsCleanupCronJob extends AbstractCronJob {
 	 * @since 1.0.0
 	 */
 	public function __construct() {
-		$this->cron_hook_name   = 'wptw_login_defender_cleanup';
-		$this->schedule_name    = 'wptw_login_defender_logs_cleanup_schedule';
+		$this->cron_hook_name   = 'tailwatch_login_defender_cleanup';
+		$this->schedule_name    = 'tailwatch_login_defender_logs_cleanup_schedule';
 		$this->default_interval = 'Daily';
 
 		parent::__construct();

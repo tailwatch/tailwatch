@@ -47,7 +47,7 @@ class ZipCreation {
 	 * @param bool         $skip_size_limit Skip the 50MB file size limit (optional, default false).
 	 * @return bool True on success, false on failure.
 	 */
-	public function wptw_create_zip_global( $source, $destination, $path_prefix = '', $exclude = array(), $start_size = 0, $end_size = null, $log_file = null, $skip_size_limit = false ) {
+	public function tailwatch_create_zip_global( $source, $destination, $path_prefix = '', $exclude = array(), $start_size = 0, $end_size = null, $log_file = null, $skip_size_limit = false ) {
 		if ( ! $this->filesystem ) {
 			Log::error(
 				'Filesystem not initialized for ZipCreation.',
@@ -234,7 +234,7 @@ class ZipCreation {
 
 					if ( empty( $file_list ) ) {
 						Log::error(
-							'wptw_create_zip_global: No valid files in source array.',
+							'tailwatch_create_zip_global: No valid files in source array.',
 							array(
 								'feature' => 'zip',
 								'action'  => 'zip_creation_failed',
@@ -272,7 +272,7 @@ class ZipCreation {
 
 					if ( empty( $filtered_file_list ) ) {
 						Log::error(
-							'wptw_create_zip_global: No files to add to ZIP.',
+							'tailwatch_create_zip_global: No files to add to ZIP.',
 							array(
 								'feature' => 'zip',
 								'action'  => 'zip_creation_failed',
@@ -326,7 +326,7 @@ class ZipCreation {
 
 					if ( empty( $file_list ) ) {
 						Log::error(
-							'wptw_create_zip_global: No files to add to ZIP.',
+							'tailwatch_create_zip_global: No files to add to ZIP.',
 							array(
 								'feature' => 'zip',
 								'action'  => 'zip_creation_failed',
@@ -369,7 +369,7 @@ class ZipCreation {
 
 				} else {
 					Log::error(
-						'wptw_create_zip_global: Invalid single file source.',
+						'tailwatch_create_zip_global: Invalid single file source.',
 						array(
 							'feature' => 'zip',
 							'action'  => 'zip_creation_failed',
@@ -380,7 +380,7 @@ class ZipCreation {
 
 				if ( 0 === $result ) {
 					Log::error(
-						'wptw_create_zip_global: PclZip error: ' . $archive->errorInfo( true ),
+						'tailwatch_create_zip_global: PclZip error: ' . $archive->errorInfo( true ),
 						array(
 							'feature' => 'zip',
 							'action'  => 'zip_creation_failed',
@@ -430,7 +430,7 @@ class ZipCreation {
 	 *
 	 * @return array Compatibility status and message.
 	 */
-	public function wptw_check_zip_compatibility() {
+	public function tailwatch_check_zip_compatibility() {
 		$status = array(
 			'is_compatible' => true,
 			'message'       => '',

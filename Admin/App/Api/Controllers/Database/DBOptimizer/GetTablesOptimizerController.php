@@ -24,13 +24,13 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class GetTablesOptimizerController {
 
-	public function wptw_check_db_optimization_status() {
+	public function tailwatch_check_db_optimization_status() {
 		try {
 			$database_clean = new DatabaseOptimizerController();
 			$database_rule  = new TablesOptimizeController();
-			$get_options    = $database_clean->wptw_db_optimize_options();
+			$get_options    = $database_clean->tailwatch_db_optimize_options();
 
-			$is_enabled = $database_clean->wptw_db_optimizer_feature_enable();
+			$is_enabled = $database_clean->tailwatch_db_optimizer_feature_enable();
 
 			if ( ! $is_enabled['feature_enable'] ) {
 				return array(
@@ -56,57 +56,57 @@ class GetTablesOptimizerController {
 			$all_monitoring_logs_count  = 0;
 
 			if ( isset( $get_options['field_1']['sub_options']['field_3']['options']['option']['selected'] ) && $get_options['field_1']['sub_options']['field_3']['options']['option']['selected'] ) {
-				$orphaned_post        = $database_rule->wptw_get_orphaned_post( $number_interval );
+				$orphaned_post        = $database_rule->tailwatch_get_orphaned_post( $number_interval );
 				$orphaned_post_counts = count( $orphaned_post );
 			}
 
 			if ( isset( $get_options['field_1']['sub_options']['field_4']['options']['option']['selected'] ) && $get_options['field_1']['sub_options']['field_4']['options']['option']['selected'] ) {
-				$auto_drafts        = $database_rule->wptw_get_drafts_post( $number_interval );
+				$auto_drafts        = $database_rule->tailwatch_get_drafts_post( $number_interval );
 				$auto_drafts_counts = count( $auto_drafts );
 			}
 
 			if ( isset( $get_options['field_1']['sub_options']['field_5']['options']['option']['selected'] ) && $get_options['field_1']['sub_options']['field_5']['options']['option']['selected'] ) {
-				$trashed_post        = $database_rule->wptw_get_trash_posts( $number_interval );
+				$trashed_post        = $database_rule->tailwatch_get_trash_posts( $number_interval );
 				$trashed_post_counts = count( $trashed_post );
 			}
 
 			if ( isset( $get_options['field_1']['sub_options']['field_6']['options']['option']['selected'] ) && $get_options['field_1']['sub_options']['field_6']['options']['option']['selected'] ) {
-				$spam_comments        = $database_rule->wptw_get_spam_comments( $number_interval );
+				$spam_comments        = $database_rule->tailwatch_get_spam_comments( $number_interval );
 				$spam_comments_counts = count( $spam_comments );
 			}
 
 			if ( isset( $get_options['field_1']['sub_options']['field_7']['options']['option']['selected'] ) && $get_options['field_1']['sub_options']['field_7']['options']['option']['selected'] ) {
-				$trashed_comments        = $database_rule->wptw_get_trash_comments( $number_interval );
+				$trashed_comments        = $database_rule->tailwatch_get_trash_comments( $number_interval );
 				$trashed_comments_counts = count( $trashed_comments );
 			}
 
 			if ( isset( $get_options['field_1']['sub_options']['field_8']['options']['option']['selected'] ) && $get_options['field_1']['sub_options']['field_8']['options']['option']['selected'] ) {
-				$trackback_pingbacks        = $database_rule->wptw_get_trackback_pingbacks( $number_interval );
+				$trackback_pingbacks        = $database_rule->tailwatch_get_trackback_pingbacks( $number_interval );
 				$trackback_pingbacks_counts = count( $trackback_pingbacks );
 			}
 
 			if ( isset( $get_options['field_1']['sub_options']['field_9']['options']['option']['selected'] ) && $get_options['field_1']['sub_options']['field_9']['options']['option']['selected'] ) {
-				$expired_transients        = $database_rule->wptw_get_expired_transients( $number_interval );
+				$expired_transients        = $database_rule->tailwatch_get_expired_transients( $number_interval );
 				$expired_transients_counts = count( $expired_transients );
 			}
 
 			if ( isset( $get_options['field_1']['sub_options']['field_11']['options']['option']['selected'] ) && $get_options['field_1']['sub_options']['field_11']['options']['option']['selected'] ) {
-				$all_logs_activity       = $database_rule->wptw_get_logs( 'default_logs_activity', $number_interval );
+				$all_logs_activity       = $database_rule->tailwatch_get_logs( 'default_logs_activity', $number_interval );
 				$all_logs_activity_count = count( $all_logs_activity );
 			}
 
 			if ( isset( $get_options['field_1']['sub_options']['field_12']['options']['option']['selected'] ) && $get_options['field_1']['sub_options']['field_12']['options']['option']['selected'] ) {
-				$all_email_logs_data  = $database_rule->wptw_get_logs( 'default_email_logs', $number_interval );
+				$all_email_logs_data  = $database_rule->tailwatch_get_logs( 'default_email_logs', $number_interval );
 				$all_email_logs_count = count( $all_email_logs_data );
 			}
 
 			if ( isset( $get_options['field_1']['sub_options']['field_13']['options']['option']['selected'] ) && $get_options['field_1']['sub_options']['field_13']['options']['option']['selected'] ) {
-				$all_ajax_logs_data  = $database_rule->wptw_get_logs( 'default_ajax_logs', $number_interval );
+				$all_ajax_logs_data  = $database_rule->tailwatch_get_logs( 'default_ajax_logs', $number_interval );
 				$all_ajax_logs_count = count( $all_ajax_logs_data );
 			}
 
 			if ( isset( $get_options['field_1']['sub_options']['field_14']['options']['option']['selected'] ) && $get_options['field_1']['sub_options']['field_14']['options']['option']['selected'] ) {
-				$all_monitoring_logs_data  = $database_rule->wptw_get_logs( 'default_monitoring_logs', $number_interval );
+				$all_monitoring_logs_data  = $database_rule->tailwatch_get_logs( 'default_monitoring_logs', $number_interval );
 				$all_monitoring_logs_count = count( $all_monitoring_logs_data );
 			}
 
@@ -146,7 +146,7 @@ class GetTablesOptimizerController {
 		}
 	}
 
-	public function wptw_db_optimize_options() {
+	public function tailwatch_db_optimize_options() {
 		$key                = 'default_feature_settings';
 		$option             = 'default_database_optimizer';
 		$is_active          = true;
@@ -226,10 +226,10 @@ class GetTablesOptimizerController {
 		return $response_data;
 	}
 
-	public function wptw_get_db_optimizer_status() {
+	public function tailwatch_get_db_optimizer_status() {
 		try {
 			$database_clean = new DatabaseOptimizerController();
-			$is_enabled     = $database_clean->wptw_db_optimizer_feature_enable();
+			$is_enabled     = $database_clean->tailwatch_db_optimizer_feature_enable();
 
 			if ( ! $is_enabled['feature_enable'] ) {
 				return array(
@@ -243,7 +243,7 @@ class GetTablesOptimizerController {
 
 			global $wpdb;
 
-			$options         = $this->wptw_db_optimize_options();
+			$options         = $this->tailwatch_db_optimize_options();
 			$database_rule   = new TablesOptimizeController();
 			$number_interval = null;
 
@@ -255,14 +255,14 @@ class GetTablesOptimizerController {
 				'trackbacks_pingbacks' => array( 'table' => $wpdb->comments,                       'options_key' => 'trackbacks_pingbacks' ),
 				'orphaned_post_meta'   => array( 'table' => $wpdb->postmeta,                       'options_key' => 'orphanedPostMeta' ),
 				'expired_transients'   => array( 'table' => $wpdb->options,                        'options_key' => 'expiredTransient' ),
-				'logs_activity'        => array( 'table' => $wpdb->prefix . WPTW_DB_TABLE_NAME,    'options_key' => 'logsActivity' ),
-				'email_logs'           => array( 'table' => $wpdb->prefix . WPTW_DB_TABLE_NAME,    'options_key' => 'emailLogs' ),
-				'ajax_logs'            => array( 'table' => $wpdb->prefix . WPTW_DB_TABLE_NAME,    'options_key' => 'ajaxLogs' ),
-				'monitoring_logs'      => array( 'table' => $wpdb->prefix . WPTW_DB_TABLE_NAME,    'options_key' => 'monitoringLogs' ),
+				'logs_activity'        => array( 'table' => $wpdb->prefix . TAILWATCH_DB_TABLE_NAME,    'options_key' => 'logsActivity' ),
+				'email_logs'           => array( 'table' => $wpdb->prefix . TAILWATCH_DB_TABLE_NAME,    'options_key' => 'emailLogs' ),
+				'ajax_logs'            => array( 'table' => $wpdb->prefix . TAILWATCH_DB_TABLE_NAME,    'options_key' => 'ajaxLogs' ),
+				'monitoring_logs'      => array( 'table' => $wpdb->prefix . TAILWATCH_DB_TABLE_NAME,    'options_key' => 'monitoringLogs' ),
 			);
 
 			// Allow extensions to add or modify cleanup steps.
-			$step_metadata = apply_filters( 'wptw_db_optimize_step_metadata', $step_metadata );
+			$step_metadata = apply_filters( 'tailwatch_db_optimize_step_metadata', $step_metadata );
 
 			$steps = array();
 			foreach ( $step_metadata as $step_key => $meta ) {
@@ -275,9 +275,9 @@ class GetTablesOptimizerController {
 
 			// Allow extensions to augment per-step metadata after the base
 			// shape is built (e.g. pro can add its own UI hints).
-			$steps = (array) apply_filters( 'wptw_db_optimize_steps', $steps );
+			$steps = (array) apply_filters( 'tailwatch_db_optimize_steps', $steps );
 
-			$next_scheduled = wp_next_scheduled( 'wptw_start_database_optimization' );
+			$next_scheduled = wp_next_scheduled( 'tailwatch_start_database_optimization' );
 			$current_time   = time();
 
 			$schedule = array(
@@ -314,32 +314,32 @@ class GetTablesOptimizerController {
 	private function get_step_count( $step_key, $database_rule, $number_interval = null ) {
 		switch ( $step_key ) {
 			case 'auto_drafts':
-				return count( $database_rule->wptw_get_drafts_post( $number_interval ) );
+				return count( $database_rule->tailwatch_get_drafts_post( $number_interval ) );
 			case 'trashed_posts':
-				return count( $database_rule->wptw_get_trash_posts( $number_interval ) );
+				return count( $database_rule->tailwatch_get_trash_posts( $number_interval ) );
 			case 'spam_comments':
-				return count( $database_rule->wptw_get_spam_comments( $number_interval ) );
+				return count( $database_rule->tailwatch_get_spam_comments( $number_interval ) );
 			case 'trashed_comments':
-				return count( $database_rule->wptw_get_trash_comments( $number_interval ) );
+				return count( $database_rule->tailwatch_get_trash_comments( $number_interval ) );
 			case 'trackbacks_pingbacks':
-				return count( $database_rule->wptw_get_trackback_pingbacks( $number_interval ) );
+				return count( $database_rule->tailwatch_get_trackback_pingbacks( $number_interval ) );
 			case 'orphaned_post_meta':
-				return count( $database_rule->wptw_get_orphaned_post( $number_interval ) );
+				return count( $database_rule->tailwatch_get_orphaned_post( $number_interval ) );
 			case 'expired_transients':
-				return count( $database_rule->wptw_get_expired_transients( $number_interval ) );
+				return count( $database_rule->tailwatch_get_expired_transients( $number_interval ) );
 			case 'logs_activity':
-				return count( $database_rule->wptw_get_logs( 'default_logs_activity', $number_interval ) );
+				return count( $database_rule->tailwatch_get_logs( 'default_logs_activity', $number_interval ) );
 			case 'email_logs':
-				return count( $database_rule->wptw_get_logs( 'default_email_logs', $number_interval ) );
+				return count( $database_rule->tailwatch_get_logs( 'default_email_logs', $number_interval ) );
 			case 'ajax_logs':
-				return count( $database_rule->wptw_get_logs( 'default_ajax_logs', $number_interval ) );
+				return count( $database_rule->tailwatch_get_logs( 'default_ajax_logs', $number_interval ) );
 			case 'monitoring_logs':
-				return count( $database_rule->wptw_get_logs( 'default_monitoring_logs', $number_interval ) );
+				return count( $database_rule->tailwatch_get_logs( 'default_monitoring_logs', $number_interval ) );
 			default:
 				// Unknown step keys fall through to the filter so extensions
 				// can supply counts for cleanup types they add (e.g., via the
-				// wptw_db_optimize_step_metadata filter).
-				return (int) apply_filters( 'wptw_db_optimize_step_count', 0, $step_key, array( 'number_interval' => $number_interval ) );
+				// tailwatch_db_optimize_step_metadata filter).
+				return (int) apply_filters( 'tailwatch_db_optimize_step_count', 0, $step_key, array( 'number_interval' => $number_interval ) );
 		}
 	}
 }

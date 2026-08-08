@@ -10,7 +10,7 @@ import React from 'react';
  * macOS / iOS / Android / most Linux render these natively. Windows' system
  * emoji font (Segoe UI Emoji) omits flag glyphs, so a bundled flags-only
  * webfont — a subset of Google's Noto Color Emoji (SIL Open Font License 1.1,
- * GPL-compatible) — is applied first via the `.wptw-flag` class (see
+ * GPL-compatible) — is applied first via the `.tailwatch-flag` class (see
  * Admin/View/Static/css/custom.css) so the flags render on Windows too.
  */
 
@@ -51,7 +51,7 @@ export const CountryFlag = ( { countryCode, size = 'md', className = '' } ) => {
 	}
 	return (
 		<span
-			className={ `wptw-flag ${ className }`.trim() }
+			className={ `tailwatch-flag ${ className }`.trim() }
 			style={ { fontSize: SIZE_MAP[ size ] || size, lineHeight: 1 } }
 			role="img"
 			aria-label={ typeof countryCode === 'string' ? countryCode.toUpperCase() : '' }

@@ -53,7 +53,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *    regardless of which features are enabled. The framework is designed
  *    around user-toggleable features via is_enabled().
  *
- * The 'wptw_process_recovery_monitor' hook IS listed in
+ * The 'tailwatch_process_recovery_monitor' hook IS listed in
  * CronJobManager::get_all_cron_hooks() so its entry gets swept on plugin
  * uninstall along with the framework jobs.
  *
@@ -77,7 +77,7 @@ class ProcessRecoveryController {
 		$this->schedule_recovery_cron();
 
 		// Hook for background recovery cron (runs every 3 minutes).
-		$hook_controller->add_action_hook( 'wptw_process_recovery_monitor', array( $this, 'run_background_recovery' ) );
+		$hook_controller->add_action_hook( 'tailwatch_process_recovery_monitor', array( $this, 'run_background_recovery' ) );
 
 		// Hook into admin_init for immediate recovery monitoring (Tier 2).
 		$hook_controller->add_action_hook( 'admin_init', array( $this, 'run_recovery_monitor' ) );
@@ -105,15 +105,15 @@ class ProcessRecoveryController {
 	}
 
 	public function add_recovery_cron_schedule( $schedules ) {
-		// wptw_-prefixed name is the canonical one (PrefixAllGlobals). The bare
+		// tailwatch_-prefixed name is the canonical one (PrefixAllGlobals). The bare
 		// `every_3_minutes` key is retained as an alias for one release cycle
 		// so pre-existing scheduled events continue to reschedule successfully;
 		// remove the alias after that cycle.
-		$schedules['wptw_every_3_minutes'] = array(
+		$schedules['tailwatch_every_3_minutes'] = array(
 			'interval' => 180,
 			'display'  => 'Every 3 Minutes',
 		);
-		$schedules['every_3_minutes'] = $schedules['wptw_every_3_minutes'];
+		$schedules['every_3_minutes'] = $schedules['tailwatch_every_3_minutes'];
 
 		return $schedules;
 	}
@@ -125,13 +125,13 @@ class ProcessRecoveryController {
 		}
 
 		// Check if already scheduled.
-		if ( ! wp_next_scheduled( 'wptw_process_recovery_monitor' ) ) {
-			wp_schedule_event( time(), 'wptw_every_3_minutes', 'wptw_process_recovery_monitor' );
+		if ( ! wp_next_scheduled( 'tailwatch_process_recovery_monitor' ) ) {
+			wp_schedule_event( time(), 'tailwatch_every_3_minutes', 'tailwatch_process_recovery_monitor' );
 		}
 	}
 
 	public function run_background_recovery() {
-		$lock_key = 'wptw_recovery_running';
+		$lock_key = 'tailwatch_recovery_running';
 		if ( get_transient( $lock_key ) ) {
 			return; // Another recovery check is already running.
 		}
@@ -190,7 +190,7 @@ class ProcessRecoveryController {
 				'process_type'    => 'search_replace',
 				'data_source'     => 'wp_tw_settings',
 				'data_key'        => 'default_search_replace',
-				'data_option'     => 'wptw_search_replace',
+				'data_option'     => 'tailwatch_search_replace',
 				'stuck_threshold' => 300,
 				'max_retries'     => 3,
 			)

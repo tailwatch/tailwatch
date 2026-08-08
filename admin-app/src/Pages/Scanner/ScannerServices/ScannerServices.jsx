@@ -2,7 +2,7 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import { CronHealer } from '../../../Components/CroneHealer/CronHealer';
 import { alertService } from "../../../Components/AlertService/AlertService";
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 let cronScheduled = false;
 let isCronExecuting = false;
@@ -18,11 +18,11 @@ const executeCronIfFailed = async () => {
     
 
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_malware_scanner_cron_if_failed");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_malware_scanner_cron_if_failed");
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -80,9 +80,9 @@ export const instantScanning = async (setScanCompleted, setErrorMessages, fetchL
       };
 
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_instant_malware_scanner");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_instant_malware_scanner");
+    formData.append("nonce", tailwatch_ajax.nonce);
     formData.append("data", JSON.stringify({
       instant_scan: true,
       dry_run: options.dry_run,
@@ -91,7 +91,7 @@ export const instantScanning = async (setScanCompleted, setErrorMessages, fetchL
       website_restore: options.website_restore
     }));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -143,7 +143,7 @@ export const instantScanning = async (setScanCompleted, setErrorMessages, fetchL
       if (response.data.data.message === "Failed to run Malware Scanner process: instant_scan is false.") {
         setErrorMessages((prevErrors) => [...prevErrors, ` ${response.data.data.message} `]);
       } else {
-        setErrorMessages((prevErrors) => [...prevErrors, 'wptw_instant_malware_scanner error']);
+        setErrorMessages((prevErrors) => [...prevErrors, 'tailwatch_instant_malware_scanner error']);
       }
       return false;
     }
@@ -164,9 +164,9 @@ export const instantScanning = async (setScanCompleted, setErrorMessages, fetchL
  */
 const buildScanLogsRequest = (lastLogIndex) => {
   const formData = new FormData();
-  formData.append("action", "wptw_global_ajax_handler");
-  formData.append("action_type", "wptw_get_malware_scan_live_logs");
-  formData.append("nonce", wptw_ajax.nonce);
+  formData.append("action", "tailwatch_global_ajax_handler");
+  formData.append("action_type", "tailwatch_get_malware_scan_live_logs");
+  formData.append("nonce", tailwatch_ajax.nonce);
   formData.append("data", JSON.stringify({ last_log_index: lastLogIndex }));
 
   const requestConfig = {
@@ -484,7 +484,7 @@ export const fetchLogs = async (
     const { formData, requestConfig } = buildScanLogsRequest(lastLogIndex);
 
     // 2. Make API request
-    const response = await axios.post(wptw_ajax.ajax_url, formData, requestConfig);
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, requestConfig);
 
     // 3. Parse response
     const parseResult = parseResponseData(response);
@@ -644,12 +644,12 @@ export const fetchMalwareData = async (setLoading, setMalwareData, page = 1, lim
   setLoading(true);
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_get_malware_scanner_report_summary");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_get_malware_scanner_report_summary");
+    formData.append("nonce", tailwatch_ajax.nonce);
     formData.append("data", JSON.stringify({ page, limit }));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -680,12 +680,12 @@ export const fetchMalwareData = async (setLoading, setMalwareData, page = 1, lim
 export const handleBulkDeleteMalware = async (isDeleteAll, pids) => {
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_delete_malware_scanner_report_by_pid");
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_delete_malware_scanner_report_by_pid");
     formData.append("data", JSON.stringify({ is_delete: isDeleteAll, pids: pids }));
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },
@@ -715,11 +715,11 @@ export const verifyScannerStatus = async ({ setVerifyLoading, setProgress, setSc
   try {
     setVerifyLoading(true);
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_malware_scanner_verify_status");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_malware_scanner_verify_status");
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
     if (response.data.success === true) {
@@ -770,12 +770,12 @@ export const verifyScannerStatus = async ({ setVerifyLoading, setProgress, setSc
 export const viewInfectedContent = async (pid, file_path) => {
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_get_infected_file_content");
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_get_infected_file_content");
     formData.append('data', JSON.stringify({ pid, file_path }));
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },

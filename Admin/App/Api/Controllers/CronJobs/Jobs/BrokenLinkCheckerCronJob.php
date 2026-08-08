@@ -44,8 +44,8 @@ class BrokenLinkCheckerCronJob extends AbstractCronJob {
 	 *
 	 */
 	public function __construct() {
-		$this->cron_hook_name   = 'wptw_broken_link_checker_schedule';
-		$this->schedule_name    = 'wptw_broken_link_checker_interval';
+		$this->cron_hook_name   = 'tailwatch_broken_link_checker_schedule';
+		$this->schedule_name    = 'tailwatch_broken_link_checker_interval';
 		$this->default_interval = '15 Days';
 
 		parent::__construct();
@@ -69,7 +69,7 @@ class BrokenLinkCheckerCronJob extends AbstractCronJob {
 	 * @return array Feature settings array.
 	 */
 	protected function get_feature_settings() {
-		return $this->get_broken_link_controller()->wptw_broken_link_settings();
+		return $this->get_broken_link_controller()->tailwatch_broken_link_settings();
 	}
 
 	/**
@@ -115,14 +115,14 @@ class BrokenLinkCheckerCronJob extends AbstractCronJob {
 		 * Fires before broken link checker cron executes.
 		 *
 		 */
-		do_action( 'wptw_before_broken_link_checker_cron_execute' );
+		do_action( 'tailwatch_before_broken_link_checker_cron_execute' );
 
-		$this->get_broken_link_controller()->wptw_insert_broken_link_data( 'automatically' );
+		$this->get_broken_link_controller()->tailwatch_insert_broken_link_data( 'automatically' );
 
 		/**
 		 * Fires after broken link checker cron was triggered.
 		 *
 		 */
-		do_action( 'wptw_after_broken_link_checker_cron_execute' );
+		do_action( 'tailwatch_after_broken_link_checker_cron_execute' );
 	}
 }

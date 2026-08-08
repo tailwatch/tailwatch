@@ -62,7 +62,7 @@ class MonitoringLogController {
 	 *     @type bool $feature_enable Whether specific feature is enabled.
 	 * }
 	 */
-	public function wptw_monitoring_is_enabled( $field_id = null ) {
+	public function tailwatch_monitoring_is_enabled( $field_id = null ) {
 		$feature_settings = $this->get_features_options();
 
 		if ( empty( $feature_settings ) ) {
@@ -105,11 +105,11 @@ class MonitoringLogController {
 	 *
 	 * @return bool Whether push notifications are enabled.
 	 */
-	public function wptw_monitoring_push_notification( $field_name ) {
+	public function tailwatch_monitoring_push_notification( $field_name ) {
 		$push_notification = new PushNotificationController();
 		$key               = 'default_feature_settings';
 		$option            = 'default_monitoring_logs';
-		return $push_notification->wptw_notification_enable_for_feature( $key, $option, $field_name );
+		return $push_notification->tailwatch_notification_enable_for_feature( $key, $option, $field_name );
 	}
 
 	/**
@@ -123,7 +123,7 @@ class MonitoringLogController {
 	 *
 	 * @return int|false The inserted row id, or false on failure.
 	 */
-	public function wptw_send_log_report( $data, $option, $type, $url = null, $current_user = '', $facets = array() ) {
+	public function tailwatch_send_log_report( $data, $option, $type, $url = null, $current_user = '', $facets = array() ) {
 
 		if ( empty( $current_user ) ) {
 			$username     = wp_get_current_user();
@@ -161,7 +161,7 @@ class MonitoringLogController {
 		$db_model = new DBModel();
 		// Return the inserted row id so callers can attach it to the notification
 		// (record_id) for deep-linking. Callers that ignore the return are unaffected.
-		return $db_model->insert_row( $logs_activity_data, $db_data_format, WPTW_DB_LOGS_TABLE_NAME );
+		return $db_model->insert_row( $logs_activity_data, $db_data_format, TAILWATCH_DB_LOGS_TABLE_NAME );
 	}
 
 	/**
@@ -189,7 +189,7 @@ class MonitoringLogController {
 		);
 
 		$data = array(
-			'domain'      => WPTW_GET_SITE_URL,
+			'domain'      => TAILWATCH_GET_SITE_URL,
 			'log_message' => sanitize_text_field( $log_message ),
 			'status_code' => absint( $status_code ),
 			'user_data'   => wp_json_encode( $user_data ),
@@ -200,7 +200,7 @@ class MonitoringLogController {
 			$data = array_merge( $data, $more_data );
 		}
 
-		return $this->wptw_send_log_report( $data, $option, absint( $status_code ), $url, '', array( 'ip_address' => $user_data['ip_address'] ) );
+		return $this->tailwatch_send_log_report( $data, $option, absint( $status_code ), $url, '', array( 'ip_address' => $user_data['ip_address'] ) );
 	}
 
 	/**
@@ -353,14 +353,14 @@ class MonitoringLogController {
 				// already-loaded $get_feature blob. OptionsController's
 				// process_fields() preserves this key per field — see
 				// the per-field extracted-shape comment there. Avoids
-				// the extra DB read wptw_notification_enable_for_feature()
+				// the extra DB read tailwatch_notification_enable_for_feature()
 				// would do.
 				// Always log the attempt first so the notification can deep-link to the
 				// row. Volume management happens via the periodic logs-cleanup cron.
 				$record_id = $this->log_http_status( $log_message, $status_code, $url, $option );
 
 				if ( ! empty( $get_feature[ $field ]['push_notification'] ) ) {
-					$rl_key = 'wptw_pn_rl_' . md5( $status_code . '|' . $url );
+					$rl_key = 'tailwatch_pn_rl_' . md5( $status_code . '|' . $url );
 					if ( false === get_transient( $rl_key ) ) {
 						$meta_data = array(
 							'feature'      => 'error_logs',
@@ -378,7 +378,7 @@ class MonitoringLogController {
 							$meta_data['Recovery mode'] = 'Yes';
 						}
 
-						$push_notification->wptw_trigger_notification(
+						$push_notification->tailwatch_trigger_notification(
 							'critical',
 							$config['title'],
 							$config['body'],

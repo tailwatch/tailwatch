@@ -6,7 +6,7 @@ import { CheckboxField } from "../Fields/CheckboxField";
 /**
  * Dynamic log filters. A Filter button (with an active-count badge) sits in the
  * table control strip; clicking it opens a modal with one searchable
- * multi-select per facet returned by wptw_logs_filter_options
+ * multi-select per facet returned by tailwatch_logs_filter_options
  * ({ column: { label, values[] } }). Each facet is a collapsible dropdown: a
  * search box appears once a facet has more than SEARCH_THRESHOLD values, and the
  * rendered list is capped at MAX_RENDER so the DOM stays light even at the

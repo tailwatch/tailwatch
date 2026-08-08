@@ -1,15 +1,15 @@
 import axios from 'axios';
 import { toast } from 'react-toastify';
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 export const handleConnectGoogle = async () => {    
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_smtp_get_gmail_oauth_url');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_smtp_get_gmail_oauth_url');
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -29,11 +29,11 @@ export const handleConnectGoogle = async () => {
 export const handleDisconnectGoogle = async () => {    
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_disconnect_google');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_disconnect_google');
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

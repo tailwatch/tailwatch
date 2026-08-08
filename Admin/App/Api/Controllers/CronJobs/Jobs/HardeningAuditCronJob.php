@@ -5,7 +5,7 @@
  * Handles the recurring hardening / security audit using the Jobs framework
  * pattern. When the recurring schedule fires, sweeps any stale in-progress
  * state from a prior run then triggers a fresh chunked audit. The worker
- * itself (`wptw_hardening_audit_scan`) self-reschedules until every check
+ * itself (`tailwatch_hardening_audit_scan`) self-reschedules until every check
  * has run — this job only kicks off the cycle, it does not iterate checks.
  *
  * @package    Tailwatch
@@ -35,8 +35,8 @@ class HardeningAuditCronJob extends AbstractCronJob {
 	private $audit_controller = null;
 
 	public function __construct() {
-		$this->cron_hook_name   = 'wptw_hardening_audit_schedule_run';
-		$this->schedule_name    = 'wptw_hardening_audit_schedule';
+		$this->cron_hook_name   = 'tailwatch_hardening_audit_schedule_run';
+		$this->schedule_name    = 'tailwatch_hardening_audit_schedule';
 		$this->default_interval = 'Every 24 Hours';
 
 		parent::__construct();
@@ -112,21 +112,21 @@ class HardeningAuditCronJob extends AbstractCronJob {
 		 * Fires before the hardening audit cron executes.
 		 *
 		 */
-		do_action( 'wptw_before_hardening_audit_cron_execute' );
+		do_action( 'tailwatch_before_hardening_audit_cron_execute' );
 
-		// Use the typed internal start (`wptw_run_hardening_audit`) instead of
-		// the AJAX-facing entry (`wptw_start_hardening_audit`) which expects a
+		// Use the typed internal start (`tailwatch_run_hardening_audit`) instead of
+		// the AJAX-facing entry (`tailwatch_start_hardening_audit`) which expects a
 		// route-layer payload (string/array) rather than a literal scan_type.
-		// Mirrors the DatabaseOptimizerCronJob → wptw_database_optimize_start
+		// Mirrors the DatabaseOptimizerCronJob → tailwatch_database_optimize_start
 		// split.
 		$controller = $this->get_audit_controller();
-		$controller->wptw_remove_garbage_entries_audit();
-		$controller->wptw_run_hardening_audit( 'automatically' );
+		$controller->tailwatch_remove_garbage_entries_audit();
+		$controller->tailwatch_run_hardening_audit( 'automatically' );
 
 		/**
 		 * Fires after the hardening audit cron has been triggered.
 		 *
 		 */
-		do_action( 'wptw_after_hardening_audit_cron_execute' );
+		do_action( 'tailwatch_after_hardening_audit_cron_execute' );
 	}
 }

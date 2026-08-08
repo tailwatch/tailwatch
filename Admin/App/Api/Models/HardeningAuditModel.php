@@ -6,7 +6,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Persistence layer for hardening-audit report snapshots.
  *
- * The shared key-value table (WPTW_DB_TABLE_NAME) holds rows for many
+ * The shared key-value table (TAILWATCH_DB_TABLE_NAME) holds rows for many
  * features; this model is the opinionated view filtered to STATE_KEY +
  * REPORT_OPTION rows — completed audit snapshots stored as JSON in `value`,
  * one per `child_of` (the report id).
@@ -39,7 +39,7 @@ class HardeningAuditModel {
 
 	public function __construct() {
 		global $wpdb;
-		$this->table = $wpdb->prefix . WPTW_DB_TABLE_NAME;
+		$this->table = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 	}
 
 	/**

@@ -33,7 +33,7 @@ const CountryListContent = ({ widget = false, limit = 10 }) => {
                             message={
                                 <span>
                                     Country rules require a free GeoIP database. Download <strong>GeoLite2-Country.mmdb</strong> from{' '}
-                                    <a href="https://www.maxmind.com/en/geolite2/signup" target="_blank" rel="noopener noreferrer" className="underline font-semibold hover:text-blue-700">MaxMind</a>{' '}(a free account is required), then upload it via your hosting file manager or FTP to your WordPress uploads directory, in the folder <code>tailwatch/wptw-logs/geoip/</code>. Country rules take effect automatically once the file is in place.
+                                    <a href="https://www.maxmind.com/en/geolite2/signup" target="_blank" rel="noopener noreferrer" className="underline font-semibold hover:text-blue-700">MaxMind</a>{' '}(a free account is required), then upload it via your hosting file manager or FTP to your WordPress uploads directory, in the folder <code>tailwatch/tailwatch-logs/geoip/</code>. Country rules take effect automatically once the file is in place.
                                 </span>
                             }
                         />

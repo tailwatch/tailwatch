@@ -135,14 +135,14 @@ input[type=radio]:checked::before {
    affect any other text. Rendered by the shared CountryFlag component
    (admin-app/src/Components/CountryFlag/CountryFlag.jsx). */
 @font-face {
-	font-family: 'wptw-flags';
+	font-family: 'tailwatch-flags';
 	src: url('../fonts/NotoColorEmojiFlags.ttf') format('truetype');
 	font-display: swap;
 	unicode-range: U+1F1E6-1F1FF;
 }
 
-.wptw-flag {
-	font-family: 'wptw-flags', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+.tailwatch-flag {
+	font-family: 'tailwatch-flags', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
 	font-style: normal;
 	font-weight: 400;
 	display: inline-block;

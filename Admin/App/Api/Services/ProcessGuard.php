@@ -225,7 +225,7 @@ class ProcessGuard {
 	 *
 	 * Process types with no `cannot_start_while` declared (or with an empty
 	 * list) return null — they can always start. Internal sub-process starts
-	 * (e.g. backup spawning db_optimize via wptw_database_optimize_start) do
+	 * (e.g. backup spawning db_optimize via tailwatch_database_optimize_start) do
 	 * NOT go through this guard; only the user-trigger AJAX entry points do.
 	 *
 	 * @param string $process_type The process_type the user is attempting to start.

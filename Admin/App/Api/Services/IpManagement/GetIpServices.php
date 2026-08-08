@@ -17,12 +17,12 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class GetIpServices {
 
-	public static function wptw_get_client_ip() {
+	public static function tailwatch_get_client_ip() {
 		$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
 
 		// Trust proxy headers if configured
 		global $wpdb;
-		$table       = $wpdb->prefix . WPTW_DB_TABLE_NAME;
+		$table       = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 		$trust_proxy = $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table, no WP cache API.
 			$wpdb->prepare(
 				'SELECT `value` FROM %i WHERE `key` = %s AND `option` = %s LIMIT 1',
@@ -50,7 +50,7 @@ class GetIpServices {
 			}
 		}
 
-		return filter_var( $ip, FILTER_VALIDATE_IP ) ? self::wptw_normalize_ip( $ip ) : '0.0.0.0';
+		return filter_var( $ip, FILTER_VALIDATE_IP ) ? self::tailwatch_normalize_ip( $ip ) : '0.0.0.0';
 	}
 
 	/**
@@ -63,7 +63,7 @@ class GetIpServices {
 	 * @param string $ip IP address.
 	 * @return string Canonical IP, or the original string when not a valid IP.
 	 */
-	public static function wptw_normalize_ip( $ip ) {
+	public static function tailwatch_normalize_ip( $ip ) {
 		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- inet_pton emits a warning on malformed input; false is explicitly handled on the next line.
 		$packed = @inet_pton( (string) $ip );
 		if ( false === $packed ) {

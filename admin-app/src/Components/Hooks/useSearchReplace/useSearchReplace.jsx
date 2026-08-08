@@ -4,7 +4,7 @@ import { UseSearchReplace } from '../Features/UseFeatures';
 import { getLocalStorage, updateLocalStorage } from '../../Utils/HelperFunctions/LocalStorageHelper';
 import { toast } from 'react-toastify';
 import { getTables, fetchLogs, verifySearchReplaceStatus, seartchActions, startSearchReplace } from '../../../Pages/SearchReplace/SearchReplaceServices/SearchReplaceServices';
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 export const useSearchReplace = () => {
     const { enableSearchReplace, refreshSearchReplaceStatus } = UseSearchReplace();
     const [scanCompleted, setScanCompleted] = useState(false);
@@ -157,12 +157,12 @@ export const useSearchReplace = () => {
     const handleSeartchAction = async (scan_state) => {
         try {
             const formData = new FormData();
-            formData.append("action", "wptw_global_ajax_handler");
-            formData.append("action_type", "wptw_cancel_pause_search_replace");
+            formData.append("action", "tailwatch_global_ajax_handler");
+            formData.append("action_type", "tailwatch_cancel_pause_search_replace");
             formData.append("data", JSON.stringify({ scan_state }));
-            formData.append("nonce", wptw_ajax.nonce);
+            formData.append("nonce", tailwatch_ajax.nonce);
 
-            const response = await axios.post(wptw_ajax.ajax_url, formData, {
+            const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
                 headers: { "Content-Type": "multipart/form-data" },
             });
 

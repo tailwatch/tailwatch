@@ -15,7 +15,7 @@ class SettingsController {
 	 *
 	 * @return array User data with status code and message.
 	 */
-	public function wptw_get_user_info() {
+	public function tailwatch_get_user_info() {
 		try {
 			// Ensure the user is logged in.
 			if ( ! is_user_logged_in() ) {
@@ -56,7 +56,7 @@ class SettingsController {
 		}
 	}
 
-	public function wptw_verify_import_and_reset_status() {
+	public function tailwatch_verify_import_and_reset_status() {
 		try {
 			$DBModel = new DBModel();
 			// Check reset status first

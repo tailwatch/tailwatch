@@ -29,10 +29,10 @@ use Tailwatch\Admin\App\Api\Services\Time\TimeService;
  * IP Protection Controller
  */
 class IpProtectionController extends BaseController {
-	protected $wptw_feature_check_exemptions = array();
+	protected $tailwatch_feature_check_exemptions = array();
 
-	protected function wptw_get_feature_status() {
-		return $this->wptw_ip_login_defender_is_enabled();
+	protected function tailwatch_get_feature_status() {
+		return $this->tailwatch_ip_login_defender_is_enabled();
 	}
 
 	private $ip_access_service;
@@ -53,12 +53,12 @@ class IpProtectionController extends BaseController {
 			$this->settings
 		);
 
-		// Cron scheduling and handler registration for 'wptw_login_defender_cleanup' and
-		// 'wptw_login_defender_cleanup_expired' is owned by CronJobs framework jobs:
+		// Cron scheduling and handler registration for 'tailwatch_login_defender_cleanup' and
+		// 'tailwatch_login_defender_cleanup_expired' is owned by CronJobs framework jobs:
 		// LoginDefenderLogsCleanupCronJob + LoginDefenderExpiredBlocksCronJob.
 	}
 
-	public function wptw_ips_login_defender_options() {
+	public function tailwatch_ips_login_defender_options() {
 		$key                = 'default_feature_settings';
 		$option             = 'default_login_defender_management';
 		$is_active          = true;
@@ -71,11 +71,11 @@ class IpProtectionController extends BaseController {
 		$key               = 'default_feature_settings';
 		$option            = 'default_login_defender_management';
 		$field_name        = 'field_13';
-		return $push_notification->wptw_notification_enable_for_feature( $key, $option, $field_name );
+		return $push_notification->tailwatch_notification_enable_for_feature( $key, $option, $field_name );
 	}
 
-	public function wptw_ip_login_defender_is_enabled() {
-		$feature_settings = $this->wptw_ips_login_defender_options();
+	public function tailwatch_ip_login_defender_is_enabled() {
+		$feature_settings = $this->tailwatch_ips_login_defender_options();
 
 		if ( empty( $feature_settings ) ) {
 			return array(
@@ -100,7 +100,7 @@ class IpProtectionController extends BaseController {
 	}
 
 	public function login_defender_ip_protection_settings() {
-		$external_settings = $this->wptw_ips_login_defender_options();
+		$external_settings = $this->tailwatch_ips_login_defender_options();
 		$field_13          = $external_settings['field_13'] ?? array();
 		$is_enabled        = $field_13['options']['option']['selected'] ?? false;
 
@@ -192,7 +192,7 @@ class IpProtectionController extends BaseController {
 			return;
 		}
 
-		$ip = GetIpServices::wptw_get_client_ip();
+		$ip = GetIpServices::tailwatch_get_client_ip();
 
 		// This is for fix stop consider failed attempt on page reload
 		$method              = isset( $_SERVER['REQUEST_METHOD'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) : 'GET';
@@ -217,7 +217,7 @@ class IpProtectionController extends BaseController {
 			} else {
 				$message = $this->get_block_message();
 			}
-			set_transient( 'login_defender_error_' . md5( $ip ), $message, 30 );
+			set_transient( 'tailwatch_login_defender_error_' . md5( $ip ), $message, 30 );
 			return;
 		}
 
@@ -228,7 +228,7 @@ class IpProtectionController extends BaseController {
 			if ( $result && ! $result['is_blocked'] ) {
 				$remaining = $result['remaining_attempts'];
 				$message   = sprintf( 'Login failed. You have %d attempt(s) left before your IP is temporarily blocked.', $remaining );
-				set_transient( 'login_defender_error_' . md5( $ip ), $message, 30 );
+				set_transient( 'tailwatch_login_defender_error_' . md5( $ip ), $message, 30 );
 			} elseif ( $result && $result['is_blocked'] ) {
 				// The block was created on THIS attempt (the threshold just crossed).
 				// Fire the push here — once — instead of on every later blocked
@@ -334,7 +334,7 @@ class IpProtectionController extends BaseController {
 			return;
 		}
 
-		$ip = GetIpServices::wptw_get_client_ip();
+		$ip = GetIpServices::tailwatch_get_client_ip();
 
 		if ( $this->has_logged_successful_login( $ip ) ) {
 			return;
@@ -347,7 +347,7 @@ class IpProtectionController extends BaseController {
 	}
 
 	public function handle_authentication( $user, $username, $password ) {
-		$ip = GetIpServices::wptw_get_client_ip();
+		$ip = GetIpServices::tailwatch_get_client_ip();
 
 		if ( ! filter_var( $ip, FILTER_VALIDATE_IP ) ) {
 			return $user;
@@ -385,7 +385,7 @@ class IpProtectionController extends BaseController {
 			return;
 		}
 
-		$ip         = GetIpServices::wptw_get_client_ip();
+		$ip         = GetIpServices::tailwatch_get_client_ip();
 		$ip_blocked = $this->is_blocked( $ip );
 		if ( is_array( $ip_blocked ) && $ip_blocked['allowed'] === false ) {
 			$message = in_array( $ip_blocked['method'], array( 'ip_management', 'geo_restrictions' ), true )
@@ -393,7 +393,7 @@ class IpProtectionController extends BaseController {
 			: $this->get_block_message();
 
 			if ( is_user_logged_in() ) {
-				set_transient( 'login_defender_block_message_' . md5( $ip ), $message, 30 );
+				set_transient( 'tailwatch_login_defender_block_message_' . md5( $ip ), $message, 30 );
 				// Log out the user
 				wp_logout();
 				// Redirect to login page
@@ -404,7 +404,7 @@ class IpProtectionController extends BaseController {
 		}
 	}
 
-	public function wptw_handle_unblock_ip( $postData ) {
+	public function tailwatch_handle_unblock_ip( $postData ) {
 		try {
 			$json_data = isset( $postData ) ? wp_unslash( $postData ) : '';
 			$data      = json_decode( $json_data, true );
@@ -504,7 +504,7 @@ class IpProtectionController extends BaseController {
 		}
 	}
 
-	public function wptw_handle_delete_ip_activity( $postData ) {
+	public function tailwatch_handle_delete_ip_activity( $postData ) {
 		try {
 			$json_data = isset( $postData ) ? wp_unslash( $postData ) : '';
 			$data      = json_decode( $json_data, true );
@@ -599,7 +599,7 @@ class IpProtectionController extends BaseController {
 		}
 	}
 
-	public function wptw_handle_get_all_ip_activities( $postData ) {
+	public function tailwatch_handle_get_all_ip_activities( $postData ) {
 		try {
 			$json_data = isset( $postData ) ? wp_unslash( $postData ) : '';
 			$data      = json_decode( $json_data, true );
@@ -664,7 +664,7 @@ class IpProtectionController extends BaseController {
 		}
 	}
 
-	public function wptw_handle_get_ip_activity_history( $postData ) {
+	public function tailwatch_handle_get_ip_activity_history( $postData ) {
 		try {
 			$json_data = isset( $postData ) ? wp_unslash( $postData ) : '';
 			$data      = json_decode( $json_data, true );
@@ -842,7 +842,7 @@ class IpProtectionController extends BaseController {
 	public function get_block_message() {
 		$settings = $this->settings;
 
-		$ip      = GetIpServices::wptw_get_client_ip();
+		$ip      = GetIpServices::tailwatch_get_client_ip();
 		$country = $this->geoip->get_country( $ip );
 		$message = $settings['error_messages']['ip_blocked'];
 		if ( empty( $message ) ) {
@@ -887,12 +887,12 @@ class IpProtectionController extends BaseController {
 	}
 
 	public function custom_login_error_message( $error ) {
-		$ip = GetIpServices::wptw_get_client_ip();
+		$ip = GetIpServices::tailwatch_get_client_ip();
 		if ( ! filter_var( $ip, FILTER_VALIDATE_IP ) ) {
 			return $error;
 		}
 
-		$cache_key     = 'login_defender_block_message_' . md5( $ip );
+		$cache_key     = 'tailwatch_login_defender_block_message_' . md5( $ip );
 		$block_message = get_transient( $cache_key );
 		if ( $block_message ) {
 			delete_transient( $cache_key );
@@ -907,7 +907,7 @@ class IpProtectionController extends BaseController {
 			return wp_kses_post( $message );
 		}
 
-		$error_cache_key = 'login_defender_error_' . md5( $ip );
+		$error_cache_key = 'tailwatch_login_defender_error_' . md5( $ip );
 		$custom_error    = get_transient( $error_cache_key );
 		if ( $custom_error ) {
 			delete_transient( $error_cache_key );
@@ -922,7 +922,7 @@ class IpProtectionController extends BaseController {
 		$retention_days = $settings['log_retention_days'] ?? 30;
 		$cutoff         = gmdate( 'Y-m-d H:i:s', strtotime( "-$retention_days days" ) );
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 		$result     = $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$wpdb->prepare(
 				'DELETE FROM %i WHERE `key` IN (%s, %s) AND date_created < %s',
@@ -936,7 +936,7 @@ class IpProtectionController extends BaseController {
 
 	public function cleanup_expired_blocks() {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 
 		$activities        = $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$wpdb->prepare(
@@ -992,7 +992,7 @@ class IpProtectionController extends BaseController {
 					array( '%s', '%s', '%s', '%d' ),
 					array( '%s', '%s' )
 				);
-				$cache_key = 'login_defender_ip_activity_' . md5( $data['ip_address'] );
+				$cache_key = 'tailwatch_login_defender_ip_activity_' . md5( $data['ip_address'] );
 				set_transient( $cache_key, $data, HOUR_IN_SECONDS );
 			}
 		}
@@ -1020,7 +1020,7 @@ class IpProtectionController extends BaseController {
 					array( '%d', '%s' ),
 					array( '%d' )
 				);
-				$transient = $rule->key === 'ip_range_block' ? 'login_defender_ip_rules' : 'login_defender_country_rules';
+				$transient = $rule->key === 'ip_range_block' ? 'tailwatch_login_defender_ip_rules' : 'tailwatch_login_defender_country_rules';
 				delete_transient( $transient );
 				++$count;
 			}

@@ -22,7 +22,7 @@ use Tailwatch\Admin\App\Api\Services\ProcessManager;
 class HardeningAuditController {
 
 	const PROCESS_TYPE = 'hardening_audit';
-	const CRON_HOOK    = 'wptw_hardening_audit_scan';
+	const CRON_HOOK    = 'tailwatch_hardening_audit_scan';
 
 	const FEATURE_OPTION_KEY = 'default_feature_settings';
 	const FEATURE_OPTION     = 'default_hardening_audit';
@@ -45,18 +45,18 @@ class HardeningAuditController {
 	/**
 	 * Live-log directory and file-base. Each run gets its own log file at
 	 * `<live_log_base>_<run_id>.json` so the frontend polling
-	 * `wptw_get_hardening_audit_live_logs` only ever streams the current
+	 * `tailwatch_get_hardening_audit_live_logs` only ever streams the current
 	 * audit's lines. Mirrors DatabaseOptimizerController's
 	 * $log_directory / $get_live_logs split.
 	 *
 	 * @var string
 	 */
-	private $log_directory = WPTW_LOGS_DIRECTORY . '/hardening-audit-logs';
+	private $log_directory = TAILWATCH_LOGS_DIRECTORY . '/hardening-audit-logs';
 
 	/**
 	 * @var string
 	 */
-	private $live_log_base = WPTW_LOGS_DIRECTORY . '/hardening-audit-logs/hardening-audit';
+	private $live_log_base = TAILWATCH_LOGS_DIRECTORY . '/hardening-audit-logs/hardening-audit';
 
 	public function __construct() {
 		$this->process_manager = new ProcessManager();
@@ -65,13 +65,13 @@ class HardeningAuditController {
 		$this->register_process_monitoring();
 
 		$hook_controller = new HookControllers();
-		$hook_controller->add_action_hook( self::CRON_HOOK, array( $this, 'wptw_run_hardening_audit_with_monitoring' ) );
+		$hook_controller->add_action_hook( self::CRON_HOOK, array( $this, 'tailwatch_run_hardening_audit_with_monitoring' ) );
 
 		// Layer-2 fallback so ProcessStatusService can verify our state from
 		// our own scan_state field even when the ProcessManager row is stale
 		// or absent. Mirrors how db_optimize and files_integrity register
 		// their built-in fallbacks — for new modules we hook the public filter.
-		add_filter( 'wptw_process_status_fallbacks', array( $this, 'register_status_fallback' ) );
+		add_filter( 'tailwatch_process_status_fallbacks', array( $this, 'register_status_fallback' ) );
 	}
 
 	/**
@@ -86,7 +86,7 @@ class HardeningAuditController {
 				'process_type'        => self::PROCESS_TYPE,
 				'cron_hooks'          => array(
 					self::CRON_HOOK,
-					'wptw_hardening_audit_schedule_run',
+					'tailwatch_hardening_audit_schedule_run',
 				),
 				'data_source'         => 'wp_tw_settings',
 				'data_key'            => self::STATE_KEY,
@@ -110,7 +110,7 @@ class HardeningAuditController {
 	}
 
 	/**
-	 * Layer-2 fallback registered via wptw_process_status_fallbacks. Returns
+	 * Layer-2 fallback registered via tailwatch_process_status_fallbacks. Returns
 	 * true when our own scan_state says the audit is mid-run, so ProcessGuard
 	 * can detect activity even if the ProcessManager row is stale.
 	 *
@@ -145,7 +145,7 @@ class HardeningAuditController {
 		);
 	}
 
-		public function wptw_hardening_audit_feature_enable() {
+		public function tailwatch_hardening_audit_feature_enable() {
 		$options = $this->get_features_options();
 		if ( empty( $options ) ) {
 			return array(
@@ -177,7 +177,7 @@ class HardeningAuditController {
 		$key               = self::FEATURE_OPTION_KEY;
 		$option            = self::FEATURE_OPTION;
 		$field_name        = 'field_1';
-		return $push_notification->wptw_notification_enable_for_feature( $key, $option, $field_name );
+		return $push_notification->tailwatch_notification_enable_for_feature( $key, $option, $field_name );
 	}
 
 	/**
@@ -185,7 +185,7 @@ class HardeningAuditController {
 	 * used by the maintenance cron to prune old audit reports.
 	 *
 	 * Returns 0 for "Keep All Data" — sentinel meaning "never prune". The
-	 * caller (`wptw_prune_hardening_audit_reports`) treats 0 as a
+	 * caller (`tailwatch_prune_hardening_audit_reports`) treats 0 as a
 	 * skip-prune signal so an arbitrarily-large bound isn't compared
 	 * against `date_created` (and so we never accidentally delete
 	 * everything if the value parses unexpectedly).
@@ -214,7 +214,7 @@ class HardeningAuditController {
 				// Unknown retention values fall through to the filter so
 				// extensions can supply seconds for retention buckets they add.
 				// Defaults to 24 hours when no listener is registered.
-				return (int) apply_filters( 'wptw_hardening_audit_retention_seconds', 24 * HOUR_IN_SECONDS, $selected );
+				return (int) apply_filters( 'tailwatch_hardening_audit_retention_seconds', 24 * HOUR_IN_SECONDS, $selected );
 		}
 	}
 
@@ -368,7 +368,7 @@ class HardeningAuditController {
 	 *
 	 * @return string Absolute path or empty string.
 	 */
-	public function wptw_get_log_file_path() {
+	public function tailwatch_get_log_file_path() {
 		$progress = $this->get_progress_data();
 		if ( empty( $progress ) || empty( $progress['run_id'] ) ) {
 			return '';
@@ -381,8 +381,8 @@ class HardeningAuditController {
 	/**
 	 * AJAX/Mobile entry for a user-triggered audit start.
 	 *
-	 * Mirrors the safety gating that DatabaseOptimizerController::wptw_database_optimize
-	 * and IntegrityWatchController::wptw_instant_files_integrity_check apply
+	 * Mirrors the safety gating that DatabaseOptimizerController::tailwatch_database_optimize
+	 * and IntegrityWatchController::tailwatch_instant_files_integrity_check apply
 	 * before kicking off a manual run:
 	 *
 	 *   1. ProcessGuard refusal if a conflicting process is mid-flight.
@@ -390,7 +390,7 @@ class HardeningAuditController {
 	 *   3. `instant_scan: true` flag — refuse with 400 when missing/false.
 	 *      This is a deliberate seatbelt: the route is a sensitive trigger,
 	 *      and requiring an explicit boolean prevents a stray POST (e.g. an
-	 *      automation that calls every `wptw_start_*` endpoint with empty
+	 *      automation that calls every `tailwatch_start_*` endpoint with empty
 	 *      bodies during onboarding) from silently launching real audits.
 	 *   4. HTTP cron-access self-test via CronHealthService — refuse if
 	 *      WP-Cron itself is broken (DISABLE_WP_CRON / ALTERNATE_WP_CRON /
@@ -409,14 +409,14 @@ class HardeningAuditController {
 	 *                         already-decoded array (mobile).
 	 * @return array Standardised response { code, data, message }.
 	 */
-	public function wptw_start_hardening_audit( $post_data = null ) {
+	public function tailwatch_start_hardening_audit( $post_data = null ) {
 		try {
 			$blocked = ( new ProcessGuard() )->ensure_can_start_process( self::PROCESS_TYPE );
 			if ( null !== $blocked ) {
 				return $blocked;
 			}
 
-			$is_enabled = $this->wptw_hardening_audit_feature_enable();
+			$is_enabled = $this->tailwatch_hardening_audit_feature_enable();
 			if ( empty( $is_enabled['feature_enable'] ) ) {
 				Log::error(
 					'Hardening Audit feature is not enabled',
@@ -503,10 +503,10 @@ class HardeningAuditController {
 				)
 			);
 
-			return $this->wptw_run_hardening_audit( 'on-demand' );
+			return $this->tailwatch_run_hardening_audit( 'on-demand' );
 		} catch ( \Throwable $e ) {
 			Log::error(
-				'Exception in wptw_start_hardening_audit: ' . $e->getMessage(),
+				'Exception in tailwatch_start_hardening_audit: ' . $e->getMessage(),
 				array(
 					'feature'   => 'hardening_audit',
 					'action'    => 'hardening_audit_start_failed',
@@ -525,7 +525,7 @@ class HardeningAuditController {
 	 * Typed internal start.
 	 *
 	 * Two callers:
-	 *   - {@see wptw_start_hardening_audit} — the AJAX/Mobile entry, after
+	 *   - {@see tailwatch_start_hardening_audit} — the AJAX/Mobile entry, after
 	 *     it validates `instant_scan`, tests cron access, and unschedules
 	 *     the recurring job. Always passes `'on-demand'`.
 	 *   - {@see HardeningAuditCronJob::execute} — the recurring schedule.
@@ -538,7 +538,7 @@ class HardeningAuditController {
 	 * @param string $scan_type 'on-demand' or 'automatically'.
 	 * @return array Standardised response { code, data, message }.
 	 */
-	public function wptw_run_hardening_audit( $scan_type = 'on-demand' ) {
+	public function tailwatch_run_hardening_audit( $scan_type = 'on-demand' ) {
 		// Pre-declared so the catch block can mark_failed even when the
 		// exception fires after `get_or_create_process` succeeded — without
 		// this, $process_id would be undefined in the catch and PHP would
@@ -559,7 +559,7 @@ class HardeningAuditController {
 				$scan_type = 'on-demand';
 			}
 
-			$enabled = $this->wptw_hardening_audit_feature_enable();
+			$enabled = $this->tailwatch_hardening_audit_feature_enable();
 			if ( empty( $enabled['feature_enable'] ) ) {
 				return array(
 					'code'           => 400,
@@ -575,7 +575,7 @@ class HardeningAuditController {
 			// must respect.
 			$existing = $this->get_cancel_pause_data();
 			if ( is_array( $existing ) && isset( $existing['scan_state'] ) && 'pause' === $existing['scan_state'] ) {
-				return $this->wptw_resume_hardening_audit();
+				return $this->tailwatch_resume_hardening_audit();
 			}
 
 			// Anything else (in-progress, completed, or empty) — sweep stale
@@ -583,7 +583,7 @@ class HardeningAuditController {
 			// a "real run" would leave a no-op audit forever stuck after a
 			// hard crash; the cleanup cron normally handles that, but a
 			// manual start should reset cleanly even before the cron fires.
-			$this->wptw_remove_garbage_entries_audit();
+			$this->tailwatch_remove_garbage_entries_audit();
 
 			$run_id     = time();
 			$process_id = $this->process_manager->get_or_create_process(
@@ -634,14 +634,14 @@ class HardeningAuditController {
 			// folder for us and only writes when the file does not already
 			// exist, so a duplicate start that fell through earlier guards
 			// cannot clobber a sibling run's log.
-			if ( ! file_exists( WPTW_LOGS_DIRECTORY ) ) {
-				wp_mkdir_p( WPTW_LOGS_DIRECTORY );
+			if ( ! file_exists( TAILWATCH_LOGS_DIRECTORY ) ) {
+				wp_mkdir_p( TAILWATCH_LOGS_DIRECTORY );
 			}
 			$live_logs = new LiveLogsController();
 			$live_logs->insert_live_logs_records(
 				sprintf( 'Starting hardening audit (%s)', $scan_type ),
 				$this->log_directory,
-				$this->wptw_get_log_file_path()
+				$this->tailwatch_get_log_file_path()
 			);
 
 			$this->process_manager->heart_beat( $process_id );
@@ -678,7 +678,7 @@ class HardeningAuditController {
 			// Clean up the ProcessManager row so we don't leak a stuck
 			// 'pending' process when the exception fires AFTER
 			// `get_or_create_process` succeeded. Mirrors the behaviour of
-			// DatabaseOptimizerController::wptw_database_optimize_start's
+			// DatabaseOptimizerController::tailwatch_database_optimize_start's
 			// catch block. $process_id stays null when the exception fires
 			// before that line, in which case we have nothing to clean up.
 			if ( ! empty( $process_id ) ) {
@@ -695,7 +695,7 @@ class HardeningAuditController {
 
 	/**
 	 * UI status probe. Returns the canonical scan_state plus a derived
-	 * progress percentage. Shape mirrors `wptw_verify_db_optimize_status` so
+	 * progress percentage. Shape mirrors `tailwatch_verify_db_optimize_status` so
 	 * the same status-watching JS can render either feature.
 	 *
 	 * Accepts (and ignores) `$post_data` so the route layer's blanket
@@ -704,11 +704,11 @@ class HardeningAuditController {
 	 * @param mixed $post_data Unused — accepted for route-layer compatibility.
 	 * @return array
 	 */
-	public function wptw_verify_hardening_audit_status( $post_data = null ) {
+	public function tailwatch_verify_hardening_audit_status( $post_data = null ) {
 		unset( $post_data );
 
 		try {
-			$is_enabled = $this->wptw_hardening_audit_feature_enable();
+			$is_enabled = $this->tailwatch_hardening_audit_feature_enable();
 			if ( empty( $is_enabled['feature_enable'] ) ) {
 				Log::error(
 					'Hardening Audit feature is not enabled',
@@ -730,7 +730,7 @@ class HardeningAuditController {
 			$cancel_pause = $this->get_cancel_pause_data();
 
 			// Explicit per-state branches mirror DB Optimizer's
-			// `wptw_verify_db_optimize_status` exactly: each scan_state has
+			// `tailwatch_verify_db_optimize_status` exactly: each scan_state has
 			// its own response shape and message so frontend code that
 			// switches on `message` (or that conditionally renders extras
 			// only when the scan is mid-run) behaves identically across
@@ -809,7 +809,7 @@ class HardeningAuditController {
 
 	/**
 	 * Unified user pause/cancel entry. Mirrors Integrity's
-	 * `wptw_cancel_pause_integrity` exactly: one route, one method, the
+	 * `tailwatch_cancel_pause_integrity` exactly: one route, one method, the
 	 * caller distinguishes pause from cancel via `scan_state` in the
 	 * payload. Adds the DB-Optimizer-style feature_enable gate at the top
 	 * so a disabled feature returns 400 with `feature_enable=false` rather
@@ -820,9 +820,9 @@ class HardeningAuditController {
 	 * @param mixed $post_data
 	 * @return array
 	 */
-	public function wptw_cancel_pause_hardening_audit( $post_data = null ) {
+	public function tailwatch_cancel_pause_hardening_audit( $post_data = null ) {
 		try {
-			$is_enabled = $this->wptw_hardening_audit_feature_enable();
+			$is_enabled = $this->tailwatch_hardening_audit_feature_enable();
 			if ( empty( $is_enabled['feature_enable'] ) ) {
 				Log::error(
 					'Hardening Audit feature is not enabled',
@@ -859,10 +859,10 @@ class HardeningAuditController {
 				);
 			}
 
-			return $this->wptw_pause_or_cancel( $scan_state );
+			return $this->tailwatch_pause_or_cancel( $scan_state );
 		} catch ( \Throwable $e ) {
 			Log::error(
-				'Exception in wptw_cancel_pause_hardening_audit: ' . $e->getMessage(),
+				'Exception in tailwatch_cancel_pause_hardening_audit: ' . $e->getMessage(),
 				array(
 					'feature'   => 'hardening_audit',
 					'action'    => 'hardening_audit_cancel_pause_failed',
@@ -879,14 +879,14 @@ class HardeningAuditController {
 
 	/**
 	 * Shared pause/cancel executor. Stays private now that the public
-	 * surface is the unified `wptw_cancel_pause_hardening_audit`. Two paths
+	 * surface is the unified `tailwatch_cancel_pause_hardening_audit`. Two paths
 	 * through one method because the unschedule logic is identical — only
 	 * the terminal state and the ProcessManager call differ.
 	 *
 	 * @param string $target_state 'pause' or 'cancel'.
 	 * @return array
 	 */
-	private function wptw_pause_or_cancel( $target_state ) {
+	private function tailwatch_pause_or_cancel( $target_state ) {
 		try {
 			if ( ! in_array( $target_state, array( 'pause', 'cancel' ), true ) ) {
 				return array(
@@ -934,7 +934,7 @@ class HardeningAuditController {
 			// Tell the live-log stream what just happened so the frontend
 			// can show it without polling status separately. Only write if
 			// the run actually has a log file (i.e. it got past start).
-			$log_file = $this->wptw_get_log_file_path();
+			$log_file = $this->tailwatch_get_log_file_path();
 			if ( '' !== $log_file && file_exists( $log_file ) ) {
 				$live_logs = new LiveLogsController();
 				$live_logs->update_live_logs_records(
@@ -948,7 +948,7 @@ class HardeningAuditController {
 					// Mark the live-log stream complete on cancel so the
 					// frontend stops polling — pause leaves it open because
 					// resume will resume the same stream.
-					$live_logs->wptw_live_logs_completed( true, $log_file );
+					$live_logs->tailwatch_live_logs_completed( true, $log_file );
 				}
 			}
 
@@ -994,11 +994,11 @@ class HardeningAuditController {
 	 * @param mixed $post_data Unused — accepted for route-layer compatibility.
 	 * @return array
 	 */
-	public function wptw_resume_hardening_audit( $post_data = null ) {
+	public function tailwatch_resume_hardening_audit( $post_data = null ) {
 		unset( $post_data );
 
 		try {
-			$is_enabled = $this->wptw_hardening_audit_feature_enable();
+			$is_enabled = $this->tailwatch_hardening_audit_feature_enable();
 			if ( empty( $is_enabled['feature_enable'] ) ) {
 				Log::error(
 					'Hardening Audit feature is not enabled',
@@ -1018,8 +1018,8 @@ class HardeningAuditController {
 
 			$cancel_pause = $this->get_cancel_pause_data();
 
-			// Single-branch validation matching `wptw_resume_db_optimize` and
-			// `wptw_resume_files_integrity` exactly: empty state AND
+			// Single-branch validation matching `tailwatch_resume_db_optimize` and
+			// `tailwatch_resume_files_integrity` exactly: empty state AND
 			// not-paused both fall into the same 400 "already scheduled"
 			// rejection rather than splitting them into 404 + 400. Frontends
 			// that switch on this code path will behave identically across
@@ -1039,7 +1039,7 @@ class HardeningAuditController {
 					wp_schedule_single_event( time(), self::CRON_HOOK );
 				}
 
-				$log_file = $this->wptw_get_log_file_path();
+				$log_file = $this->tailwatch_get_log_file_path();
 				if ( '' !== $log_file && file_exists( $log_file ) ) {
 					$live_logs = new LiveLogsController();
 					$live_logs->update_live_logs_records(
@@ -1096,8 +1096,8 @@ class HardeningAuditController {
 
 	/**
 	 * Recovery endpoint: reschedule the chunked worker when it appears to
-	 * have stalled. Mirrors `wptw_db_optimization_cron_if_failed` and
-	 * `wptw_files_integrity_cron_if_failed` — same shape, same return codes
+	 * have stalled. Mirrors `tailwatch_db_optimization_cron_if_failed` and
+	 * `tailwatch_files_integrity_cron_if_failed` — same shape, same return codes
 	 * — so the same frontend "is the scan stuck? click to retry" affordance
 	 * works for all three modules.
 	 *
@@ -1120,11 +1120,11 @@ class HardeningAuditController {
 	 * @param mixed $post_data Unused — accepted for route-layer compatibility.
 	 * @return array
 	 */
-	public function wptw_hardening_audit_cron_if_failed( $post_data = null ) {
+	public function tailwatch_hardening_audit_cron_if_failed( $post_data = null ) {
 		unset( $post_data );
 
 		try {
-			$is_enabled = $this->wptw_hardening_audit_feature_enable();
+			$is_enabled = $this->tailwatch_hardening_audit_feature_enable();
 			if ( empty( $is_enabled['feature_enable'] ) ) {
 				Log::error(
 					'Hardening Audit feature is not enabled',
@@ -1240,7 +1240,7 @@ class HardeningAuditController {
 	 *
 	 * @return void
 	 */
-	public function wptw_run_hardening_audit_with_monitoring() {
+	public function tailwatch_run_hardening_audit_with_monitoring() {
 		$cancel_pause = $this->get_cancel_pause_data();
 		if ( empty( $cancel_pause ) || empty( $cancel_pause['scan_state'] ) ) {
 			return;
@@ -1342,7 +1342,7 @@ class HardeningAuditController {
 		// uses ("Processing spam comments (rows N-M)") and Integrity uses
 		// ("Scanning files: N-M"): announce what we're doing in present
 		// tense BEFORE the work happens, with a human-readable name.
-		$log_file       = $this->wptw_get_log_file_path();
+		$log_file       = $this->tailwatch_get_log_file_path();
 		$live_logs      = new LiveLogsController();
 		$has_log_target = ( '' !== $log_file && file_exists( $log_file ) );
 
@@ -1375,7 +1375,7 @@ class HardeningAuditController {
 		$progress['remaining_checks'] = $remaining;
 		$this->update_progress_data( $progress );
 
-		// Mirror the same percentage onto cancel_pause so wptw_import_live_logs
+		// Mirror the same percentage onto cancel_pause so tailwatch_import_live_logs
 		// and any other consumer reading cancel_pause['progress'] see the
 		// real progress, not the stale 0 we seeded at start. Independently
 		// useful: the verify-status endpoint pulls from progress, but
@@ -1505,10 +1505,10 @@ class HardeningAuditController {
 
 		// Final live-log lines + completion flag. Mirrors Integrity's
 		// two-line completion: INFO "Scan completed successfully" then
-		// RESULT "Changes found: N". wptw_live_logs_completed flips
+		// RESULT "Changes found: N". tailwatch_live_logs_completed flips
 		// is_completed=true on the JSON file so the frontend's polling
 		// loop tears itself down after one last fetch.
-		$log_file = $this->wptw_get_log_file_path();
+		$log_file = $this->tailwatch_get_log_file_path();
 		if ( '' !== $log_file && file_exists( $log_file ) ) {
 			$live_logs = new LiveLogsController();
 
@@ -1532,7 +1532,7 @@ class HardeningAuditController {
 				'RESULT'
 			);
 
-			$live_logs->wptw_live_logs_completed( true, $log_file );
+			$live_logs->tailwatch_live_logs_completed( true, $log_file );
 		}
 
 		$summary        = isset( $report['summary'] ) && is_array( $report['summary'] ) ? $report['summary'] : array();
@@ -1584,7 +1584,7 @@ class HardeningAuditController {
 			);
 		}
 
-		do_action( 'wptw_after_hardening_audit_completed', $report );
+		do_action( 'tailwatch_after_hardening_audit_completed', $report );
 	}
 
 	private function empty_summary() {
@@ -1613,7 +1613,7 @@ class HardeningAuditController {
 	 * @param mixed $post_data Unused — accepted for route-layer compatibility.
 	 * @return array
 	 */
-	public function wptw_remove_garbage_entries_audit( $post_data = null ) {
+	public function tailwatch_remove_garbage_entries_audit( $post_data = null ) {
 		unset( $post_data );
 
 		try {
@@ -1657,7 +1657,7 @@ class HardeningAuditController {
 	 * AJAX/Mobile fetch for the current run's live-log stream. Frontend
 	 * polls this with `{ last_log_index: N }` and gets back any new lines
 	 * plus the current scan_state, progress, ETA, and is_completed flag —
-	 * mirroring `wptw_get_optimize_live_logs` exactly so the same status
+	 * mirroring `tailwatch_get_optimize_live_logs` exactly so the same status
 	 * UI component can render either feature.
 	 *
 	 * Returns 404 when there is no active or paused run (no log file on
@@ -1667,9 +1667,9 @@ class HardeningAuditController {
 	 * @param mixed $post_data
 	 * @return array
 	 */
-	public function wptw_get_hardening_audit_live_logs( $post_data = null ) {
+	public function tailwatch_get_hardening_audit_live_logs( $post_data = null ) {
 		try {
-			$is_enabled = $this->wptw_hardening_audit_feature_enable();
+			$is_enabled = $this->tailwatch_hardening_audit_feature_enable();
 			if ( empty( $is_enabled['feature_enable'] ) ) {
 				Log::error(
 					'Hardening Audit feature is not enabled',
@@ -1687,7 +1687,7 @@ class HardeningAuditController {
 				);
 			}
 
-			$log_file = $this->wptw_get_log_file_path();
+			$log_file = $this->tailwatch_get_log_file_path();
 			if ( '' === $log_file ) {
 				return array(
 					'code'    => 404,
@@ -1702,7 +1702,7 @@ class HardeningAuditController {
 			}
 
 			$live_logs = new LiveLogsController();
-			return $live_logs->wptw_import_live_logs(
+			return $live_logs->tailwatch_import_live_logs(
 				$post_data,
 				$log_file,
 				$cancel_pause,
@@ -1728,21 +1728,21 @@ class HardeningAuditController {
 	/**
 	 * List completed audit reports, newest first.
 	 *
-	 * Pagination contract matches Integrity's `wptw_get_file_logs_data`:
+	 * Pagination contract matches Integrity's `tailwatch_get_file_logs_data`:
 	 * the caller passes `{ page, limit }` (1-indexed page), and the
 	 * response carries the items as `data` directly plus a separate
 	 * `pagination: { total, page, limit, total_pages }` block. Defaults
 	 * are `page=1`, `limit=10` — same defaults the reference module uses.
 	 *
 	 * The list view returns lightweight summaries only; the caller asks
-	 * for `wptw_get_hardening_audit_report_by_id` when it wants the full
+	 * for `tailwatch_get_hardening_audit_report_by_id` when it wants the full
 	 * per-check details, so we don't ship 17 check payloads through every
 	 * list refresh.
 	 *
 	 * @param mixed $post_data
 	 * @return array
 	 */
-	public function wptw_list_hardening_audit_reports( $post_data = null ) {
+	public function tailwatch_list_hardening_audit_reports( $post_data = null ) {
 		try {
 			$data  = $this->parse_post_data( $post_data );
 			$limit = isset( $data['limit'] ) && is_numeric( $data['limit'] ) && (int) $data['limit'] > 0 ? (int) $data['limit'] : 10;
@@ -1789,7 +1789,7 @@ class HardeningAuditController {
 			);
 		} catch ( \Throwable $e ) {
 			Log::error(
-				'Exception in wptw_list_hardening_audit_reports: ' . $e->getMessage(),
+				'Exception in tailwatch_list_hardening_audit_reports: ' . $e->getMessage(),
 				array(
 					'feature'   => 'hardening_audit',
 					'action'    => 'hardening_audit_reports_list_failed',
@@ -1807,14 +1807,14 @@ class HardeningAuditController {
 
 	/**
 	 * Fetch a single audit report by its run_id. Mirrors the
-	 * `wptw_get_files_log_by_id` shape: report fields land on `data`
+	 * `tailwatch_get_files_log_by_id` shape: report fields land on `data`
 	 * directly (not wrapped under `data.report`) so the frontend renders
 	 * with the same template path used for the integrity-detail view.
 	 *
 	 * @param mixed $post_data
 	 * @return array
 	 */
-	public function wptw_get_hardening_audit_report_by_id( $post_data = null ) {
+	public function tailwatch_get_hardening_audit_report_by_id( $post_data = null ) {
 		try {
 			$data      = $this->parse_post_data( $post_data );
 			$report_id = isset( $data['id'] ) ? (int) $data['id'] : 0;
@@ -1867,7 +1867,7 @@ class HardeningAuditController {
 			);
 		} catch ( \Throwable $e ) {
 			Log::error(
-				'Exception in wptw_get_hardening_audit_report_by_id: ' . $e->getMessage(),
+				'Exception in tailwatch_get_hardening_audit_report_by_id: ' . $e->getMessage(),
 				array(
 					'feature'   => 'hardening_audit',
 					'action'    => 'hardening_audit_report_details_by_id_failed',
@@ -1885,7 +1885,7 @@ class HardeningAuditController {
 	/**
 	 * Delete one, several, or all audit reports.
 	 *
-	 * Mirrors `wptw_delete_comparison_by_id` exactly:
+	 * Mirrors `tailwatch_delete_comparison_by_id` exactly:
 	 *   - `{ ids: [1, 2, 3] }`   → delete those specific report ids
 	 *   - `{ is_delete: true }`  → delete every report
 	 *   - neither / both empty   → 400 with the same wording the reference
@@ -1908,7 +1908,7 @@ class HardeningAuditController {
 	 * @param mixed $post_data
 	 * @return array
 	 */
-	public function wptw_delete_hardening_audit_report_by_id( $post_data = null ) {
+	public function tailwatch_delete_hardening_audit_report_by_id( $post_data = null ) {
 		try {
 			$blocked = ( new ProcessGuard() )->ensure_can_modify_artifacts(
 				array( self::PROCESS_TYPE )
@@ -1979,7 +1979,7 @@ class HardeningAuditController {
 			return $response;
 		} catch ( \Throwable $e ) {
 			Log::error(
-				'Exception in wptw_delete_hardening_audit_report_by_id: ' . $e->getMessage(),
+				'Exception in tailwatch_delete_hardening_audit_report_by_id: ' . $e->getMessage(),
 				array(
 					'feature'   => 'hardening_audit',
 					'action'    => 'hardening_audit_delete_failed',
@@ -1998,7 +1998,7 @@ class HardeningAuditController {
 	 * Internal bulk-delete primitive used by both the public AJAX entry and
 	 * any future internal callers (e.g. a "clear all reports on uninstall"
 	 * sweeper). Returns `{ success_count, failed_ids }` in the same shape
-	 * `wptw_delete_comparison_entry` uses.
+	 * `tailwatch_delete_comparison_entry` uses.
 	 *
 	 * Delete-all bypasses the per-id loop with a single SQL DELETE so it
 	 * stays O(1) regardless of report count.
@@ -2054,13 +2054,13 @@ class HardeningAuditController {
 	 *
 	 * Honours the "Keep All Data" sentinel that
 	 * `get_report_retention_seconds` returns as 0 — same pattern Integrity
-	 * uses for its `wptw_maintain_integrity_entry`. Skipping rather than
+	 * uses for its `tailwatch_maintain_integrity_entry`. Skipping rather than
 	 * passing a giant cutoff value avoids any chance of accidentally
 	 * deleting everything if the retention value were ever parsed wrong.
 	 *
 	 * @return int Rows deleted (best-effort), or 0 when Keep All Data is set.
 	 */
-	public function wptw_prune_hardening_audit_reports() {
+	public function tailwatch_prune_hardening_audit_reports() {
 		$retention_seconds = $this->get_report_retention_seconds();
 
 		if ( 0 === $retention_seconds ) {

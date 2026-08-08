@@ -44,8 +44,8 @@ class DatabaseOptimizerCronJob extends AbstractCronJob {
 	 *
 	 */
 	public function __construct() {
-		$this->cron_hook_name   = 'wptw_start_database_optimization';
-		$this->schedule_name    = 'wptw_db_optimized';
+		$this->cron_hook_name   = 'tailwatch_start_database_optimization';
+		$this->schedule_name    = 'tailwatch_db_optimized';
 		$this->default_interval = 'Every 48 Hours';
 
 		parent::__construct();
@@ -69,7 +69,7 @@ class DatabaseOptimizerCronJob extends AbstractCronJob {
 	 * @return array Feature settings array.
 	 */
 	protected function get_feature_settings() {
-		return $this->get_db_optimizer_controller()->wptw_db_optimize_options();
+		return $this->get_db_optimizer_controller()->tailwatch_db_optimize_options();
 	}
 
 	/**
@@ -136,14 +136,14 @@ class DatabaseOptimizerCronJob extends AbstractCronJob {
 		 * Fires before database optimizer cron executes.
 		 *
 		 */
-		do_action( 'wptw_before_database_optimizer_cron_execute' );
+		do_action( 'tailwatch_before_database_optimizer_cron_execute' );
 
-		$this->get_db_optimizer_controller()->wptw_database_optimize_start( 'automatically' );
+		$this->get_db_optimizer_controller()->tailwatch_database_optimize_start( 'automatically' );
 
 		/**
 		 * Fires after database optimizer cron was triggered.
 		 *
 		 */
-		do_action( 'wptw_after_database_optimizer_cron_execute' );
+		do_action( 'tailwatch_after_database_optimizer_cron_execute' );
 	}
 }

@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { getLocalStorage } from '../../../Components/Utils/HelperFunctions/LocalStorageHelper';
 import { toast } from 'react-toastify';
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 export const fetchData = async (key, option, setLoading, setTabData, paginationParams = null,setFeatureEnable,setParentEnable, filters = null) => {
   setLoading(true);
@@ -26,12 +26,12 @@ export const fetchData = async (key, option, setLoading, setTabData, paginationP
     }
 
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_logs_feature');
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_logs_feature');
     formData.append('data', JSON.stringify(requestData));
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }      
     });    
     if (response.data.success) {
@@ -69,12 +69,12 @@ export const fetchData = async (key, option, setLoading, setTabData, paginationP
 export const fetchFilterOptions = async (key, option) => {
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_logs_filter_options');
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_logs_filter_options');
     formData.append('data', JSON.stringify({ key, option }));
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
     if (response.data?.success && response.data?.data?.data) {
@@ -91,12 +91,12 @@ export const handleDelete = async ({deleteData,setIsDeleting,fetchTabData}) => {
   setIsDeleting(true);
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_delete_logs");
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_delete_logs");
     formData.append("data", JSON.stringify({ ids, key, option, is_delete }));
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },

@@ -690,22 +690,22 @@ class NotificationActions {
 		'ssl_verification_completed'                   => array(
 			'type'    => 'dynamic',
 			'handler' => 'SslVerificationController',
-			'method'  => 'wptw_ssl_push_notification_status',
+			'method'  => 'tailwatch_ssl_push_notification_status',
 		),
 		'ssl_verification_failed'                      => array(
 			'type'    => 'dynamic',
 			'handler' => 'SslVerificationController',
-			'method'  => 'wptw_ssl_push_notification_status',
+			'method'  => 'tailwatch_ssl_push_notification_status',
 		),
 		'ssl_certificate_expired'                      => array(
 			'type'    => 'dynamic',
 			'handler' => 'SslVerificationController',
-			'method'  => 'wptw_ssl_push_notification_status',
+			'method'  => 'tailwatch_ssl_push_notification_status',
 		),
 		'ssl_certificate_expiring'                     => array(
 			'type'    => 'dynamic',
 			'handler' => 'SslVerificationController',
-			'method'  => 'wptw_ssl_push_notification_status',
+			'method'  => 'tailwatch_ssl_push_notification_status',
 		),
 		'ssl_verification_warning'                     => array(
 			'type'  => 'static',
@@ -1188,7 +1188,7 @@ class NotificationActions {
 		$action = sanitize_text_field( $action );
 
 		// Allow pro plugin to register additional actions.
-		$pro_result = apply_filters( 'wptw_notification_should_notify', null, $action );
+		$pro_result = apply_filters( 'tailwatch_notification_should_notify', null, $action );
 		if ( null !== $pro_result ) {
 			return (bool) $pro_result;
 		}

@@ -1,15 +1,15 @@
 import axios from 'axios';
 
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 /**
  * Generic preview fetcher for any "design"-typed feature.
  *
  * Backend contract per design feature:
- *   POST  wptw_ajax.ajax_url
- *     action       : wptw_global_ajax_handler
+ *   POST  tailwatch_ajax.ajax_url
+ *     action       : tailwatch_global_ajax_handler
  *     action_type  : <schema.preview.action>
- *     nonce        : wptw_ajax.nonce
+ *     nonce        : tailwatch_ajax.nonce
  *     data         : JSON.stringify({ draft, variant, device })
  *
  * Success response envelope:
@@ -35,12 +35,12 @@ export const fetchDesignPreview = async ({ action, draft = {}, variant = null, d
 
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
+        formData.append('action', 'tailwatch_global_ajax_handler');
         formData.append('action_type', action);
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('nonce', tailwatch_ajax.nonce);
         formData.append('data', JSON.stringify({ draft, variant, device }));
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
             signal,
         });

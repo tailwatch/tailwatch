@@ -2,18 +2,18 @@ import axios from "axios";
 import { toast } from 'react-toastify';
 import { CronHealer } from '../../../Components/CroneHealer/CronHealer'
 import { alertService } from "../../../Components/AlertService/AlertService";
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 export const fetchFileLogs = async (setLoading, setTabData, setPagination, page = 1, limit = 10) => {
   setLoading(true);
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_get_file_logs_data");
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_get_file_logs_data");
     formData.append('data', JSON.stringify({ page, limit }));
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -38,12 +38,12 @@ export const instantScanning = async (setScanCompleted, setStatusMessage, setIsD
   try {
     setIsMonitoring(true);
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_instant_files_integrity_check");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_instant_files_integrity_check");
+    formData.append("nonce", tailwatch_ajax.nonce);
     formData.append("data", JSON.stringify({ instant_scan: true }));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -94,11 +94,11 @@ const executeCronIfFailed = async () => {
     isCronExecuting = true;
 
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_files_integrity_cron_if_failed");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_files_integrity_cron_if_failed");
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -160,13 +160,13 @@ export const fetchLogs = async (
 
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_files_integrity_comparison_logs");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_files_integrity_comparison_logs");
+    formData.append("nonce", tailwatch_ajax.nonce);
     const lastLogIndex = isFirstExecution ? 0 : isLastLogIndex;
     formData.append("data", JSON.stringify({ last_log_index: lastLogIndex }));
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -262,12 +262,12 @@ export const handleDelete = async (deleteData, setTabData, setDeletingFileId) =>
   setDeletingFileId(ids.length > 0 ? ids[0] : null); // Set first ID or null for bulk
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_delete_comparison_by_id");
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_delete_comparison_by_id");
     formData.append("data", JSON.stringify({ ids, is_delete }));
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },
@@ -304,11 +304,11 @@ export const checkMalwareScanner = async (setIsScannerEnabled, setLoadingStrip, 
   setLoadingStrip(true);
   try {
     const formData = new FormData();
-    formData.append("action", "wptw_global_ajax_handler");
-    formData.append("action_type", "wptw_malware_scanner_changes_detection");
-    formData.append("nonce", wptw_ajax.nonce);
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_malware_scanner_changes_detection");
+    formData.append("nonce", tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
     if (response.data.success) {
@@ -340,17 +340,17 @@ export const fetchLogData = async (setLogData, setLoading, setError, id, page = 
   setLoading(true);
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_get_files_log_by_id');
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_get_files_log_by_id');
     formData.append('data', JSON.stringify({
       id: parseInt(id, 10),
       page: page,
       limit: limit,
       file_status: file_status
     }));
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }

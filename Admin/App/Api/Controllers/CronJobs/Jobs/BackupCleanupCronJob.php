@@ -39,8 +39,8 @@ class BackupCleanupCronJob extends AbstractCronJob {
 	 *
 	 */
 	public function __construct() {
-		$this->cron_hook_name   = 'wptw_backup_cleanup_cron';
-		$this->schedule_name    = 'wptw_backup_cleanup_schedule';
+		$this->cron_hook_name   = 'tailwatch_backup_cleanup_cron';
+		$this->schedule_name    = 'tailwatch_backup_cleanup_schedule';
 		$this->default_interval = 'Every 30 Minutes';
 
 		parent::__construct();
@@ -93,7 +93,7 @@ class BackupCleanupCronJob extends AbstractCronJob {
 	public function execute() {
 		try {
 			$controller = new BackupController();
-			$controller->wptw_auto_cleanup_incomplete_backup();
+			$controller->tailwatch_auto_cleanup_incomplete_backup();
 		} catch ( \Throwable $e ) {
 			Log::error(
 				'Backup cleanup cron job failed',

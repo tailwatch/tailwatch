@@ -52,13 +52,13 @@ class IpManagementController {
 		$hooks->add_action_hook( 'init', array( $this, 'check_and_block_xmlrpc' ), 1, 0 );
 	}
 
-	public function wptw_ips_managment_options() {
+	public function tailwatch_ips_managment_options() {
 		$options_controller = new OptionsController();
 		return $options_controller->get_features_options( 'default_feature_settings', 'default_ips_managment', true );
 	}
 
-	public function wptw_ips_managment_is_enabled() {
-		$feature_settings = $this->wptw_ips_managment_options();
+	public function tailwatch_ips_managment_is_enabled() {
+		$feature_settings = $this->tailwatch_ips_managment_options();
 
 		if ( empty( $feature_settings ) ) {
 			return array(
@@ -91,7 +91,7 @@ class IpManagementController {
 	 *
 	 * @return array{background_color:string,accent_color:string,show_logo:bool,show_countdown:bool,heading_temporary:string,message_temporary:string,heading_permanent:string,message_permanent:string}
 	 */
-	public function wptw_get_block_page_design() {
+	public function tailwatch_get_block_page_design() {
 		$defaults = array(
 			'background_color'  => '#667eea',
 			'accent_color'      => '#764ba2',
@@ -104,7 +104,7 @@ class IpManagementController {
 			'message_permanent' => __( 'Access to this website is restricted.', 'tailwatch' ),
 		);
 
-		$settings = $this->wptw_ips_managment_options();
+		$settings = $this->tailwatch_ips_managment_options();
 		if ( empty( $settings ) ) {
 			return $defaults;
 		}
@@ -154,7 +154,7 @@ class IpManagementController {
 	 * @param string $post_data JSON string.
 	 * @return array{code:int,html:string}
 	 */
-	public function wptw_preview_block_page( $post_data ) {
+	public function tailwatch_preview_block_page( $post_data ) {
 		// $post_data is already unslashed by the dispatcher (AjaxRequestController
 		// wp_unslash $_POST['data']); a second unslash here would strip legitimate
 		// JSON escapes (e.g. \n in multi-line messages).
@@ -174,7 +174,7 @@ class IpManagementController {
 		// $body['device'] ('desktop'|'mobile') is accepted but unused — layout is responsive.
 
 		// Saved settings (or built-in defaults) are the base; the draft overrides them.
-		$design = $this->wptw_get_block_page_design();
+		$design = $this->tailwatch_get_block_page_design();
 
 		// Frontend register key => array( internal design key, value type ).
 		$map = array(
@@ -298,12 +298,12 @@ class IpManagementController {
 		if ( is_user_logged_in() && current_user_can( 'manage_options' ) ) {
 			return $errors; // admin recovery valve
 		}
-		$block = $this->evaluate_entire_site_block( GetIpServices::wptw_get_client_ip() );
+		$block = $this->evaluate_entire_site_block( GetIpServices::tailwatch_get_client_ip() );
 		if ( ! $block ) {
 			return $errors;
 		}
 		$message = ! empty( $block['reason'] ) ? $block['reason'] : 'Access to this website is restricted.';
-		return new \WP_Error( 'wptw_ip_blocked', $message, array( 'status' => 403 ) );
+		return new \WP_Error( 'tailwatch_ip_blocked', $message, array( 'status' => 403 ) );
 	}
 
 	/**
@@ -316,7 +316,7 @@ class IpManagementController {
 		if ( ! ( defined( 'XMLRPC_REQUEST' ) && XMLRPC_REQUEST ) ) {
 			return;
 		}
-		$block = $this->evaluate_entire_site_block( GetIpServices::wptw_get_client_ip() );
+		$block = $this->evaluate_entire_site_block( GetIpServices::tailwatch_get_client_ip() );
 		if ( ! $block ) {
 			return;
 		}
@@ -339,7 +339,7 @@ class IpManagementController {
 			return;
 		}
 
-		$ip    = GetIpServices::wptw_get_client_ip();
+		$ip    = GetIpServices::tailwatch_get_client_ip();
 		$block = $this->evaluate_entire_site_block( $ip );
 		if ( ! $block ) {
 			return;
@@ -391,7 +391,7 @@ class IpManagementController {
 			}
 		}
 
-		$feature_settings = $this->wptw_ips_managment_is_enabled();
+		$feature_settings = $this->tailwatch_ips_managment_is_enabled();
 
 		if ( $feature_settings['blacklist_feature'] ) {
 			$ip_block_result = $this->check_ip_rules( $ip );
@@ -523,7 +523,7 @@ class IpManagementController {
 		);
 
 		// Allow PRO plugin to filter this
-		$result = apply_filters( 'wptw_check_country_entire_site_block', $result, $country, $ip );
+		$result = apply_filters( 'tailwatch_check_country_entire_site_block', $result, $country, $ip );
 
 		return $result;
 	}
@@ -556,7 +556,7 @@ class IpManagementController {
 
 	private function show_default_block_page( $block_data ) {
 		// Full custom HTML override (advanced) still wins.
-		$custom_template = apply_filters( 'wptw_entire_site_block_template', null, $block_data );
+		$custom_template = apply_filters( 'tailwatch_entire_site_block_template', null, $block_data );
 		if ( $custom_template ) {
 			if ( ! headers_sent() ) {
 				status_header( 403 );
@@ -566,7 +566,7 @@ class IpManagementController {
 			exit;
 		}
 
-		$design  = $this->wptw_get_block_page_design();
+		$design  = $this->tailwatch_get_block_page_design();
 		$is_temp = ( 'temporary' === ( $block_data['block_type'] ?? 'permanent' ) );
 		$heading = $is_temp ? $design['heading_temporary'] : $design['heading_permanent'];
 
@@ -582,7 +582,7 @@ class IpManagementController {
 	 * string (no exit) so it is unit-testable.
 	 *
 	 * @param array $block_data Block result (block_type, reason, retry_time).
-	 * @param array $design     Appearance from wptw_get_block_page_design().
+	 * @param array $design     Appearance from tailwatch_get_block_page_design().
 	 * @return string
 	 */
 	private function build_block_page_html( $block_data, $design ) {

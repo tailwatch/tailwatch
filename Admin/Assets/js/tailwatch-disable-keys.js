@@ -1,13 +1,13 @@
 document.addEventListener(
 	'DOMContentLoaded',
 	function () {
-		if (typeof wptwDisableKeysOptions === 'undefined') {
+		if (typeof tailwatchDisableKeysOptions === 'undefined') {
 			return;
 		}
 
 		function toast( message ) {
-			if ( window.wptwToast && typeof window.wptwToast.warning === 'function' ) {
-				window.wptwToast.warning( message );
+			if ( window.tailwatchToast && typeof window.tailwatchToast.warning === 'function' ) {
+				window.tailwatchToast.warning( message );
 			}
 		}
 
@@ -18,7 +18,7 @@ document.addEventListener(
 			return typeof e.getModifierState === 'function' && e.getModifierState( 'AltGraph' );
 		}
 
-		if (wptwDisableKeysOptions.contextMenu) {
+		if (tailwatchDisableKeysOptions.contextMenu) {
 			document.addEventListener(
 				'contextmenu',
 				function (e) {
@@ -28,7 +28,7 @@ document.addEventListener(
 			);
 		}
 
-		if (wptwDisableKeysOptions.inspectElement) {
+		if (tailwatchDisableKeysOptions.inspectElement) {
 			document.addEventListener(
 				'keydown',
 				function (e) {
@@ -50,7 +50,7 @@ document.addEventListener(
 			);
 		}
 
-		if (wptwDisableKeysOptions.copyPasteCut) {
+		if (tailwatchDisableKeysOptions.copyPasteCut) {
 			document.addEventListener(
 				'copy',
 				function (e) {
@@ -74,7 +74,7 @@ document.addEventListener(
 			);
 		}
 
-		if (wptwDisableKeysOptions.viewSource) {
+		if (tailwatchDisableKeysOptions.viewSource) {
 			document.addEventListener(
 				'keydown',
 				function (e) {
@@ -93,7 +93,7 @@ document.addEventListener(
 			);
 		}
 
-		if (wptwDisableKeysOptions.dragDrop) {
+		if (tailwatchDisableKeysOptions.dragDrop) {
 			document.addEventListener(
 				'dragstart',
 				function (event) {

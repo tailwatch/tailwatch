@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 export const useVerifyVisitStatus = (navigate) => {
     const [isVerifyLoading, setIsLoading] = useState(true);
@@ -38,11 +38,11 @@ export const useVerifyVisitStatus = (navigate) => {
     const VerifyVisitStatus = async () => {
         try {
             const formData = new FormData();
-            formData.append("action", "wptw_global_ajax_handler");
-            formData.append("action_type", "wptw_verify_visit_progress");
-            formData.append("nonce", wptw_ajax.nonce);
+            formData.append("action", "tailwatch_global_ajax_handler");
+            formData.append("action_type", "tailwatch_verify_visit_progress");
+            formData.append("nonce", tailwatch_ajax.nonce);
 
-            const response = await axios.post(wptw_ajax.ajax_url, formData, {
+            const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
                 headers: { "Content-Type": "multipart/form-data" },
             });
 

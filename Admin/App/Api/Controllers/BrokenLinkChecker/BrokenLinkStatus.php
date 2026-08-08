@@ -13,7 +13,7 @@ use Tailwatch\Admin\App\Api\Controllers\Redirections\RedirectionsManager;
 class BrokenLinkStatus {
 
 	private $feature       = 'broken_link_checker';
-	private $get_live_logs = WPTW_LOGS_DIRECTORY . '/broken-links' . '/broken-links-logs.json';
+	private $get_live_logs = TAILWATCH_LOGS_DIRECTORY . '/broken-links' . '/broken-links-logs.json';
 	private $processManager;
 
 	public function __construct() {
@@ -22,21 +22,21 @@ class BrokenLinkStatus {
 
 	public function broken_link_cancel_pause_data() {
 		$feature_controller = new DBModel();
-		$wptw_key           = 'default_broken_link_checker';
+		$tailwatch_key           = 'default_broken_link_checker';
 		$option             = 'broken_link_cancel_pause';
-		return $feature_controller->get_recent_data( $option, $wptw_key, WPTW_DB_LOGS_TABLE_NAME );
+		return $feature_controller->get_recent_data( $option, $tailwatch_key, TAILWATCH_DB_LOGS_TABLE_NAME );
 	}
 
 	public function update_broken_link_cancel_pause( array $options ) {
 		$DBModel  = new DBModel();
-		$wptw_key = 'default_broken_link_checker';
+		$tailwatch_key = 'default_broken_link_checker';
 		$option   = 'broken_link_cancel_pause';
 
 		$db_data = array(
 			'value' => wp_json_encode( $options ),
 		);
 
-		$DBModel->update_recent_row( $db_data, $wptw_key, $option, WPTW_DB_LOGS_TABLE_NAME );
+		$DBModel->update_recent_row( $db_data, $tailwatch_key, $option, TAILWATCH_DB_LOGS_TABLE_NAME );
 	}
 
 	public function update_broken_link_logs_records( $message, $level = 'INFO' ) {
@@ -44,17 +44,17 @@ class BrokenLinkStatus {
 		$live_logs->update_live_logs_records( $message, $this->get_live_logs, $level );
 	}
 
-	public function wptw_get_log_file_path() {
+	public function tailwatch_get_log_file_path() {
 		$broken_link_controller = new BrokenLinkChecker();
-		$broken_link_data       = $broken_link_controller->wptw_get_broken_link_data();
+		$broken_link_data       = $broken_link_controller->tailwatch_get_broken_link_data();
 		$broken_data            = json_decode( $broken_link_data->value, true );
 		return $this->get_live_logs . '_' . $broken_data['file_key'] . '.json';
 	}
 
-	public function wptw_broken_link_checker_live_logs( $post_data ) {
+	public function tailwatch_broken_link_checker_live_logs( $post_data ) {
 		try {
 			$broken_link_controller = new BrokenLinkChecker();
-			$is_enabled             = $broken_link_controller->wptw_broken_link_feature_enable();
+			$is_enabled             = $broken_link_controller->tailwatch_broken_link_feature_enable();
 
 			if ( ! $is_enabled['feature_enable'] ) {
 				return array(
@@ -70,10 +70,10 @@ class BrokenLinkStatus {
 			$feature_type = 'broken_links';
 
 			$livelogs = new LiveLogsController();
-			return $livelogs->wptw_import_live_logs( $post_data, $this->get_live_logs, $cancel_pause, $feature_type );
+			return $livelogs->tailwatch_import_live_logs( $post_data, $this->get_live_logs, $cancel_pause, $feature_type );
 		} catch ( \Throwable $e ) {
 			Log::error(
-				'Exception in wptw_broken_link_checker_live_logs: ' . $e->getMessage(),
+				'Exception in tailwatch_broken_link_checker_live_logs: ' . $e->getMessage(),
 				array(
 					'feature'  => $this->feature,
 					'action'   => 'broken_link_check_live_logs_failed',
@@ -91,14 +91,14 @@ class BrokenLinkStatus {
 		}
 	}
 
-	public function wptw_stop_broken_link_cron() {
+	public function tailwatch_stop_broken_link_cron() {
 		$cancel_pause = $this->broken_link_cancel_pause_data();
 
 		if ( ! empty( $cancel_pause['scan_state'] ) && ( $cancel_pause['scan_state'] === 'pause' || $cancel_pause['scan_state'] === 'cancel' ) ) {
 
-			$timestamp = wp_next_scheduled( 'wptw_broken_link_checker' );
+			$timestamp = wp_next_scheduled( 'tailwatch_broken_link_checker' );
 			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'wptw_broken_link_checker' );
+				wp_unschedule_event( $timestamp, 'tailwatch_broken_link_checker' );
 			}
 
 			if ( $cancel_pause['cron_running'] === true ) {
@@ -112,12 +112,12 @@ class BrokenLinkStatus {
 		return false;
 	}
 
-	public function wptw_resume_broken_link_checker() {
+	public function tailwatch_resume_broken_link_checker() {
 		$user_context  = 'system';
 		$action_failed = 'broken_link_check_resume_failed';
 		try {
 			$broken_link_controller = new BrokenLinkChecker();
-			$is_enabled             = $broken_link_controller->wptw_broken_link_feature_enable();
+			$is_enabled             = $broken_link_controller->tailwatch_broken_link_feature_enable();
 
 			if ( ! $is_enabled['feature_enable'] ) {
 				Log::error(
@@ -143,7 +143,7 @@ class BrokenLinkStatus {
 			$cancel_pause = $this->broken_link_cancel_pause_data();
 
 			if ( ! empty( $cancel_pause ) && ! empty( $cancel_pause['scan_state'] ) && $cancel_pause['scan_state'] === 'pause' ) {
-				wp_schedule_single_event( time() + 10, 'wptw_broken_link_checker' );
+				wp_schedule_single_event( time() + 10, 'tailwatch_broken_link_checker' );
 
 				$cancel_pause['scan_state'] = 'in-progress';
 				$this->update_broken_link_cancel_pause( $cancel_pause );
@@ -188,7 +188,7 @@ class BrokenLinkStatus {
 			}
 		} catch ( \Throwable $e ) {
 			Log::error(
-				'Exception in wptw_resume_broken_link_checker: ' . $e->getMessage(),
+				'Exception in tailwatch_resume_broken_link_checker: ' . $e->getMessage(),
 				array(
 					'feature'  => $this->feature,
 					'action'   => $action_failed,
@@ -206,12 +206,12 @@ class BrokenLinkStatus {
 		}
 	}
 
-	public function wptw_cancel_pause_broken_link( $post_data ) {
+	public function tailwatch_cancel_pause_broken_link( $post_data ) {
 		$user_context  = 'system';
 		$action_failed = 'broken_link_check_cancel_pause_failed';
 		try {
 			$broken_link_controller = new BrokenLinkChecker();
-			$is_enabled             = $broken_link_controller->wptw_broken_link_feature_enable();
+			$is_enabled             = $broken_link_controller->tailwatch_broken_link_feature_enable();
 
 			if ( ! $is_enabled['feature_enable'] ) {
 				Log::error(
@@ -244,9 +244,9 @@ class BrokenLinkStatus {
 				$cancel_pause['scan_state'] = $data['scan_state'];
 				$this->update_broken_link_cancel_pause( $cancel_pause );
 
-				$timestamp = wp_next_scheduled( 'wptw_broken_link_checker' );
+				$timestamp = wp_next_scheduled( 'tailwatch_broken_link_checker' );
 				if ( true ) {
-					wp_unschedule_event( $timestamp, 'wptw_broken_link_checker' );
+					wp_unschedule_event( $timestamp, 'tailwatch_broken_link_checker' );
 					$process_id = $cancel_pause['process_id'] ?? null;
 
 					if ( $data['scan_state'] === 'cancel' ) {
@@ -351,7 +351,7 @@ class BrokenLinkStatus {
 			}
 		} catch ( \Throwable $e ) {
 			Log::error(
-				'Exception in wptw_cancel_pause_broken_link: ' . $e->getMessage(),
+				'Exception in tailwatch_cancel_pause_broken_link: ' . $e->getMessage(),
 				array(
 					'feature'  => $this->feature,
 					'action'   => $action_failed,
@@ -369,13 +369,13 @@ class BrokenLinkStatus {
 		}
 	}
 
-	public function wptw_broken_links_cron_if_failed() {
+	public function tailwatch_broken_links_cron_if_failed() {
 		$user_context     = 'system';
 		$action_failed    = 'broken_link_check_cron_if_failed_on_attempt';
 		$action_completed = 'broken_link_check_started';
 		try {
 			$broken_link_controller = new BrokenLinkChecker();
-			$is_enabled             = $broken_link_controller->wptw_broken_link_feature_enable();
+			$is_enabled             = $broken_link_controller->tailwatch_broken_link_feature_enable();
 
 			if ( ! $is_enabled['feature_enable'] ) {
 				return array(
@@ -389,8 +389,8 @@ class BrokenLinkStatus {
 
 			$cancel_pause = $this->broken_link_cancel_pause_data();
 			if ( $cancel_pause['cron_running'] === false ) {
-				if ( ! wp_next_scheduled( 'wptw_broken_link_checker' ) ) {
-					$cron_scheduled = wp_schedule_single_event( time() + 5, 'wptw_broken_link_checker' );
+				if ( ! wp_next_scheduled( 'tailwatch_broken_link_checker' ) ) {
+					$cron_scheduled = wp_schedule_single_event( time() + 5, 'tailwatch_broken_link_checker' );
 
 					if ( $cron_scheduled ) {
 						Log::info(
@@ -409,12 +409,12 @@ class BrokenLinkStatus {
 						);
 					} else {
 						Log::error(
-							'Failed to schedule wptw_broken_link_checker',
+							'Failed to schedule tailwatch_broken_link_checker',
 							array(
 								'feature'  => $this->feature,
 								'action'   => $action_failed,
 								'title'  => 'Broken Links',
-								'detail'   => 'Failed to schedule wptw_broken_link_checker',
+								'detail'   => 'Failed to schedule tailwatch_broken_link_checker',
 								'origin'   => $user_context,
 								'severity' => 'high',
 							)
@@ -459,7 +459,7 @@ class BrokenLinkStatus {
 			}
 		} catch ( \Throwable $e ) {
 			Log::error(
-				'Exception in wptw_broken_links_cron_if_failed: ' . $e->getMessage(),
+				'Exception in tailwatch_broken_links_cron_if_failed: ' . $e->getMessage(),
 				array(
 					'feature'  => $this->feature,
 					'action'   => $action_failed,
@@ -477,10 +477,10 @@ class BrokenLinkStatus {
 		}
 	}
 
-	public function wptw_verify_broken_link_status() {
+	public function tailwatch_verify_broken_link_status() {
 		try {
 			$broken_link_controller = new BrokenLinkChecker();
-			$is_enabled             = $broken_link_controller->wptw_broken_link_feature_enable();
+			$is_enabled             = $broken_link_controller->tailwatch_broken_link_feature_enable();
 
 			if ( ! $is_enabled['feature_enable'] ) {
 				return array(
@@ -542,7 +542,7 @@ class BrokenLinkStatus {
 			}
 		} catch ( \Throwable $e ) {
 			Log::error(
-				'Exception in wptw_verify_broken_link_status: ' . $e->getMessage(),
+				'Exception in tailwatch_verify_broken_link_status: ' . $e->getMessage(),
 				array(
 					'feature'  => $this->feature,
 					'action'   => 'broken_link_check_status_verify_failed',
@@ -560,12 +560,12 @@ class BrokenLinkStatus {
 		}
 	}
 
-	public function wptw_get_broken_links_logs( $post_data ) {
+	public function tailwatch_get_broken_links_logs( $post_data ) {
 		$user_context  = 'system';
 		$action_failed = 'broken_link_check_live_logs_failed';
 		try {
 			$broken_link_controller = new BrokenLinkChecker();
-			$is_enabled             = $broken_link_controller->wptw_broken_link_feature_enable();
+			$is_enabled             = $broken_link_controller->tailwatch_broken_link_feature_enable();
 
 			if ( ! $is_enabled['feature_enable'] ) {
 				return array(
@@ -636,14 +636,14 @@ class BrokenLinkStatus {
 			}
 
 			$feature_controller = new DBModel();
-			$rules              = $feature_controller->getAllRedirectRules( 'default_broken_link_logs', 'active', $limit, $page, WPTW_DB_LOGS_TABLE_NAME );
+			$rules              = $feature_controller->getAllRedirectRules( 'default_broken_link_logs', 'active', $limit, $page, TAILWATCH_DB_LOGS_TABLE_NAME );
 			if ( $rules['data'] ) {
 				$redirection_manager = new RedirectionsManager();
 
 				return array(
 					'code'        => 200,
 					'data'        => $rules['data'],
-					'redirections_feature' => $redirection_manager->wptw_redirection_feature_enable(),
+					'redirections_feature' => $redirection_manager->tailwatch_redirection_feature_enable(),
 					'total'       => $rules['total'],
 					'page'        => $rules['page'],
 					'limit'       => $rules['limit'],
@@ -658,7 +658,7 @@ class BrokenLinkStatus {
 			}
 		} catch ( \Throwable $e ) {
 			Log::error(
-				'Exception in wptw_get_broken_links_logs: ' . $e->getMessage(),
+				'Exception in tailwatch_get_broken_links_logs: ' . $e->getMessage(),
 				array(
 					'feature'  => $this->feature,
 					'action'   => $action_failed,

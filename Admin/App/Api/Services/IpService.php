@@ -33,7 +33,7 @@ class IpService {
 	/**
 	 * Resolve the client IP for logging and rule matching.
 	 *
-	 * Delegates to the hardened resolver GetIpServices::wptw_get_client_ip(),
+	 * Delegates to the hardened resolver GetIpServices::tailwatch_get_client_ip(),
 	 * which returns REMOTE_ADDR by default and only consults X-Forwarded-For
 	 * when the site has explicitly enabled the `trust_proxy_headers` setting.
 	 * In that case it walks the header right-to-left to the first public
@@ -54,7 +54,7 @@ class IpService {
 	 * @return string Validated client IP, or '0.0.0.0' when none is available.
 	 */
 	public static function get_client_ip() {
-		$ip = GetIpServices::wptw_get_client_ip();
+		$ip = GetIpServices::tailwatch_get_client_ip();
 		return '' === $ip ? '0.0.0.0' : $ip;
 	}
 }

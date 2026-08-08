@@ -12,10 +12,10 @@ use Tailwatch\Admin\App\Api\Models\IpManagement\WhitelistModel;
 
 class IpManagementLogCount {
 
-	public function wptw_ip_management_log_count() {
+	public function tailwatch_ip_management_log_count() {
 		try {
 			$ip_protection   = new IpManagementController();
-			$feature_status  = $ip_protection->wptw_ips_managment_is_enabled();
+			$feature_status  = $ip_protection->tailwatch_ips_managment_is_enabled();
 			$rule_model      = new RuleModel();
 			$whitelist_model = new WhitelistModel();
 

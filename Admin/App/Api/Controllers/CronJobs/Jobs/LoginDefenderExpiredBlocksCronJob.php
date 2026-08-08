@@ -40,8 +40,8 @@ class LoginDefenderExpiredBlocksCronJob extends AbstractCronJob {
 	 * @since 1.0.0
 	 */
 	public function __construct() {
-		$this->cron_hook_name   = 'wptw_login_defender_cleanup_expired';
-		$this->schedule_name    = 'wptw_login_defender_expired_blocks_schedule';
+		$this->cron_hook_name   = 'tailwatch_login_defender_cleanup_expired';
+		$this->schedule_name    = 'tailwatch_login_defender_expired_blocks_schedule';
 		$this->default_interval = 'Daily';
 
 		parent::__construct();

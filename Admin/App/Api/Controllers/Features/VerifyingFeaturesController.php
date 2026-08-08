@@ -9,7 +9,7 @@ use Tailwatch\Admin\App\Api\Models\DBModel;
 
 class VerifyingFeaturesController {
 
-	public function wptw_verify_options_status( $all_options ) {
+	public function tailwatch_verify_options_status( $all_options ) {
 		$selected_options = array();
 
 		foreach ( $all_options as $option ) {
@@ -26,7 +26,7 @@ class VerifyingFeaturesController {
 		return $selected_options;
 	}
 
-	public function wptw_get_option_labels( $all_options ) {
+	public function tailwatch_get_option_labels( $all_options ) {
 		$labels = array();
 
 		foreach ( $all_options as $option ) {
@@ -38,7 +38,7 @@ class VerifyingFeaturesController {
 		return $labels;
 	}
 
-	public function wptw_counts_logs_activity( $option, $key, $type_state = null ) {
+	public function tailwatch_counts_logs_activity( $option, $key, $type_state = null ) {
 		$db_model      = new DBModel();
 		$existing_data = $db_model->get_logs_count_by_type( $key, $option, $type_state );
 

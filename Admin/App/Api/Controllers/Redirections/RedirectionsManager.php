@@ -25,9 +25,9 @@ class RedirectionsManager extends BaseController {
 	 *
 	 * @var array
 	 */
-	protected $wptw_feature_check_exemptions = array(
-		'wptw_get_posts_by_post_type',
-		'wptw_get_all_post_types',
+	protected $tailwatch_feature_check_exemptions = array(
+		'tailwatch_get_posts_by_post_type',
+		'tailwatch_get_all_post_types',
 	);
 
 	/**
@@ -42,8 +42,8 @@ class RedirectionsManager extends BaseController {
 	 *
 	 * @return array
 	 */
-	public function wptw_get_feature_status() {
-		return $this->wptw_redirection_feature_enable();
+	public function tailwatch_get_feature_status() {
+		return $this->tailwatch_redirection_feature_enable();
 	}
 
 	/**
@@ -51,7 +51,7 @@ class RedirectionsManager extends BaseController {
 	 *
 	 * @return array|null
 	 */
-	public function wptw_redirect_manager_options() {
+	public function tailwatch_redirect_manager_options() {
 		$key                = 'default_feature_settings';
 		$option             = 'default_redirection_manager';
 		$is_active          = true;
@@ -64,8 +64,8 @@ class RedirectionsManager extends BaseController {
 	 *
 	 * @return array{parent_enable:bool,feature_enable:bool}
 	 */
-	public function wptw_redirection_feature_enable() {
-		$feature_enable = $this->wptw_redirect_manager_options();
+	public function tailwatch_redirection_feature_enable() {
+		$feature_enable = $this->tailwatch_redirect_manager_options();
 
 		if ( empty( $feature_enable ) ) {
 			return array(
@@ -98,7 +98,7 @@ class RedirectionsManager extends BaseController {
 	 * @param string $option_value Option (base path) value.
 	 * @return int|false
 	 */
-	private function wptw_insert_redirect_rule( $rule_data, $source_url, $match_type, $option_value ) {
+	private function tailwatch_insert_redirect_rule( $rule_data, $source_url, $match_type, $option_value ) {
 
 		$db_data = array(
 			'user_id'       => get_current_user_id(),
@@ -196,7 +196,7 @@ class RedirectionsManager extends BaseController {
 	 * @param string $post_data JSON post data.
 	 * @return array
 	 */
-	public function wptw_create_redirection_rules( $post_data ) {
+	public function tailwatch_create_redirection_rules( $post_data ) {
 		try {
 
 			if ( empty( $post_data ) || ! is_string( $post_data ) ) {
@@ -644,7 +644,7 @@ class RedirectionsManager extends BaseController {
 				}
 			}
 
-			$result = $this->wptw_insert_redirect_rule( $rule_data, $rule_data['source_url'], $rule_data['match_type'], $option_value );
+			$result = $this->tailwatch_insert_redirect_rule( $rule_data, $rule_data['source_url'], $rule_data['match_type'], $option_value );
 			if ( false === $result ) {
 				global $wpdb;
 				Log::error(
@@ -708,7 +708,7 @@ class RedirectionsManager extends BaseController {
 	 *
 	 * @return array Response data including post types.
 	 */
-	public function wptw_get_all_post_types() {
+	public function tailwatch_get_all_post_types() {
 		try {
 			$post_types = get_post_types(
 				array(
@@ -756,7 +756,7 @@ class RedirectionsManager extends BaseController {
 	 * @param string $post_data Raw JSON string with post type and pagination.
 	 * @return array Response data including posts or error details.
 	 */
-	public function wptw_get_posts_by_post_type( $post_data ) {
+	public function tailwatch_get_posts_by_post_type( $post_data ) {
 		try {
 			if ( empty( $post_data ) || ! is_string( $post_data ) ) {
 				Log::error(
@@ -919,7 +919,7 @@ class RedirectionsManager extends BaseController {
 	 * @param string $post_data Raw JSON string containing pagination parameters.
 	 * @return array Response including redirect rules and pagination meta.
 	 */
-	public function wptw_get_all_redirect_rules( $post_data ) {
+	public function tailwatch_get_all_redirect_rules( $post_data ) {
 		try {
 			if ( empty( $post_data ) || ! is_string( $post_data ) ) {
 				Log::error(
@@ -1015,7 +1015,7 @@ class RedirectionsManager extends BaseController {
 	 * @param string $post_data Raw JSON string containing rule data.
 	 * @return array Response indicating success or failure.
 	 */
-	public function wptw_update_redirect_rule( $post_data ) {
+	public function tailwatch_update_redirect_rule( $post_data ) {
 		try {
 
 			if ( empty( $post_data ) || ! is_string( $post_data ) ) {

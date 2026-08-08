@@ -37,7 +37,7 @@ class PushNotificationController {
 	 *     @type bool $mobile_notification Whether mobile notifications are enabled.
 	 * }
 	 */
-	public function wptw_global_get_push_notification() {
+	public function tailwatch_global_get_push_notification() {
 		$db_model = new DBModel();
 		$option   = 'site_settings';
 		$key      = 'plugin_activation';
@@ -63,7 +63,7 @@ class PushNotificationController {
 	 *
 	 * @return bool True if push notifications enabled for the feature, false otherwise.
 	 */
-	public function wptw_notification_enable_for_feature( $key, $option, $field_name ) {
+	public function tailwatch_notification_enable_for_feature( $key, $option, $field_name ) {
 		$db_model      = new DBModel();
 		$existing_data = $db_model->get_recent_data( $option, $key );
 
@@ -79,10 +79,10 @@ class PushNotificationController {
 	 *
 	 * @return array
 	 */
-	public function wptw_get_push_notification() {
+	public function tailwatch_get_push_notification() {
 		try {
-			$notification_status = $this->wptw_global_get_push_notification();
-			$verify_license      = $this->wptw_push_notification_verify_license();
+			$notification_status = $this->tailwatch_global_get_push_notification();
+			$verify_license      = $this->tailwatch_push_notification_verify_license();
 
 			return array(
 				'code'                     => 200,
@@ -111,7 +111,7 @@ class PushNotificationController {
 	 *
 	 * @return array
 	 */
-	public function wptw_enable_disable_push_notification( $post_data ) {
+	public function tailwatch_enable_disable_push_notification( $post_data ) {
 		$mobile_notification = null;
 
 		try {
@@ -223,7 +223,7 @@ class PushNotificationController {
 	 *     @type int         $notification_credit_left Remaining notification credits.
 	 * }
 	 */
-	private function wptw_push_notification_verify_license() {
+	private function tailwatch_push_notification_verify_license() {
 		// Read cached license data from DB — never make a live API call here.
 		// Notifications fire inside the logging system; a live API call would
 		// add latency, risk timeouts, and trigger Log:: calls that cause loops.
@@ -231,7 +231,7 @@ class PushNotificationController {
 		$license_data  = $verify_status->get_plugin_activation_status();
 
 		if ( ! empty( $license_data['extended_connected'] ) && ! empty( $license_data['extended_connected']['user_id'] ) ) {
-			$last_check = get_option( 'wptw_last_license_check', array() );
+			$last_check = get_option( 'tailwatch_last_license_check', array() );
 			$credits    = 0;
 
 			if ( ! empty( $last_check ) && ( $last_check['status'] ?? '' ) === 'active' ) {
@@ -268,7 +268,7 @@ class PushNotificationController {
 	 *
 	 * @return bool True if notification sent successfully, false otherwise.
 	 */
-	private function wptw_send_mobile_push_notification( $severity, $userId, $meta_data = null ) {
+	private function tailwatch_send_mobile_push_notification( $severity, $userId, $meta_data = null ) {
 		try {
 			if ( empty( $userId ) || ! is_string( $userId ) ) {
 				return false;
@@ -281,7 +281,7 @@ class PushNotificationController {
 
 			$notification_data = array(
 				'userId' => $sanitized_user_id,
-				'domain' => esc_url_raw( WPTW_GET_SITE_URL ),
+				'domain' => esc_url_raw( TAILWATCH_GET_SITE_URL ),
 				'type'   => sanitize_text_field( $severity ),
 			);
 
@@ -314,7 +314,7 @@ class PushNotificationController {
 	 *
 	 * @return array
 	 */
-	public function wptw_trigger_notification( $severity, $title, $message, $meta_data = null ) {
+	public function tailwatch_trigger_notification( $severity, $title, $message, $meta_data = null ) {
 		try {
 			if ( empty( $severity ) || empty( $title ) || empty( $message ) ) {
 				return array(
@@ -326,7 +326,7 @@ class PushNotificationController {
 
 			$severity = sanitize_text_field( $severity );
 
-			$notification_status = $this->wptw_global_get_push_notification();
+			$notification_status = $this->tailwatch_global_get_push_notification();
 			$mobile_enabled      = (bool) $notification_status['mobile_notification'];
 
 			$response_data = array(
@@ -343,7 +343,7 @@ class PushNotificationController {
 				);
 			}
 
-			$verify_license = $this->wptw_push_notification_verify_license();
+			$verify_license = $this->tailwatch_push_notification_verify_license();
 
 			if ( ! $verify_license['status'] ) {
 				$response_data['mobile_reason'] = 'license_not_connected';
@@ -372,7 +372,7 @@ class PushNotificationController {
 				);
 			}
 
-			$mobile_sent = $this->wptw_send_mobile_push_notification(
+			$mobile_sent = $this->tailwatch_send_mobile_push_notification(
 				$severity,
 				$verify_license['userId'],
 				$meta_data
@@ -403,7 +403,7 @@ class PushNotificationController {
 	 * AWS billing alerts, Auth0 security events): safety-critical messages override
 	 * user unsubscribe preferences. Use this ONLY for events the site operator must
 	 * hear about regardless of preferences — recovery mode activation, hard security
-	 * incidents, etc. For everything else, use wptw_trigger_notification().
+	 * incidents, etc. For everything else, use tailwatch_trigger_notification().
 	 *
 	 * Bypasses (user-controlled toggles):
 	 *  - mobile_notification toggle (channel enable)
@@ -419,7 +419,7 @@ class PushNotificationController {
 	 *                             buttons, etc.). Sent verbatim when present.
 	 * @return array Standard response shape with mobile_sent flag.
 	 */
-	public function wptw_trigger_critical_push_notification( $title, $message, $meta_data = null ) {
+	public function tailwatch_trigger_critical_push_notification( $title, $message, $meta_data = null ) {
 		try {
 			if ( empty( $title ) || empty( $message ) ) {
 				return array(
@@ -433,7 +433,7 @@ class PushNotificationController {
 			$mobile_sent = false;
 			$reason      = '';
 
-			$verify_license = $this->wptw_push_notification_verify_license();
+			$verify_license = $this->tailwatch_push_notification_verify_license();
 			if ( ! $verify_license['status'] ) {
 				$reason = 'license_not_connected';
 			} elseif ( empty( $verify_license['notification_credit_left'] ) ) {
@@ -441,7 +441,7 @@ class PushNotificationController {
 			} elseif ( empty( $verify_license['userId'] ) ) {
 				$reason = 'no_user_id';
 			} else {
-				$mobile_sent = $this->wptw_send_mobile_push_notification(
+				$mobile_sent = $this->tailwatch_send_mobile_push_notification(
 					$severity,
 					$verify_license['userId'],
 					$meta_data

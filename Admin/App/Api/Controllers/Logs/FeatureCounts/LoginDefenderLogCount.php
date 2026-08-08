@@ -12,7 +12,7 @@ use Tailwatch\Admin\App\Api\Services\GeoIp2\GeoIPService;
 
 class LoginDefenderLogCount {
 
-	public function wptw_login_defender_log_count() {
+	public function tailwatch_login_defender_log_count() {
 		try {
 			$options   = ( new OptionsController() )->get_features_options( 'default_feature_settings', 'default_login_defender_management', true );
 			$logs_data = array();

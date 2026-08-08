@@ -27,7 +27,7 @@ class GeoIPService {
 	private $database_path;
 
 	public function __construct( $database_path = null ) {
-		$this->database_path = $database_path ?? self::wptw_geo_lite_db_file_path();
+		$this->database_path = $database_path ?? self::tailwatch_geo_lite_db_file_path();
 	}
 
 	/**
@@ -37,8 +37,8 @@ class GeoIPService {
 	 *
 	 * @return string
 	 */
-	public static function wptw_geo_lite_db_file_path() {
-		return WPTW_LOGS_DIRECTORY . '/' . self::FOLDER_NAME . '/' . self::DATABASE . self::DATABASE_EXTENSION;
+	public static function tailwatch_geo_lite_db_file_path() {
+		return TAILWATCH_LOGS_DIRECTORY . '/' . self::FOLDER_NAME . '/' . self::DATABASE . self::DATABASE_EXTENSION;
 	}
 
 	/**
@@ -71,7 +71,7 @@ class GeoIPService {
 			return 'Unknown';
 		}
 
-		$cache_key = 'login_defender_geo_' . md5( $ip );
+		$cache_key = 'tailwatch_login_defender_geo_' . md5( $ip );
 		$cached    = get_transient( $cache_key );
 		if ( $cached !== false ) {
 			return $cached;

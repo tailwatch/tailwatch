@@ -113,8 +113,8 @@ const validateSourceSlug = (value) => {
 
 //"apply_conditions": false,
 export const RedirectionFormContent = memo(({ control, errors, formValues, userRoles, setValue, handleRoleSelection, showAdvancedOptions, setShowAdvancedOptions, showInclusionRules, setShowInclusionRules, redirectCodes, matchTypeOptions, handleSelectionChange, initialPostType, initialPostId, initialCustomUrl, disableSourceUrl = false }) => {
-    /* global wptw_ajax */
-    const baseUrl = typeof wptw_ajax !== 'undefined' ? wptw_ajax.base_url : 'http://localhost/';
+    /* global tailwatch_ajax */
+    const baseUrl = typeof tailwatch_ajax !== 'undefined' ? tailwatch_ajax.base_url : 'http://localhost/';
 
     return (
         <div className="!space-y-6">

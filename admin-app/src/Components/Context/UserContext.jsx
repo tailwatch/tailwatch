@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { updateLocalStorage } from "../Utils/HelperFunctions/LocalStorageHelper";
 import axios from "axios";
 
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 const UserContext = createContext();
 
 export const useUser = () => {
@@ -27,12 +27,12 @@ export const UserProvider = ({ children }) => {
       setLoading(true);
       setError(null);
 
-      const ajaxUrl = wptw_ajax.ajax_url;
-      const nonce = wptw_ajax.nonce;
+      const ajaxUrl = tailwatch_ajax.ajax_url;
+      const nonce = tailwatch_ajax.nonce;
 
       const formData = new FormData();
-      formData.append("action", "wptw_global_ajax_handler");
-      formData.append("action_type", "wptw_get_user_info");
+      formData.append("action", "tailwatch_global_ajax_handler");
+      formData.append("action_type", "tailwatch_get_user_info");
       formData.append("nonce", nonce);
 
       const response = await axios.post(ajaxUrl, formData);

@@ -41,14 +41,14 @@ abstract class AbstractCronJob {
 	protected $hook_controller = null;
 
 	/**
-	 * Cron hook name (e.g., 'wptw_verify_ssl').
+	 * Cron hook name (e.g., 'tailwatch_verify_ssl').
 	 *
 	 * @var string
 	 */
 	protected $cron_hook_name;
 
 	/**
-	 * Schedule name for WordPress cron (e.g., 'wptw_ssl_schedule').
+	 * Schedule name for WordPress cron (e.g., 'tailwatch_ssl_schedule').
 	 *
 	 * @var string
 	 */
@@ -389,7 +389,7 @@ abstract class AbstractCronJob {
 		 * @param string $cron_hook_name The cron hook name.
 		 * @param bool   $result         Whether scheduling was successful.
 		 */
-		do_action( 'wptw_cron_scheduled', $this->cron_hook_name, (bool) $result );
+		do_action( 'tailwatch_cron_scheduled', $this->cron_hook_name, (bool) $result );
 
 		return (bool) $result;
 	}
@@ -413,7 +413,7 @@ abstract class AbstractCronJob {
 		 * @param string $cron_hook_name The cron hook name.
 		 * @param bool   $result         Whether unscheduling was successful.
 		 */
-		do_action( 'wptw_cron_unscheduled', $this->cron_hook_name, (bool) $result );
+		do_action( 'tailwatch_cron_unscheduled', $this->cron_hook_name, (bool) $result );
 
 		return (bool) $result;
 	}

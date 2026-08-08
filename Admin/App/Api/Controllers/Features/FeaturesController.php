@@ -140,11 +140,11 @@ class FeaturesController {
 	 *
 	 * @return array Response array with data, message, and code.
 	 */
-	public function wptw_get_feature( $post_data, $plan_type = null ) {
+	public function tailwatch_get_feature( $post_data, $plan_type = null ) {
 		// License status is read from cached DB state — no outbound API call.
 		// Freshness is owned by the 12h LicenseVerifyCronJob plus the manual
 		// connect / disconnect / verify-button user actions. This endpoint
-		// used to call wptw_verify_license() inline, which fired an outbound
+		// used to call tailwatch_verify_license() inline, which fired an outbound
 		// HTTPS request on every dashboard feature fetch (5-15 per admin
 		// session) — well-documented antipattern in WP licensing (EDD, Freemius,
 		// plugin-update-checker all cache locally and read from cache for UI).
@@ -199,7 +199,7 @@ class FeaturesController {
 	 *
 	 * @return array Response array with feature_data, message, and code.
 	 */
-	public function wptw_update_feature_status( $post_data = null, $feature_options = null, $skip_lock_gate = false ) {
+	public function tailwatch_update_feature_status( $post_data = null, $feature_options = null, $skip_lock_gate = false ) {
 		$feature_id     = null;
 		$feature_title  = null;
 		$feature_option = null;
@@ -276,7 +276,7 @@ class FeaturesController {
 			// intent and avoids the trap of "permitted-but-actually-unsafe"
 			// sub-option edits mid-run. ProcessGuard returns null when safe.
 			// $skip_lock_gate is the opt-in escape hatch for the running process
-			// itself: migration/restore call wptw_keep_enable_migration_restore_
+			// itself: migration/restore call tailwatch_keep_enable_migration_restore_
 			// feature mid-flight to force-enable their own parent row, which
 			// would otherwise self-block on the gate they triggered.
 			if ( ! $skip_lock_gate ) {
@@ -341,7 +341,7 @@ class FeaturesController {
 			$feature = $db_model->get_data_by_id( $feature_id );
 
 			// Recalculate security score for this feature immediately.
-			( new SecurityFeaturesVerifyController() )->wptw_calculate_security_level( $feature );
+			( new SecurityFeaturesVerifyController() )->tailwatch_calculate_security_level( $feature );
 
 			// Use $new_type_state instead of $feature (which is an array).
 			$is_activating  = ( $new_type_state === 'active' );
@@ -418,7 +418,7 @@ class FeaturesController {
 	 *
 	 * @return array|void Response array with feature_data, message, and code.
 	 */
-	public function wptw_update_inner_feature( $post_data = null, $feature_options = null, $skip_lock_gate = false ) {
+	public function tailwatch_update_inner_feature( $post_data = null, $feature_options = null, $skip_lock_gate = false ) {
 		$feature_id     = null;
 		$feature_title  = null;
 		$feature_option = null;
@@ -461,7 +461,7 @@ class FeaturesController {
 				);
 			}
 
-			$duplicate_selection = $this->wptw_check_duplicate_selection( $json_data['options'] );
+			$duplicate_selection = $this->tailwatch_check_duplicate_selection( $json_data['options'] );
 			if ( ! empty( $duplicate_selection ) ) {
 				Log::warning(
 					'Inner feature update failed: Duplicate selection detected',
@@ -525,7 +525,7 @@ class FeaturesController {
 			// as surely as disabling can, so all changes wait until the run
 			// finishes. ProcessGuard returns null when safe to proceed.
 			// $skip_lock_gate is the opt-in escape hatch for the running process
-			// itself: wptw_enable_restore_and_migrate is invoked mid-flight by
+			// itself: tailwatch_enable_restore_and_migrate is invoked mid-flight by
 			// migration/restore to set their own inner option and would
 			// otherwise self-block on the gate they triggered.
 			if ( $skip_lock_gate ) {
@@ -600,7 +600,7 @@ class FeaturesController {
 			$feature = $db_model->get_data_by_id( $feature_id );
 
 			// Recalculate security score for this feature immediately.
-			( new SecurityFeaturesVerifyController() )->wptw_calculate_security_level( $feature );
+			( new SecurityFeaturesVerifyController() )->tailwatch_calculate_security_level( $feature );
 
 			// Log successful update if there were changes.
 			// Note: selected_data is now an array of structured arrays, duplicates are prevented by $processed_reports.
@@ -1187,7 +1187,7 @@ class FeaturesController {
 	 *
 	 * @return string|null Error message if duplicates found, null otherwise.
 	 */
-	public function wptw_check_duplicate_selection( $new_options ) {
+	public function tailwatch_check_duplicate_selection( $new_options ) {
 		$prevent_duplicate_prefix = array( 'user_role_selection' );
 		$selected_values          = array();
 
@@ -1300,7 +1300,7 @@ class FeaturesController {
 	 *
 	 * @return array Response array with feature_data, message, and code.
 	 */
-	public function wptw_update_push_notification_value( $post_data ) {
+	public function tailwatch_update_push_notification_value( $post_data ) {
 		$feature_id     = null;
 		$feature_title  = null;
 		$feature_option = null;

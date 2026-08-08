@@ -45,8 +45,8 @@ class IntegrityEntryMaintenanceCronJob extends AbstractCronJob {
 	 *
 	 */
 	public function __construct() {
-		$this->cron_hook_name   = 'wptw_integrity_old_entry_cleanup';
-		$this->schedule_name    = 'wptw_integrity_entry_maintenance_schedule';
+		$this->cron_hook_name   = 'tailwatch_integrity_old_entry_cleanup';
+		$this->schedule_name    = 'tailwatch_integrity_entry_maintenance_schedule';
 		$this->default_interval = 'Every 30 Minutes';
 
 		parent::__construct();
@@ -85,14 +85,14 @@ class IntegrityEntryMaintenanceCronJob extends AbstractCronJob {
 	/**
 	 * Execute the integrity entry maintenance task.
 	 *
-	 * Delegates to the controller's existing wptw_maintain_integrity_entry()
+	 * Delegates to the controller's existing tailwatch_maintain_integrity_entry()
 	 * method which trims the comparison log based on the retention setting.
 	 *
 	 * @return void
 	 */
 	public function execute() {
 		try {
-			$this->get_integrity_controller()->wptw_maintain_integrity_entry();
+			$this->get_integrity_controller()->tailwatch_maintain_integrity_entry();
 		} catch ( \Throwable $e ) {
 			Log::error(
 				'Integrity entry maintenance cron job failed',

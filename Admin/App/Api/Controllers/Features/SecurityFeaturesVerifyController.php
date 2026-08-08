@@ -16,7 +16,7 @@ use Tailwatch\Admin\App\Api\Models\DBModel;
  *
  * Computes the 100-point security score by summing per-feature weights
  * in chunked passes via a self-rescheduling single-event cron
- * (`wptw_verify_features_in_multi_cron`) so it never blocks page loads.
+ * (`tailwatch_verify_features_in_multi_cron`) so it never blocks page loads.
  *
  * ## Free vs. extension features
  *
@@ -24,14 +24,14 @@ use Tailwatch\Admin\App\Api\Models\DBModel;
  * security-score row for. Some entries (`default_malware_scan`,
  * `default_two_step_authenticate`) ship NO scoring implementation in
  * the free plugin — they are extension surfaces. When an add-on hooks
- * `wptw_calculate_security_feature_score`, its return value is used
+ * `tailwatch_calculate_security_feature_score`, its return value is used
  * as the row's score. When no listener responds, the row is rendered
  * as an `is_upgrade_feature` card that does not contribute to the
  * security total — the frontend draws the same upgrade affordance
  * used by other extension-only surfaces in the plugin.
  *
  * Extensions may also augment disabled-feature responses via
- * `wptw_security_feature_disabled_response` to attach contextual
+ * `tailwatch_security_feature_disabled_response` to attach contextual
  * call-to-action metadata.
  *
  */
@@ -42,11 +42,11 @@ class SecurityFeaturesVerifyController {
 	/**
 	 * Every security feature the dashboard renders a row for.
 	 *
-	 * Free-scored entries have a `wptw_calculate_*` method in this
+	 * Free-scored entries have a `tailwatch_calculate_*` method in this
 	 * class. Extension-only entries (`default_malware_scan`,
 	 * `default_two_step_authenticate`) have no method — they flow
 	 * through the extension-hook fallback in
-	 * {@see self::wptw_calculate_security_level()} so add-ons can
+	 * {@see self::tailwatch_calculate_security_level()} so add-ons can
 	 * provide the score or the frontend can render an upgrade card.
 	 *
 	 * @var string[]
@@ -81,7 +81,7 @@ class SecurityFeaturesVerifyController {
 
 	public function __construct() {
 		$hook_controller = new HookControllers();
-		$hook_controller->add_action_hook( 'wptw_verify_features_in_multi_cron', array( $this, 'wptw_verify_features_with_cron' ) );
+		$hook_controller->add_action_hook( 'tailwatch_verify_features_in_multi_cron', array( $this, 'tailwatch_verify_features_with_cron' ) );
 		$this->processManager = new ProcessManager();
 		$this->register_process_monitoring();
 	}
@@ -90,15 +90,15 @@ class SecurityFeaturesVerifyController {
 		ProcessManager::register_process(
 			array(
 				'process_type'    => 'security_verify',
-				'cron_hooks'      => array( 'wptw_verify_features_in_multi_cron' ),
+				'cron_hooks'      => array( 'tailwatch_verify_features_in_multi_cron' ),
 				'stuck_threshold' => 300,
 				'max_retries'     => 3,
 			)
 		);
 	}
 
-	public function wptw_verify_features_with_cron() {
-		$get_features = $this->wptw_get_features_value();
+	public function tailwatch_verify_features_with_cron() {
+		$get_features = $this->tailwatch_get_features_value();
 		$process_id   = isset( $get_features['process_id'] ) ? $get_features['process_id'] : ( $this->currentProcessId ?? null );
 		if ( ! $process_id ) {
 			$total = 0;
@@ -107,7 +107,7 @@ class SecurityFeaturesVerifyController {
 			}
 			$process_id                 = $this->processManager->get_or_create_process(
 				'security_verify',
-				'wptw_verify_features_in_multi_cron',
+				'tailwatch_verify_features_in_multi_cron',
 				array(
 					'total' => $total,
 				)
@@ -133,7 +133,7 @@ class SecurityFeaturesVerifyController {
 
 			$feature_value = $db_model->get_data_by_id( $feature['id'] );
 
-			$this->wptw_calculate_security_level( $feature_value );
+			$this->tailwatch_calculate_security_level( $feature_value );
 
 			$get_features['all_options']['active_features'][ $name ]['is_completed'] = true;
 
@@ -143,7 +143,7 @@ class SecurityFeaturesVerifyController {
 			if ( $get_features['attempt_count'] >= 5 && $get_features['process_run'] === 'automatically' ) {
 				$get_features['attempt_count'] = 0;
 				$this->update_features_value( $get_features );
-				wp_schedule_single_event( time() + 4, 'wptw_verify_features_in_multi_cron' );
+				wp_schedule_single_event( time() + 4, 'tailwatch_verify_features_in_multi_cron' );
 				return;
 			}
 		}
@@ -165,23 +165,23 @@ class SecurityFeaturesVerifyController {
 		}
 	}
 
-	public function wptw_get_calculate_features() {
+	public function tailwatch_get_calculate_features() {
 		$db_model = new DBModel();
-		$wptw_key           = 'default_dashboard_data';
+		$tailwatch_key           = 'default_dashboard_data';
 		$option             = 'calculate_active_features';
-		return $db_model->get_recent_data( $option, $wptw_key );
+		return $db_model->get_recent_data( $option, $tailwatch_key );
 	}
 
 	public function update_calculate_features_data( array $options ) {
 		$db_model  = new DBModel();
-		$wptw_key = 'default_dashboard_data';
+		$tailwatch_key = 'default_dashboard_data';
 		$option   = 'calculate_active_features';
 
 		$db_data = array(
 			'value' => wp_json_encode( $options ),
 		);
 
-		$db_model->update_recent_row( $db_data, $wptw_key, $option );
+		$db_model->update_recent_row( $db_data, $tailwatch_key, $option );
 	}
 
 	/**
@@ -200,7 +200,7 @@ class SecurityFeaturesVerifyController {
 	 *    swap the "Activate" button for an "Upgrade Now" affordance.
 	 * 3. Both — an extension feature whose listener returns a real
 	 *    score will overwrite the upgrade-card payload via the
-	 *    `wptw_calculate_security_feature_score` filter.
+	 *    `tailwatch_calculate_security_feature_score` filter.
 	 *
 	 * Fully active free features are intentionally excluded from the
 	 * list — they contribute to `total_score` but have nothing for
@@ -219,10 +219,10 @@ class SecurityFeaturesVerifyController {
 	 *     }>
 	 * }
 	 */
-	public function wptw_features_calculate_score() {
+	public function tailwatch_features_calculate_score() {
 		try {
 
-			$feature_data = $this->wptw_get_features_value();
+			$feature_data = $this->tailwatch_get_features_value();
 			if ( ! empty( $feature_data ) && $feature_data['process_run'] === 'manually' && $feature_data['is_completed'] === false ) {
 				return array(
 					'code'                  => 200,
@@ -234,7 +234,7 @@ class SecurityFeaturesVerifyController {
 				);
 			}
 
-			$existing_data = $this->wptw_get_calculate_features();
+			$existing_data = $this->tailwatch_get_calculate_features();
 
 			if ( ! empty( $existing_data ) ) {
 				$total_score           = $existing_data['total_score'] ?? 0;
@@ -291,7 +291,7 @@ class SecurityFeaturesVerifyController {
 							 * @param string $key     Feature option key (e.g. `default_malware_scan`).
 							 * @param array  $feature Full score row built by the per-feature scorer / filter listener.
 							 */
-							$row = apply_filters( 'wptw_security_disabled_feature_row', $row, $key, $feature );
+							$row = apply_filters( 'tailwatch_security_disabled_feature_row', $row, $key, $feature );
 							$all_disabled_features[] = $row;
 						}
 					}
@@ -334,7 +334,7 @@ class SecurityFeaturesVerifyController {
 		}
 	}
 
-	public function wptw_get_features_value() {
+	public function tailwatch_get_features_value() {
 		$db_model = new DBModel();
 		$key                = 'default_verify_features';
 		$option             = 'verify_features_with_cron';
@@ -353,7 +353,7 @@ class SecurityFeaturesVerifyController {
 		$db_model->update_recent_row( $db_data, $key, $option );
 	}
 
-	public function wptw_delete_verify_features_entries( $db_model, $option, $key ) {
+	public function tailwatch_delete_verify_features_entries( $db_model, $option, $key ) {
 		$where = array(
 			'option' => $option,
 			'key'    => $key,
@@ -362,11 +362,11 @@ class SecurityFeaturesVerifyController {
 		$db_model->delete_rows( $where );
 	}
 
-	public function wptw_get_all_features_with_cron( $process_run = 'automatically' ) {
+	public function tailwatch_get_all_features_with_cron( $process_run = 'automatically' ) {
 		$option             = 'verify_features_with_cron';
 		$key                = 'default_verify_features';
 		$db_model = new DBModel();
-		$this->wptw_delete_verify_features_entries( $db_model, $option, $key );
+		$this->tailwatch_delete_verify_features_entries( $db_model, $option, $key );
 
 		$get_features = $db_model->get_features( false );
 
@@ -393,7 +393,7 @@ class SecurityFeaturesVerifyController {
 		$total                      = isset( $all_options['active_features'] ) ? count( $all_options['active_features'] ) : 0;
 		$process_id                 = $this->processManager->get_or_create_process(
 			'security_verify',
-			'wptw_verify_features_in_multi_cron',
+			'tailwatch_verify_features_in_multi_cron',
 			array(
 				'total' => $total,
 			)
@@ -418,14 +418,14 @@ class SecurityFeaturesVerifyController {
 
 		$db_model->insert_row( $db_data, $db_data_format );
 
-		wp_schedule_single_event( time() + 5, 'wptw_verify_features_in_multi_cron' );
+		wp_schedule_single_event( time() + 5, 'tailwatch_verify_features_in_multi_cron' );
 	}
 
-	public function wptw_start_security_features_process() {
+	public function tailwatch_start_security_features_process() {
 		try {
 			// Fix typo and clear hooks
-			wp_clear_scheduled_hook( 'wptw_verify_features_with_crone' );
-			wp_clear_scheduled_hook( 'wptw_verify_features_in_multi_cron' );
+			wp_clear_scheduled_hook( 'tailwatch_verify_features_with_crone' );
+			wp_clear_scheduled_hook( 'tailwatch_verify_features_in_multi_cron' );
 
 			Log::info(
 				'Manual security features verification process initiated',
@@ -436,7 +436,7 @@ class SecurityFeaturesVerifyController {
 				)
 			);
 
-			$this->wptw_get_all_features_with_cron( 'manually' );
+			$this->tailwatch_get_all_features_with_cron( 'manually' );
 
 			return array(
 				'code'    => 200,
@@ -469,15 +469,15 @@ class SecurityFeaturesVerifyController {
 		}
 	}
 
-	public function wptw_execute_security_features_cron_if_failed() {
+	public function tailwatch_execute_security_features_cron_if_failed() {
 		try {
 			// Check if cron is already scheduled
-			if ( wp_next_scheduled( 'wptw_verify_features_in_multi_cron' ) ) {
+			if ( wp_next_scheduled( 'tailwatch_verify_features_in_multi_cron' ) ) {
 				return array(
 					'code'    => 200,
 					'message' => __( 'Security features cron is already scheduled.', 'tailwatch' ),
 					'data'    => array(
-						'next_scheduled' => gmdate( 'Y-m-d H:i:s', wp_next_scheduled( 'wptw_verify_features_in_multi_cron' ) ),
+						'next_scheduled' => gmdate( 'Y-m-d H:i:s', wp_next_scheduled( 'tailwatch_verify_features_in_multi_cron' ) ),
 					),
 				);
 			}
@@ -492,7 +492,7 @@ class SecurityFeaturesVerifyController {
 			);
 
 			// Schedule the cron
-			wp_schedule_single_event( time() + 4, 'wptw_verify_features_in_multi_cron' );
+			wp_schedule_single_event( time() + 4, 'tailwatch_verify_features_in_multi_cron' );
 
 			return array(
 				'code'    => 200,
@@ -530,7 +530,7 @@ class SecurityFeaturesVerifyController {
 	 *
 	 * Returns the minimal shape consumed by the security-score frontend
 	 * (feature_name, total_score, message, disabled_features). Extensions
-	 * can augment the response via the wptw_security_feature_disabled_response
+	 * can augment the response via the tailwatch_security_feature_disabled_response
 	 * filter — for example, to attach promotional metadata for features
 	 * distributed as a separate add-on.
 	 *
@@ -538,7 +538,7 @@ class SecurityFeaturesVerifyController {
 	 * @param string $calculate_status  Feature option key (e.g. 'default_backup_enable').
 	 * @return array Status payload.
 	 */
-	public function wptw_return_if_feature_disable( $feature_name, $calculate_status = '' ) {
+	public function tailwatch_return_if_feature_disable( $feature_name, $calculate_status = '' ) {
 		$response = array(
 			'feature_name'      => $feature_name,
 			'total_score'       => 0,
@@ -546,11 +546,11 @@ class SecurityFeaturesVerifyController {
 			'disabled_features' => array(),
 		);
 
-		return apply_filters( 'wptw_security_feature_disabled_response', $response, $feature_name, $calculate_status );
+		return apply_filters( 'tailwatch_security_feature_disabled_response', $response, $feature_name, $calculate_status );
 	}
 
-	public function wptw_calculate_security_level( $default_data ) {
-		$existing_data = $this->wptw_get_calculate_features();
+	public function tailwatch_calculate_security_level( $default_data ) {
+		$existing_data = $this->tailwatch_get_calculate_features();
 
 		$calculate_status = $default_data['option'];
 		$decode_options   = json_decode( $default_data['value'], true );
@@ -565,7 +565,7 @@ class SecurityFeaturesVerifyController {
 		// extension-scored features. The free plugin alone tops out at 77
 		// (the remaining 23 — Malware Guard 14 + Role-based 2FA 9 — are
 		// extension-only rows that contribute zero until an add-on hooks
-		// `wptw_calculate_security_feature_score`).
+		// `tailwatch_calculate_security_feature_score`).
 		//
 		// Free weights: files_and_permission 9, file_integrity_check 12,
 		// log_activity 8, monitoring_logs 8, verify_ssl 8,
@@ -583,16 +583,16 @@ class SecurityFeaturesVerifyController {
 		if ( $calculate_status === 'default_files_and_permission' ) {
 			$feature_name = 'File Permissions';
 			if ( $feature_active ) {
-				$file_permission_score = $this->wptw_calculate_file_permissions( $decode_options['options'], 9, $feature_name, $calculate_status );
+				$file_permission_score = $this->tailwatch_calculate_file_permissions( $decode_options['options'], 9, $feature_name, $calculate_status );
 			} else {
-				$file_permission_score = $this->wptw_return_if_feature_disable( $feature_name, $calculate_status );
+				$file_permission_score = $this->tailwatch_return_if_feature_disable( $feature_name, $calculate_status );
 			}
 			$existing_data['all_features']['default_files_and_permission'] = $file_permission_score;
 		} elseif ( isset( self::$extension_feature_labels[ $calculate_status ] ) ) {
 			// Extension-only feature row (e.g. Malware Guard, Role-based 2FA).
 			// Free ships no scorer — delegate to the extension filter, fall back
 			// to an upgrade card when no add-on responds.
-			$existing_data['all_features'][ $calculate_status ] = $this->wptw_resolve_extension_feature_score(
+			$existing_data['all_features'][ $calculate_status ] = $this->tailwatch_resolve_extension_feature_score(
 				$calculate_status,
 				$decode_options,
 				$feature_active
@@ -600,65 +600,65 @@ class SecurityFeaturesVerifyController {
 		} elseif ( $calculate_status === 'default_file_integrity_check' ) {
 			$feature_name = 'File Integrity Watch';
 			if ( $feature_active ) {
-				$file_integrity = $this->wptw_calculate_file_integrity( $decode_options['options'], 12, $feature_name, $calculate_status );
+				$file_integrity = $this->tailwatch_calculate_file_integrity( $decode_options['options'], 12, $feature_name, $calculate_status );
 			} else {
-				$file_integrity = $this->wptw_return_if_feature_disable( $feature_name, $calculate_status );
+				$file_integrity = $this->tailwatch_return_if_feature_disable( $feature_name, $calculate_status );
 			}
 			$existing_data['all_features']['default_file_integrity_check'] = $file_integrity;
 		} elseif ( $calculate_status === 'default_log_activity' ) {
 			$feature_name = 'Activity Logs';
 			if ( $feature_active ) {
-				$user_activity_logs = $this->wptw_calculate_user_activity_logs( $decode_options['options'], 8, $feature_name, $calculate_status );
+				$user_activity_logs = $this->tailwatch_calculate_user_activity_logs( $decode_options['options'], 8, $feature_name, $calculate_status );
 			} else {
-				$user_activity_logs = $this->wptw_return_if_feature_disable( $feature_name, $calculate_status );
+				$user_activity_logs = $this->tailwatch_return_if_feature_disable( $feature_name, $calculate_status );
 			}
 			$existing_data['all_features']['default_log_activity'] = $user_activity_logs;
 		} elseif ( $calculate_status === 'default_monitoring_logs' ) {
 			$feature_name = 'Error Logs';
 			if ( $feature_active ) {
-				$error_logs = $this->wptw_calculate_error_logs( $decode_options['options'], 8, $feature_name, $calculate_status );
+				$error_logs = $this->tailwatch_calculate_error_logs( $decode_options['options'], 8, $feature_name, $calculate_status );
 			} else {
-				$error_logs = $this->wptw_return_if_feature_disable( $feature_name, $calculate_status );
+				$error_logs = $this->tailwatch_return_if_feature_disable( $feature_name, $calculate_status );
 			}
 			$existing_data['all_features']['default_monitoring_logs'] = $error_logs;
 		} elseif ( $calculate_status === 'default_verify_ssl' ) {
 			$feature_name = 'Smart SSL';
 			if ( $feature_active ) {
-				$smart_ssl = $this->wptw_calculate_smart_ssl( $decode_options['options'], 8, $feature_name, $calculate_status );
+				$smart_ssl = $this->tailwatch_calculate_smart_ssl( $decode_options['options'], 8, $feature_name, $calculate_status );
 			} else {
-				$smart_ssl = $this->wptw_return_if_feature_disable( $feature_name, $calculate_status );
+				$smart_ssl = $this->tailwatch_return_if_feature_disable( $feature_name, $calculate_status );
 			}
 			$existing_data['all_features']['default_verify_ssl'] = $smart_ssl;
 		} elseif ( $calculate_status === 'default_backup_enable' ) {
 			$feature_name = 'Backup Vault';
 			if ( $feature_active ) {
-				$backup = $this->wptw_calculate_backup( $decode_options['options'], 8, $feature_name, $calculate_status );
+				$backup = $this->tailwatch_calculate_backup( $decode_options['options'], 8, $feature_name, $calculate_status );
 			} else {
-				$backup = $this->wptw_return_if_feature_disable( $feature_name, $calculate_status );
+				$backup = $this->tailwatch_return_if_feature_disable( $feature_name, $calculate_status );
 			}
 			$existing_data['all_features']['default_backup_enable'] = $backup;
 		} elseif ( $calculate_status === 'default_database_optimizer' ) {
 			$feature_name = 'Database Optimizer';
 			if ( $feature_active ) {
-				$db_optimizer = $this->wptw_calculate_database_optimizer( $decode_options['options'], 8, $feature_name, $calculate_status );
+				$db_optimizer = $this->tailwatch_calculate_database_optimizer( $decode_options['options'], 8, $feature_name, $calculate_status );
 			} else {
-				$db_optimizer = $this->wptw_return_if_feature_disable( $feature_name, $calculate_status );
+				$db_optimizer = $this->tailwatch_return_if_feature_disable( $feature_name, $calculate_status );
 			}
 			$existing_data['all_features']['default_database_optimizer'] = $db_optimizer;
 		} elseif ( $calculate_status === 'default_hardening_audit' ) {
 			$feature_name = 'Hardening Audit';
 			if ( $feature_active ) {
-				$hardening_audit = $this->wptw_calculate_hardening_audit( $decode_options['options'], 8, $feature_name, $calculate_status );
+				$hardening_audit = $this->tailwatch_calculate_hardening_audit( $decode_options['options'], 8, $feature_name, $calculate_status );
 			} else {
-				$hardening_audit = $this->wptw_return_if_feature_disable( $feature_name, $calculate_status );
+				$hardening_audit = $this->tailwatch_return_if_feature_disable( $feature_name, $calculate_status );
 			}
 			$existing_data['all_features']['default_hardening_audit'] = $hardening_audit;
 		} elseif ( $calculate_status === 'default_login_defender_management' ) {
 			$feature_name = 'Login Defender';
 			if ( $feature_active ) {
-				$login_defender = $this->wptw_calculate_login_defender( $decode_options['options'], 8, $feature_name, $calculate_status );
+				$login_defender = $this->tailwatch_calculate_login_defender( $decode_options['options'], 8, $feature_name, $calculate_status );
 			} else {
-				$login_defender = $this->wptw_return_if_feature_disable( $feature_name, $calculate_status );
+				$login_defender = $this->tailwatch_return_if_feature_disable( $feature_name, $calculate_status );
 			}
 			$existing_data['all_features']['default_login_defender_management'] = $login_defender;
 		}
@@ -696,7 +696,7 @@ class SecurityFeaturesVerifyController {
 		$this->update_calculate_features_data( $existing_data );
 	}
 
-	public function wptw_calculate_file_permissions( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
+	public function tailwatch_calculate_file_permissions( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
 		$expected_features = array(
 			'disable_file_editor_in_plugins',
 			'disable_file_editor_in_themes',
@@ -712,8 +712,8 @@ class SecurityFeaturesVerifyController {
 		);
 
 		$verify_feature = new VerifyingFeaturesController();
-		$all_options    = $verify_feature->wptw_verify_options_status( $feature_options );
-		$label_map      = $verify_feature->wptw_get_option_labels( $feature_options );
+		$all_options    = $verify_feature->tailwatch_verify_options_status( $feature_options );
+		$label_map      = $verify_feature->tailwatch_get_option_labels( $feature_options );
 
 		$total_permissions  = count( $expected_features );
 		$active_permissions = 0;
@@ -740,7 +740,7 @@ class SecurityFeaturesVerifyController {
 	/**
 	 * Build a security-score row for an extension-only feature.
 	 *
-	 * Asks the `wptw_calculate_security_feature_score` filter for the
+	 * Asks the `tailwatch_calculate_security_feature_score` filter for the
 	 * row payload. An add-on that ships the actual feature returns a
 	 * standard score entry (`feature_name`, `total_score`, `message`,
 	 * `disabled_features`). When no listener responds, the row falls
@@ -753,12 +753,12 @@ class SecurityFeaturesVerifyController {
 	 * @param bool   $feature_active   Whether the parent feature row is currently active.
 	 * @return array Standard score entry, possibly carrying `is_upgrade_feature => true`.
 	 */
-	private function wptw_resolve_extension_feature_score( $calculate_status, $decode_options, $feature_active ) {
+	private function tailwatch_resolve_extension_feature_score( $calculate_status, $decode_options, $feature_active ) {
 		$feature_name = self::$extension_feature_labels[ $calculate_status ]
 			?? ucfirst( str_replace( array( 'default_', '_' ), array( '', ' ' ), $calculate_status ) );
 
 		$extension_score = apply_filters(
-			'wptw_calculate_security_feature_score',
+			'tailwatch_calculate_security_feature_score',
 			null,
 			$calculate_status,
 			$feature_name,
@@ -790,7 +790,7 @@ class SecurityFeaturesVerifyController {
 	 * @param string $calculate_status Feature option key.
 	 * @return array Standard score row.
 	 */
-	public function wptw_calculate_login_defender( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
+	public function tailwatch_calculate_login_defender( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
 		$expected_features = array(
 			'ip_based_protection',
 		);
@@ -800,8 +800,8 @@ class SecurityFeaturesVerifyController {
 		$disabled_features = array();
 
 		$verify_feature = new VerifyingFeaturesController();
-		$all_options    = $verify_feature->wptw_verify_options_status( $feature_options );
-		$label_map      = $verify_feature->wptw_get_option_labels( $feature_options );
+		$all_options    = $verify_feature->tailwatch_verify_options_status( $feature_options );
+		$label_map      = $verify_feature->tailwatch_get_option_labels( $feature_options );
 
 		foreach ( $expected_features as $feature ) {
 			if ( in_array( $feature, $all_options ) ) {
@@ -821,7 +821,7 @@ class SecurityFeaturesVerifyController {
 		);
 	}
 
-	public function wptw_calculate_file_integrity( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
+	public function tailwatch_calculate_file_integrity( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
 		$expected_features = array(
 			'enable_integrity_check',
 		);
@@ -831,8 +831,8 @@ class SecurityFeaturesVerifyController {
 		$disabled_features = array();
 
 		$verify_feature = new VerifyingFeaturesController();
-		$all_options    = $verify_feature->wptw_verify_options_status( $feature_options );
-		$label_map      = $verify_feature->wptw_get_option_labels( $feature_options );
+		$all_options    = $verify_feature->tailwatch_verify_options_status( $feature_options );
+		$label_map      = $verify_feature->tailwatch_get_option_labels( $feature_options );
 
 		foreach ( $expected_features as $feature ) {
 			if ( in_array( $feature, $all_options ) ) {
@@ -852,7 +852,7 @@ class SecurityFeaturesVerifyController {
 		);
 	}
 
-	public function wptw_calculate_user_activity_logs( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
+	public function tailwatch_calculate_user_activity_logs( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
 		// Key Activity Logs log options
 		$expected_features = array(
 			'Login',
@@ -870,8 +870,8 @@ class SecurityFeaturesVerifyController {
 		$disabled_features = array();
 
 		$verify_feature = new VerifyingFeaturesController();
-		$all_options    = $verify_feature->wptw_verify_options_status( $feature_options );
-		$label_map      = $verify_feature->wptw_get_option_labels( $feature_options );
+		$all_options    = $verify_feature->tailwatch_verify_options_status( $feature_options );
+		$label_map      = $verify_feature->tailwatch_get_option_labels( $feature_options );
 
 		foreach ( $expected_features as $feature ) {
 			if ( in_array( $feature, $all_options ) ) {
@@ -891,7 +891,7 @@ class SecurityFeaturesVerifyController {
 		);
 	}
 
-	public function wptw_calculate_error_logs( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
+	public function tailwatch_calculate_error_logs( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
 		// Key error log options
 		$expected_features = array(
 			'log_503_service_unavailable',
@@ -910,8 +910,8 @@ class SecurityFeaturesVerifyController {
 		$disabled_features = array();
 
 		$verify_feature = new VerifyingFeaturesController();
-		$all_options    = $verify_feature->wptw_verify_options_status( $feature_options );
-		$label_map      = $verify_feature->wptw_get_option_labels( $feature_options );
+		$all_options    = $verify_feature->tailwatch_verify_options_status( $feature_options );
+		$label_map      = $verify_feature->tailwatch_get_option_labels( $feature_options );
 
 		foreach ( $expected_features as $feature ) {
 			if ( in_array( $feature, $all_options ) ) {
@@ -931,7 +931,7 @@ class SecurityFeaturesVerifyController {
 		);
 	}
 
-	public function wptw_calculate_smart_ssl( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
+	public function tailwatch_calculate_smart_ssl( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
 		$expected_features = array(
 			'verify_ssl',
 		);
@@ -941,8 +941,8 @@ class SecurityFeaturesVerifyController {
 		$disabled_features = array();
 
 		$verify_feature = new VerifyingFeaturesController();
-		$all_options    = $verify_feature->wptw_verify_options_status( $feature_options );
-		$label_map      = $verify_feature->wptw_get_option_labels( $feature_options );
+		$all_options    = $verify_feature->tailwatch_verify_options_status( $feature_options );
+		$label_map      = $verify_feature->tailwatch_get_option_labels( $feature_options );
 
 		foreach ( $expected_features as $feature ) {
 			if ( in_array( $feature, $all_options ) ) {
@@ -962,7 +962,7 @@ class SecurityFeaturesVerifyController {
 		);
 	}
 
-	public function wptw_calculate_backup( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
+	public function tailwatch_calculate_backup( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
 		$expected_features = array(
 			'enable_backup',
 		);
@@ -972,8 +972,8 @@ class SecurityFeaturesVerifyController {
 		$disabled_features = array();
 
 		$verify_feature = new VerifyingFeaturesController();
-		$all_options    = $verify_feature->wptw_verify_options_status( $feature_options );
-		$label_map      = $verify_feature->wptw_get_option_labels( $feature_options );
+		$all_options    = $verify_feature->tailwatch_verify_options_status( $feature_options );
+		$label_map      = $verify_feature->tailwatch_get_option_labels( $feature_options );
 
 		foreach ( $expected_features as $feature ) {
 			if ( in_array( $feature, $all_options ) ) {
@@ -993,7 +993,7 @@ class SecurityFeaturesVerifyController {
 		);
 	}
 
-	public function wptw_calculate_database_optimizer( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
+	public function tailwatch_calculate_database_optimizer( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
 		$expected_features = array(
 			'enable_database_optimizer',
 		);
@@ -1003,8 +1003,8 @@ class SecurityFeaturesVerifyController {
 		$disabled_features = array();
 
 		$verify_feature = new VerifyingFeaturesController();
-		$all_options    = $verify_feature->wptw_verify_options_status( $feature_options );
-		$label_map      = $verify_feature->wptw_get_option_labels( $feature_options );
+		$all_options    = $verify_feature->tailwatch_verify_options_status( $feature_options );
+		$label_map      = $verify_feature->tailwatch_get_option_labels( $feature_options );
 
 		foreach ( $expected_features as $feature ) {
 			if ( in_array( $feature, $all_options ) ) {
@@ -1027,7 +1027,7 @@ class SecurityFeaturesVerifyController {
 	/**
 	 * Score the Hardening Audit feature.
 	 *
-	 * Mirrors `wptw_calculate_database_optimizer` and `wptw_calculate_backup`
+	 * Mirrors `tailwatch_calculate_database_optimizer` and `tailwatch_calculate_backup`
 	 * — the feature has a single master toggle (`enable_hardening_audit`),
 	 * so the score is binary: full weight if enabled, zero if not.
 	 *
@@ -1038,7 +1038,7 @@ class SecurityFeaturesVerifyController {
 	 * @param string $calculate_status Feature option key, used for plan-tier lookup.
 	 * @return array Standard score entry: feature_name, total_score, message, disabled_features.
 	 */
-	public function wptw_calculate_hardening_audit( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
+	public function tailwatch_calculate_hardening_audit( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
 		$expected_features = array(
 			'enable_hardening_audit',
 		);
@@ -1048,8 +1048,8 @@ class SecurityFeaturesVerifyController {
 		$disabled_features = array();
 
 		$verify_feature = new VerifyingFeaturesController();
-		$all_options    = $verify_feature->wptw_verify_options_status( $feature_options );
-		$label_map      = $verify_feature->wptw_get_option_labels( $feature_options );
+		$all_options    = $verify_feature->tailwatch_verify_options_status( $feature_options );
+		$label_map      = $verify_feature->tailwatch_get_option_labels( $feature_options );
 
 		foreach ( $expected_features as $feature ) {
 			if ( in_array( $feature, $all_options ) ) {

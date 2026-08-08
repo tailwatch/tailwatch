@@ -24,11 +24,11 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class IpBlackListController extends BaseController {
 
-	protected $wptw_feature_check_exemptions = array();
+	protected $tailwatch_feature_check_exemptions = array();
 
-	protected function wptw_get_feature_status() {
+	protected function tailwatch_get_feature_status() {
 		$controller = new IpManagementController();
-		$status     = $controller->wptw_ips_managment_is_enabled();
+		$status     = $controller->tailwatch_ips_managment_is_enabled();
 		return array(
 			'feature_enable' => $status['blacklist_feature'],
 			'parent_enable'  => $status['parent_enable'],
@@ -45,15 +45,15 @@ class IpBlackListController extends BaseController {
 	}
 
 
-	public function wptw_handle_add_ip_rule( $postData ) {
+	public function tailwatch_handle_add_ip_rule( $postData ) {
 		try {
-			$validation = FieldsValidationController::wptw_validate_json_and_fields( $postData, array( 'ip_ranges', 'block_type', 'block_duration', 'scope', 'reason' ) );
+			$validation = FieldsValidationController::tailwatch_validate_json_and_fields( $postData, array( 'ip_ranges', 'block_type', 'block_duration', 'scope', 'reason' ) );
 			if ( ! $validation['success'] ) {
 				Log::error(
 					'IP rule creation validation failed',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_add_ip_rule',
+						'action'  => 'tailwatch_handle_add_ip_rule',
 						'title'  => 'IP Management',
 						'detail'  => $validation['message'],
 					)
@@ -73,7 +73,7 @@ class IpBlackListController extends BaseController {
 					'No IP ranges provided for rule creation',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_add_ip_rule',
+						'action'  => 'tailwatch_handle_add_ip_rule',
 						'title'  => 'IP Management',
 					)
 				);
@@ -88,7 +88,7 @@ class IpBlackListController extends BaseController {
 					'Invalid block type for IP rule',
 					array(
 						'feature'    => 'ip_management',
-						'action'     => 'wptw_handle_add_ip_rule',
+						'action'     => 'tailwatch_handle_add_ip_rule',
 						'title'  => 'IP Management',
 						'block_type' => $block_type,
 					)
@@ -104,7 +104,7 @@ class IpBlackListController extends BaseController {
 					'Invalid scope for IP rule',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_add_ip_rule',
+						'action'  => 'tailwatch_handle_add_ip_rule',
 						'title'  => 'IP Management',
 						'scope'   => $scope,
 					)
@@ -120,7 +120,7 @@ class IpBlackListController extends BaseController {
 					'Invalid block duration for IP rule',
 					array(
 						'feature'        => 'ip_management',
-						'action'         => 'wptw_handle_add_ip_rule',
+						'action'         => 'tailwatch_handle_add_ip_rule',
 						'title'  => 'IP Management',
 						'block_duration' => $block_duration,
 					)
@@ -136,7 +136,7 @@ class IpBlackListController extends BaseController {
 					'Reason too long for IP rule',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_add_ip_rule',
+						'action'  => 'tailwatch_handle_add_ip_rule',
 						'title'  => 'IP Management',
 					)
 				);
@@ -157,7 +157,7 @@ class IpBlackListController extends BaseController {
 					'Invalid IP ranges for rule',
 					array(
 						'feature'        => 'ip_management',
-						'action'         => 'wptw_handle_add_ip_rule',
+						'action'         => 'tailwatch_handle_add_ip_rule',
 						'title'  => 'IP Management',
 						'invalid_ranges' => implode( ', ', $invalid_ranges ),
 					)
@@ -188,7 +188,7 @@ class IpBlackListController extends BaseController {
 					'IP rule addition failed',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_add_ip_rule',
+						'action'  => 'tailwatch_handle_add_ip_rule',
 						'title'  => 'IP Management',
 						'detail'  => $message,
 					)
@@ -204,7 +204,7 @@ class IpBlackListController extends BaseController {
 				'IP rule created',
 				array(
 					'feature'    => 'ip_management',
-					'action'     => 'wptw_handle_add_ip_rule',
+					'action'     => 'tailwatch_handle_add_ip_rule',
 					'title'  => 'IP Management',
 					'added'      => $result['added'],
 					'block_type' => $block_type,
@@ -222,7 +222,7 @@ class IpBlackListController extends BaseController {
 				'IP rule addition exception',
 				array(
 					'feature'   => 'ip_management',
-					'action'    => 'wptw_handle_add_ip_rule',
+					'action'    => 'tailwatch_handle_add_ip_rule',
 					'title'  => 'IP Management',
 					'exception' => $e,
 				)
@@ -234,16 +234,16 @@ class IpBlackListController extends BaseController {
 		}
 	}
 
-	public function wptw_handle_update_ip_rule( $postData ) {
+	public function tailwatch_handle_update_ip_rule( $postData ) {
 		try {
 			// First validate with minimal required fields
-			$validation = FieldsValidationController::wptw_validate_json_and_fields( $postData, array( 'ip_ranges', 'block_type', 'reason' ) );
+			$validation = FieldsValidationController::tailwatch_validate_json_and_fields( $postData, array( 'ip_ranges', 'block_type', 'reason' ) );
 			if ( ! $validation['success'] ) {
 				Log::error(
 					'IP rule update validation failed',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_update_ip_rule',
+						'action'  => 'tailwatch_handle_update_ip_rule',
 						'title'  => 'IP Management',
 						'detail'  => $validation['message'],
 					)
@@ -259,7 +259,7 @@ class IpBlackListController extends BaseController {
 					'Invalid block type for IP rule update',
 					array(
 						'feature'    => 'ip_management',
-						'action'     => 'wptw_handle_update_ip_rule',
+						'action'     => 'tailwatch_handle_update_ip_rule',
 						'title'  => 'IP Management',
 						'block_type' => $block_type,
 					)
@@ -271,13 +271,13 @@ class IpBlackListController extends BaseController {
 			}
 
 			if ( $block_type !== 'unblocked' ) {
-				$additional_validation = FieldsValidationController::wptw_validate_json_and_fields( $postData, array( 'block_duration', 'scope' ) );
+				$additional_validation = FieldsValidationController::tailwatch_validate_json_and_fields( $postData, array( 'block_duration', 'scope' ) );
 				if ( ! $additional_validation['success'] ) {
 					Log::error(
 						'IP rule update validation failed (block_duration, scope)',
 						array(
 							'feature' => 'ip_management',
-							'action'  => 'wptw_handle_update_ip_rule',
+							'action'  => 'tailwatch_handle_update_ip_rule',
 							'title'  => 'IP Management',
 							'detail'  => $additional_validation['message'],
 						)
@@ -301,7 +301,7 @@ class IpBlackListController extends BaseController {
 					'No IP ranges provided for rule update',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_update_ip_rule',
+						'action'  => 'tailwatch_handle_update_ip_rule',
 						'title'  => 'IP Management',
 					)
 				);
@@ -316,7 +316,7 @@ class IpBlackListController extends BaseController {
 					'Invalid scope for IP rule update',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_update_ip_rule',
+						'action'  => 'tailwatch_handle_update_ip_rule',
 						'title'  => 'IP Management',
 						'scope'   => $scope,
 					)
@@ -332,7 +332,7 @@ class IpBlackListController extends BaseController {
 					'Invalid block duration for IP rule update',
 					array(
 						'feature'        => 'ip_management',
-						'action'         => 'wptw_handle_update_ip_rule',
+						'action'         => 'tailwatch_handle_update_ip_rule',
 						'title'  => 'IP Management',
 						'block_duration' => $block_duration,
 					)
@@ -348,7 +348,7 @@ class IpBlackListController extends BaseController {
 					'Reason too long for IP rule update',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_update_ip_rule',
+						'action'  => 'tailwatch_handle_update_ip_rule',
 						'title'  => 'IP Management',
 					)
 				);
@@ -369,7 +369,7 @@ class IpBlackListController extends BaseController {
 					'Invalid IP ranges for rule update',
 					array(
 						'feature'        => 'ip_management',
-						'action'         => 'wptw_handle_update_ip_rule',
+						'action'         => 'tailwatch_handle_update_ip_rule',
 						'title'  => 'IP Management',
 						'invalid_ranges' => implode( ', ', $invalid_ranges ),
 					)
@@ -400,7 +400,7 @@ class IpBlackListController extends BaseController {
 					'IP rule update failed',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_update_ip_rule',
+						'action'  => 'tailwatch_handle_update_ip_rule',
 						'title'  => 'IP Management',
 						'detail'  => $message,
 					)
@@ -416,7 +416,7 @@ class IpBlackListController extends BaseController {
 				'IP rule updated',
 				array(
 					'feature'    => 'ip_management',
-					'action'     => 'wptw_handle_update_ip_rule',
+					'action'     => 'tailwatch_handle_update_ip_rule',
 					'title'  => 'IP Management',
 					'updated'    => $result['updated'],
 					'block_type' => $block_type,
@@ -433,7 +433,7 @@ class IpBlackListController extends BaseController {
 				'IP rule update exception',
 				array(
 					'feature'   => 'ip_management',
-					'action'    => 'wptw_handle_update_ip_rule',
+					'action'    => 'tailwatch_handle_update_ip_rule',
 					'title'  => 'IP Management',
 					'exception' => $e,
 				)
@@ -445,15 +445,15 @@ class IpBlackListController extends BaseController {
 		}
 	}
 
-	public function wptw_handle_delete_ip_rule( $postData ) {
+	public function tailwatch_handle_delete_ip_rule( $postData ) {
 		try {
-			$validation = FieldsValidationController::wptw_validate_json_and_fields( $postData, array( 'is_delete' ) );
+			$validation = FieldsValidationController::tailwatch_validate_json_and_fields( $postData, array( 'is_delete' ) );
 			if ( ! $validation['success'] ) {
 				Log::error(
 					'IP rule deletion validation failed',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_delete_ip_rule',
+						'action'  => 'tailwatch_handle_delete_ip_rule',
 						'title'  => 'IP Management',
 						'detail'  => $validation['message'],
 					)
@@ -471,7 +471,7 @@ class IpBlackListController extends BaseController {
 						'No IP ranges provided for rule deletion',
 						array(
 							'feature' => 'ip_management',
-							'action'  => 'wptw_handle_delete_ip_rule',
+							'action'  => 'tailwatch_handle_delete_ip_rule',
 							'title'  => 'IP Management',
 						)
 					);
@@ -492,7 +492,7 @@ class IpBlackListController extends BaseController {
 						'Invalid IP ranges for rule deletion',
 						array(
 							'feature'        => 'ip_management',
-							'action'         => 'wptw_handle_delete_ip_rule',
+							'action'         => 'tailwatch_handle_delete_ip_rule',
 							'title'  => 'IP Management',
 							'invalid_ranges' => implode( ', ', $invalid_ranges ),
 						)
@@ -521,7 +521,7 @@ class IpBlackListController extends BaseController {
 					'IP rule deletion failed',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_delete_ip_rule',
+						'action'  => 'tailwatch_handle_delete_ip_rule',
 						'title'  => 'IP Management',
 						'detail'  => $message,
 					)
@@ -537,7 +537,7 @@ class IpBlackListController extends BaseController {
 				'IP rules deleted',
 				array(
 					'feature'   => 'ip_management',
-					'action'    => 'wptw_handle_delete_ip_rule',
+					'action'    => 'tailwatch_handle_delete_ip_rule',
 					'title'  => 'IP Management',
 					'deleted'   => $result['deleted'],
 					'is_delete' => $is_delete,
@@ -553,7 +553,7 @@ class IpBlackListController extends BaseController {
 				'IP rule deletion exception',
 				array(
 					'feature'   => 'ip_management',
-					'action'    => 'wptw_handle_delete_ip_rule',
+					'action'    => 'tailwatch_handle_delete_ip_rule',
 					'title'  => 'IP Management',
 					'exception' => $e,
 				)
@@ -565,15 +565,15 @@ class IpBlackListController extends BaseController {
 		}
 	}
 
-	public function wptw_handle_unblock_ip_range( $postData ) {
+	public function tailwatch_handle_unblock_ip_range( $postData ) {
 		try {
-			$validation = FieldsValidationController::wptw_validate_json_and_fields( $postData, array( 'ip_range' ) );
+			$validation = FieldsValidationController::tailwatch_validate_json_and_fields( $postData, array( 'ip_range' ) );
 			if ( ! $validation['success'] ) {
 				Log::error(
 					'IP unblock validation failed',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_unblock_ip_range',
+						'action'  => 'tailwatch_handle_unblock_ip_range',
 						'title'  => 'IP Management',
 						'detail'  => $validation['message'],
 					)
@@ -589,7 +589,7 @@ class IpBlackListController extends BaseController {
 					'Invalid IP address or range for unblock',
 					array(
 						'feature'  => 'ip_management',
-						'action'   => 'wptw_handle_unblock_ip_range',
+						'action'   => 'tailwatch_handle_unblock_ip_range',
 						'title'  => 'IP Management',
 						'ip_range' => $ip_range,
 					)
@@ -616,7 +616,7 @@ class IpBlackListController extends BaseController {
 					'IP unblock failed',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_unblock_ip_range',
+						'action'  => 'tailwatch_handle_unblock_ip_range',
 						'title'  => 'IP Management',
 						'detail'  => $message,
 					)
@@ -632,7 +632,7 @@ class IpBlackListController extends BaseController {
 				'IP unblocked',
 				array(
 					'feature'  => 'ip_management',
-					'action'   => 'wptw_handle_unblock_ip_range',
+					'action'   => 'tailwatch_handle_unblock_ip_range',
 					'title'  => 'IP Management',
 					'ip_range' => $ip_range,
 				)
@@ -647,7 +647,7 @@ class IpBlackListController extends BaseController {
 				'IP unblock exception',
 				array(
 					'feature'   => 'ip_management',
-					'action'    => 'wptw_handle_unblock_ip_range',
+					'action'    => 'tailwatch_handle_unblock_ip_range',
 					'title'  => 'IP Management',
 					'exception' => $e,
 				)
@@ -659,15 +659,15 @@ class IpBlackListController extends BaseController {
 		}
 	}
 
-	public function wptw_handle_get_blocked_ip_ranges( $postData ) {
+	public function tailwatch_handle_get_blocked_ip_ranges( $postData ) {
 		try {
-			$validation = FieldsValidationController::wptw_validate_json_and_fields( $postData, array() );
+			$validation = FieldsValidationController::tailwatch_validate_json_and_fields( $postData, array() );
 			if ( ! $validation['success'] ) {
 				Log::error(
 					'IP blocked ranges retrieval validation failed',
 					array(
 						'feature' => 'ip_management',
-						'action'  => 'wptw_handle_get_blocked_ip_ranges',
+						'action'  => 'tailwatch_handle_get_blocked_ip_ranges',
 						'title'  => 'IP Management',
 						'detail'  => $validation['message'],
 					)
@@ -699,7 +699,7 @@ class IpBlackListController extends BaseController {
 				'IP blocked ranges retrieval exception',
 				array(
 					'feature'   => 'ip_management',
-					'action'    => 'wptw_handle_get_blocked_ip_ranges',
+					'action'    => 'tailwatch_handle_get_blocked_ip_ranges',
 					'title'  => 'IP Management',
 					'exception' => $e,
 				)

@@ -46,14 +46,14 @@ class Constants {
 	/**
 	 * Define a constant if not already defined.
 	 *
-	 * @param string $wptw_constant_name  Constant name.
-	 * @param mixed  $wptw_constant_value Constant value.
+	 * @param string $tailwatch_constant_name  Constant name.
+	 * @param mixed  $tailwatch_constant_value Constant value.
 	 * @return void
 	 */
-	private static function define( $wptw_constant_name, $wptw_constant_value ) {
-		if ( ! defined( $wptw_constant_name ) ) {
+	private static function define( $tailwatch_constant_name, $tailwatch_constant_value ) {
+		if ( ! defined( $tailwatch_constant_name ) ) {
 			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.VariableConstantNameFound -- Dynamic constant definition.
-			define( $wptw_constant_name, $wptw_constant_value );
+			define( $tailwatch_constant_name, $tailwatch_constant_value );
 		}
 	}
 
@@ -64,22 +64,22 @@ class Constants {
 	 */
 	private static function define_core_constants() {
 		// Main plugin file path.
-		self::define( 'WPTW_FILE', WPTW_PLUGIN_FILE );
+		self::define( 'TAILWATCH_FILE', TAILWATCH_PLUGIN_FILE );
 
 		// Plugin version number.
-		self::define( 'WPTW_VERSION', '1.0.0' );
+		self::define( 'TAILWATCH_VERSION', '1.0.0' );
 
 		// WordPress plugins directory path.
-		self::define( 'WPTW_PLUGIN_DIR', WP_PLUGIN_DIR );
+		self::define( 'TAILWATCH_PLUGIN_DIR', WP_PLUGIN_DIR );
 
 		// Plugin display name.
-		self::define( 'WPTW_NAME', 'Tailwatch' );
+		self::define( 'TAILWATCH_NAME', 'Tailwatch' );
 
 		// Plugin URL path.
-		self::define( 'WPTW_URI', plugin_dir_url( WPTW_PLUGIN_FILE ) );
+		self::define( 'TAILWATCH_URI', plugin_dir_url( TAILWATCH_PLUGIN_FILE ) );
 
 		// Plugin directory path.
-		self::define( 'WPTW_DIR', plugin_dir_path( WPTW_PLUGIN_FILE ) );
+		self::define( 'TAILWATCH_DIR', plugin_dir_path( TAILWATCH_PLUGIN_FILE ) );
 	}
 
 	/**
@@ -89,25 +89,25 @@ class Constants {
 	 */
 	private static function define_directory_constants() {
 		// Admin directory path.
-		self::define( 'WPTW_ADMIN_DIR', plugin_dir_path( WPTW_PLUGIN_FILE ) . 'Admin/' );
+		self::define( 'TAILWATCH_ADMIN_DIR', plugin_dir_path( TAILWATCH_PLUGIN_FILE ) . 'Admin/' );
 
 		// Admin assets URL path.
-		self::define( 'WPTW_ADMIN_ASSETS_URI', plugin_dir_url( WPTW_PLUGIN_FILE ) . 'Admin/Assets/' );
+		self::define( 'TAILWATCH_ADMIN_ASSETS_URI', plugin_dir_url( TAILWATCH_PLUGIN_FILE ) . 'Admin/Assets/' );
 
 		// Admin assets directory path.
-		self::define( 'WPTW_ADMIN_ASSETS_DIR', plugin_dir_path( WPTW_PLUGIN_FILE ) . 'Admin/Assets/' );
+		self::define( 'TAILWATCH_ADMIN_ASSETS_DIR', plugin_dir_path( TAILWATCH_PLUGIN_FILE ) . 'Admin/Assets/' );
 
 		// Admin includes directory path.
-		self::define( 'WPTW_ADMIN_INCLUDES_DIR', plugin_dir_path( WPTW_PLUGIN_FILE ) . 'Admin/Includes/' );
+		self::define( 'TAILWATCH_ADMIN_INCLUDES_DIR', plugin_dir_path( TAILWATCH_PLUGIN_FILE ) . 'Admin/Includes/' );
 
 		// Admin interface directory path.
-		self::define( 'WPTW_ADMIN_INTERFACE_DIR', plugin_dir_path( WPTW_PLUGIN_FILE ) . 'Admin/Interface/' );
+		self::define( 'TAILWATCH_ADMIN_INTERFACE_DIR', plugin_dir_path( TAILWATCH_PLUGIN_FILE ) . 'Admin/Interface/' );
 
 		// Admin app directory path.
-		self::define( 'WPTW_ADMIN_APP_DIR', plugin_dir_path( WPTW_PLUGIN_FILE ) . 'Admin/App/' );
+		self::define( 'TAILWATCH_ADMIN_APP_DIR', plugin_dir_path( TAILWATCH_PLUGIN_FILE ) . 'Admin/App/' );
 
 		// Admin API directory path.
-		self::define( 'WPTW_ADMIN_API_DIR', plugin_dir_path( WPTW_PLUGIN_FILE ) . 'Admin/App/Api/' );
+		self::define( 'TAILWATCH_ADMIN_API_DIR', plugin_dir_path( TAILWATCH_PLUGIN_FILE ) . 'Admin/App/Api/' );
 	}
 
 	/**
@@ -117,13 +117,13 @@ class Constants {
 	 */
 	private static function define_api_constants() {
 		// API base URL for external services.
-		self::define( 'WPTW_API_BASE_URL', 'https://api.wptailwatch.com' );
+		self::define( 'TAILWATCH_API_BASE_URL', 'https://api.wptailwatch.com' );
 
 		// Central API relay endpoint. Push notifications and license verification
-		self::define( 'WPTW_RELAY', WPTW_API_BASE_URL . '/wptw/relay' );
+		self::define( 'TAILWATCH_RELAY', TAILWATCH_API_BASE_URL . '/tailwatch/relay' );
 
 		// Plugin feedback endpoint.
-		self::define( 'WPTW_PLUGIN_FEEDBACK', WPTW_API_BASE_URL . '/plugin-feedback/submit' );
+		self::define( 'TAILWATCH_PLUGIN_FEEDBACK', TAILWATCH_API_BASE_URL . '/plugin-feedback/submit' );
 	}
 
 	/**
@@ -133,18 +133,18 @@ class Constants {
 	 */
 	private static function define_database_constants() {
 		// Settings database table name.
-		self::define( 'WPTW_DB_TABLE_NAME', 'tw_settings' );
+		self::define( 'TAILWATCH_DB_TABLE_NAME', 'tw_settings' );
 
 		// Logs database table name.
-		self::define( 'WPTW_DB_LOGS_TABLE_NAME', 'tw_logs' );
+		self::define( 'TAILWATCH_DB_LOGS_TABLE_NAME', 'tw_logs' );
 
 		// File-integrity baseline (one row per file) + scan-history tables.
-		self::define( 'WPTW_DB_FILEMON_BASELINE_TABLE', 'tw_filemon_baseline' );
-		self::define( 'WPTW_DB_FILEMON_SCANS_TABLE', 'tw_filemon_scans' );
+		self::define( 'TAILWATCH_DB_FILEMON_BASELINE_TABLE', 'tw_filemon_baseline' );
+		self::define( 'TAILWATCH_DB_FILEMON_SCANS_TABLE', 'tw_filemon_scans' );
 
 		// Database schema version. Bump only when the table structure changes;
 		// activation runs dbDelta only when the stored version differs from this.
-		self::define( 'WPTW_DB_VERSION', '1.0.0' );
+		self::define( 'TAILWATCH_DB_VERSION', '1.0.0' );
 	}
 
 	/**
@@ -154,23 +154,23 @@ class Constants {
 	 */
 	private static function define_environment_constants() {
 		// Current site URL.
-		self::define( 'WPTW_GET_SITE_URL', get_site_url() );
+		self::define( 'TAILWATCH_GET_SITE_URL', get_site_url() );
 
 		// Backup and migration storage: a slug-named folder in wp-content, kept
 		// independent of the per-site uploads directory.
-		self::define( 'WPTW_CONTENT_DIR_BASE', WP_CONTENT_DIR . '/tailwatch' );
-		self::define( 'WPTW_CONTENT_URL_BASE', content_url( '/tailwatch' ) );
+		self::define( 'TAILWATCH_CONTENT_DIR_BASE', WP_CONTENT_DIR . '/tailwatch' );
+		self::define( 'TAILWATCH_CONTENT_URL_BASE', content_url( '/tailwatch' ) );
 
 		// Backup storage filesystem path and public URL.
-		self::define( 'WPTW_BACKUP_DIR', WPTW_CONTENT_DIR_BASE . '/wptw-backup' );
-		self::define( 'WPTW_BACKUP_URL', WPTW_CONTENT_URL_BASE . '/wptw-backup' );
+		self::define( 'TAILWATCH_BACKUP_DIR', TAILWATCH_CONTENT_DIR_BASE . '/tailwatch-backup' );
+		self::define( 'TAILWATCH_BACKUP_URL', TAILWATCH_CONTENT_URL_BASE . '/tailwatch-backup' );
 
 		// Logs and generated data live in a slug-named folder inside the uploads
 		// directory, resolved through wp_get_upload_dir() so custom upload
 		// locations are honored.
 		$uploads      = wp_get_upload_dir();
 		$uploads_base = wp_normalize_path( $uploads['basedir'] );
-		self::define( 'WPTW_LOGS_DIRECTORY', trailingslashit( $uploads_base ) . 'tailwatch/wptw-logs' );
+		self::define( 'TAILWATCH_LOGS_DIRECTORY', trailingslashit( $uploads_base ) . 'tailwatch/tailwatch-logs' );
 	}
 
 	/**
@@ -180,10 +180,10 @@ class Constants {
 	 */
 	private static function define_version_constants() {
 		// Minimum PHP version required.
-		self::define( 'WPTW_PHP_VERSION', '7.4.0' );
+		self::define( 'TAILWATCH_PHP_VERSION', '7.4.0' );
 
 		// Minimum WordPress version required.
-		self::define( 'WPTW_WP_VERSION', '6.3.0' );
+		self::define( 'TAILWATCH_WP_VERSION', '6.3.0' );
 	}
 
 	/**
@@ -193,6 +193,6 @@ class Constants {
 	 */
 	private static function define_misc_constants() {
 		// Visit data option key.
-		self::define( 'WPTW_VISIT_DATA', 'wptw_visit_data' );
+		self::define( 'TAILWATCH_VISIT_DATA', 'tailwatch_visit_data' );
 	}
 }

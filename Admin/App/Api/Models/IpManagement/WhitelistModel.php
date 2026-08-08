@@ -43,7 +43,7 @@ class WhitelistModel {
 			'failed'  => array(),
 			'added'   => array(),
 		);
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 		$exemption  = in_array( $exemption, array( 'login_defender' ), true ) ? $exemption : 'login_defender';
 
 		foreach ( $ip_ranges as $ip_range ) {
@@ -126,7 +126,7 @@ class WhitelistModel {
 				$results['success']             = false;
 				continue;
 			}
-			delete_transient( 'wptw_whitelist_ip_all' );
+			delete_transient( 'tailwatch_whitelist_ip_all' );
 			$results['added'][] = $ip_range;
 		}
 
@@ -141,7 +141,7 @@ class WhitelistModel {
 			'failed'  => array(),
 			'added'   => array(),
 		);
-		$table_name    = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name    = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 		$exemption     = in_array( $exemption, array( 'login_defender' ), true ) ? $exemption : 'login_defender';
 
 		foreach ( $country_codes as $country_code ) {
@@ -217,7 +217,7 @@ class WhitelistModel {
 				continue;
 			}
 
-			delete_transient( 'login_defender_whitelist_country_' . $country_code );
+			delete_transient( 'tailwatch_login_defender_whitelist_country_' . $country_code );
 			$results['added'][] = $country_code;
 		}
 
@@ -228,7 +228,7 @@ class WhitelistModel {
 		global $wpdb;
 		$ip_ranges  = (array) $ip_ranges;
 		$success    = true;
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 		$exemption  = in_array( $exemption, array( 'login_defender' ), true ) ? $exemption : 'login_defender';
 
 		foreach ( $ip_ranges as $ip_range ) {
@@ -313,7 +313,7 @@ class WhitelistModel {
 				);
 				$success = false;
 			}
-			delete_transient( 'wptw_whitelist_ip_all' );
+			delete_transient( 'tailwatch_whitelist_ip_all' );
 		}
 
 		return $success;
@@ -323,7 +323,7 @@ class WhitelistModel {
 		global $wpdb;
 		$country_codes = (array) $country_codes;
 		$success       = true;
-		$table_name    = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name    = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 		$exemption     = in_array( $exemption, array( 'login_defender' ), true ) ? $exemption : 'login_defender';
 
 		foreach ( $country_codes as $country_code ) {
@@ -396,7 +396,7 @@ class WhitelistModel {
 				$success = false;
 			}
 			// Clear transient cache for the country code
-			delete_transient( 'login_defender_whitelist_country_' . $country_code );
+			delete_transient( 'tailwatch_login_defender_whitelist_country_' . $country_code );
 		}
 
 		return $success;
@@ -404,7 +404,7 @@ class WhitelistModel {
 
 	public function delete_ip_whitelist( $ip_ranges, $is_delete = false ) {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 		$success    = true;
 
 		if ( $is_delete ) {
@@ -425,7 +425,7 @@ class WhitelistModel {
 				$success = false;
 			}
 
-			delete_transient( 'wptw_whitelist_ip_all' );
+			delete_transient( 'tailwatch_whitelist_ip_all' );
 		} else {
 			$ip_ranges = (array) $ip_ranges;
 			foreach ( $ip_ranges as $ip_range ) {
@@ -463,7 +463,7 @@ class WhitelistModel {
 					$success = false;
 				}
 
-				delete_transient( 'wptw_whitelist_ip_all' );
+				delete_transient( 'tailwatch_whitelist_ip_all' );
 			}
 		}
 
@@ -472,7 +472,7 @@ class WhitelistModel {
 
 	public function delete_country_whitelist( $country_codes, $is_delete = false ) {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 		$success    = true;
 
 		if ( $is_delete ) {
@@ -496,7 +496,7 @@ class WhitelistModel {
 			$wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 				$wpdb->prepare(
 					"DELETE FROM $wpdb->options WHERE option_name LIKE %s",
-					'%login_defender_whitelist_country_%'
+					'%tailwatch_login_defender_whitelist_country_%'
 				)
 			);
 		} else {
@@ -536,7 +536,7 @@ class WhitelistModel {
 					$success = false;
 				}
 
-				delete_transient( 'login_defender_whitelist_country_' . $country_code );
+				delete_transient( 'tailwatch_login_defender_whitelist_country_' . $country_code );
 			}
 		}
 
@@ -545,10 +545,11 @@ class WhitelistModel {
 
 	public function get_ip_whitelists( $limit = null, $page = null, $geoip = null ) {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 
 		$count_sql = $wpdb->prepare(
-			"SELECT COUNT(*) FROM $table_name WHERE `key` = %s AND is_active = %d", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table identifier derived from $wpdb->prefix; not user input.
+			'SELECT COUNT(*) FROM %i WHERE `key` = %s AND is_active = %d',
+			$table_name,
 			'whitelist_ip',
 			1
 		);
@@ -609,10 +610,11 @@ class WhitelistModel {
 
 	public function get_country_whitelists( $limit = null, $page = null ) {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 
 		$count_sql = $wpdb->prepare(
-			"SELECT COUNT(*) FROM $table_name WHERE `key` = %s AND is_active = %d", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table identifier derived from $wpdb->prefix; not user input.
+			'SELECT COUNT(*) FROM %i WHERE `key` = %s AND is_active = %d',
+			$table_name,
 			'whitelist_country',
 			1
 		);
@@ -660,12 +662,12 @@ class WhitelistModel {
 	public function is_ip_whitelisted( $ip ) {
 		// Single-list transient avoids the per-IP key vs CIDR range invalidation mismatch
 		// that made the original per-IP caching unreliable.
-		$list_cache_key = 'wptw_whitelist_ip_all';
+		$list_cache_key = 'tailwatch_whitelist_ip_all';
 		$whitelists     = get_transient( $list_cache_key );
 
 		if ( false === $whitelists ) {
 			global $wpdb;
-			$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+			$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 			$rows       = $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 				$wpdb->prepare(
 					'SELECT `value` FROM %i WHERE `key` = %s AND is_active = %d',
@@ -695,14 +697,14 @@ class WhitelistModel {
 	}
 
 	public function is_country_whitelisted( $country_code ) {
-		$cache_key = 'login_defender_whitelist_country_' . $country_code;
+		$cache_key = 'tailwatch_login_defender_whitelist_country_' . $country_code;
 		$cached    = get_transient( $cache_key );
 		if ( false !== $cached ) {
 			return $cached;
 		}
 
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 		$whitelist  = $wpdb->get_row( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$wpdb->prepare(
 				'SELECT * FROM %i WHERE `key` = %s AND `option` = %s AND is_active = %d',
@@ -737,15 +739,15 @@ class WhitelistModel {
 
 	public function count_ip_whitelists() {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
-		$sql        = "SELECT COUNT(*) FROM $table_name WHERE `key` = 'whitelist_ip' AND is_active = 1";
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
+		$sql        = $wpdb->prepare( "SELECT COUNT(*) FROM %i WHERE `key` = 'whitelist_ip' AND is_active = 1", $table_name );
 		return (int) $wpdb->get_var( $sql ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 	}
 
 	public function count_country_whitelists() {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
-		$sql        = "SELECT COUNT(*) FROM $table_name WHERE `key` = 'whitelist_country' AND is_active = 1";
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
+		$sql        = $wpdb->prepare( "SELECT COUNT(*) FROM %i WHERE `key` = 'whitelist_country' AND is_active = 1", $table_name );
 		return (int) $wpdb->get_var( $sql ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 	}
 }

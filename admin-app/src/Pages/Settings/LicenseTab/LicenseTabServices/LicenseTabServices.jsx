@@ -1,11 +1,11 @@
 import axios from 'axios';
 import { toast } from 'react-toastify';
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 export const handleConfirmDisconnect = async (email, setEmail, setLicenseKey, setConnectionDateTime, setPlanName, setDevices, setLoading, refreshLicense, fetchFeaturesData) => {
 
 
 
-    const website = encodeURIComponent(wptw_ajax.base_url);
+    const website = encodeURIComponent(tailwatch_ajax.base_url);
     const ac = encodeURIComponent('unlink');
     const encodedEmail = encodeURIComponent(email || '');
     const popupUrl = `https://dashboard.wptailwatch.com/verifyandauthenticate?ip=true&website=${website}&ac=${ac}&email=${encodedEmail}`;
@@ -51,12 +51,12 @@ export const handleConfirmDisconnect = async (email, setEmail, setLicenseKey, se
                 setLoading(true);
 
                 const formData = new FormData();
-                formData.append('action', 'wptw_global_ajax_handler');
-                formData.append('action_type', 'wptw_delete_plugin_activation_data');
-                formData.append('nonce', wptw_ajax.nonce);
+                formData.append('action', 'tailwatch_global_ajax_handler');
+                formData.append('action_type', 'tailwatch_delete_plugin_activation_data');
+                formData.append('nonce', tailwatch_ajax.nonce);
                 formData.append('data', 'extended_connected');
 
-                const deleteResponse = await axios.post(wptw_ajax.ajax_url, formData, {
+                const deleteResponse = await axios.post(tailwatch_ajax.ajax_url, formData, {
                     headers: { 'Content-Type': 'multipart/form-data' },
                 });
 
@@ -103,11 +103,11 @@ export const fetchData = async ({
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_get_plugin_activation');
-        formData.append('nonce', wptw_ajax.nonce);
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_get_plugin_activation');
+        formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
@@ -153,8 +153,8 @@ export const fetchData = async ({
     }
 };
 
-export const handleConnect = async ({ setLoading, wptw_ajax, successCallback }) => {
-    const website = encodeURIComponent(wptw_ajax.base_url);
+export const handleConnect = async ({ setLoading, tailwatch_ajax, successCallback }) => {
+    const website = encodeURIComponent(tailwatch_ajax.base_url);
     const ac = encodeURIComponent('link');
     const env = encodeURIComponent('production');
     const popupUrl = `https://dashboard.wptailwatch.com/signin?ip=true&website=${website}&ac=${ac}&env=${env}`;
@@ -211,11 +211,11 @@ export const handleConnect = async ({ setLoading, wptw_ajax, successCallback }) 
                 };                
 
                 const formData = new FormData();
-                formData.append('action', 'wptw_global_ajax_handler');
-                formData.append('action_type', 'wptw_update_plugin_activation');
-                formData.append('nonce', wptw_ajax.nonce);
+                formData.append('action', 'tailwatch_global_ajax_handler');
+                formData.append('action_type', 'tailwatch_update_plugin_activation');
+                formData.append('nonce', tailwatch_ajax.nonce);
                 formData.append('data', JSON.stringify(loginData));
-                const response = await axios.post(wptw_ajax.ajax_url, formData);
+                const response = await axios.post(tailwatch_ajax.ajax_url, formData);
                 if (response.data.success) {
                     await successCallback();
                     toast.success("License connected successfully");

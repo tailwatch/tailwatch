@@ -150,6 +150,6 @@ class EncryptionService {
 		if ( empty( $salt ) ) {
 			return false;
 		}
-		return hash( 'sha256', 'wptw-encryption|' . $salt, true );
+		return hash( 'sha256', 'tailwatch-encryption|' . $salt, true );
 	}
 }

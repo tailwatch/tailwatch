@@ -1,16 +1,16 @@
 import axios from "axios";
 import { toast } from "react-toastify";
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 export const getIpDetails = async ({ setLoading, setIpDetailsData, page = 1, limit = 10, setFeatureEnable, setParentEnable, setPagination, setIsLicenseConnect }) => {
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_handle_get_all_ip_activities');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_handle_get_all_ip_activities');
         formData.append('data', JSON.stringify({ page, limit }));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (response.data.data.code === 200) {
@@ -40,11 +40,11 @@ export const handleUnblockIp = async ({ setLoading, ip, getIpDetailsData }) => {
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_handle_unblock_ip');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_handle_unblock_ip');
         formData.append('data', JSON.stringify(ip));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (response.data.data.code === 200) {
@@ -65,11 +65,11 @@ export const handleDeleteIp = async ({ setLoading, payload, getIpDetailsData }) 
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_handle_delete_ip_activity');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_handle_delete_ip_activity');
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (response.data.data.code === 200) {
@@ -90,11 +90,11 @@ export const getIpDataDetails = async ({ setLoading, setIpData, setCurrentActivi
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_handle_get_ip_activity_history');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_handle_get_ip_activity_history');
         formData.append('data', JSON.stringify({ ip, page, limit }));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (response.data.data.code === 200) {

@@ -45,8 +45,8 @@ class LicenseVerifyCronJob extends AbstractCronJob {
 	 *
 	 */
 	public function __construct() {
-		$this->cron_hook_name   = 'wptw_license_verify_cron';
-		$this->schedule_name    = 'wptw_license_verification';
+		$this->cron_hook_name   = 'tailwatch_license_verify_cron';
+		$this->schedule_name    = 'tailwatch_license_verification';
 		$this->default_interval = 'Every 12 Hours';
 
 		parent::__construct();
@@ -122,13 +122,13 @@ class LicenseVerifyCronJob extends AbstractCronJob {
 			 *
 			 * @since 1.0.0
 			 */
-			do_action( 'wptw_before_license_verify_cron_execute' );
+			do_action( 'tailwatch_before_license_verify_cron_execute' );
 
 			// Cron is the periodic-refresh backbone — must always hit the API
 			// to keep the cached verify-result transient fresh. Passing the
 			// cached path (force = false) here would just return the cache
 			// it itself is responsible for populating.
-			$result = $this->get_verify_controller()->wptw_verify_license( true );
+			$result = $this->get_verify_controller()->tailwatch_verify_license( true );
 
 			/**
 			 * Fires after the license verification cron executes.
@@ -137,7 +137,7 @@ class LicenseVerifyCronJob extends AbstractCronJob {
 			 *
 			 * @param mixed $result The result of license verification.
 			 */
-			do_action( 'wptw_after_license_verify_cron_execute', $result );
+			do_action( 'tailwatch_after_license_verify_cron_execute', $result );
 		} catch ( \Throwable $e ) {
 			Log::error(
 				'License verification cron job failed',

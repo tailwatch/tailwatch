@@ -4,16 +4,16 @@ import { showLocalStorageError } from '../ErrorModal/localStorageErrorHandler';
 import { alertService } from '../AlertService/AlertService';
 import toast from "react-hot-toast";
 
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 const GetData = async () => {
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_get_feature');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_get_feature');
+    formData.append('nonce', tailwatch_ajax.nonce);
 
-    const response = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
@@ -38,12 +38,12 @@ const GetData = async () => {
 const InsertData = async (featureId, newActiveState) => {
   try {
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_update_feature_status');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_update_feature_status');
+    formData.append('nonce', tailwatch_ajax.nonce);
     formData.append('data', JSON.stringify({ 'featureId': featureId, 'is_active': newActiveState }));
 
-    const response1 = await axios.post(wptw_ajax.ajax_url, formData, {
+    const response1 = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
@@ -75,48 +75,6 @@ const InsertData = async (featureId, newActiveState) => {
       }
     }
 
-    let notificationSettings = null;
-    let pushOptions = null;
-
-    try {
-      const notificationItem = localStorage.getItem('settings_push_notification');
-      if (notificationItem) {
-        notificationSettings = JSON.parse(notificationItem);
-      }
-    } catch (error) {
-      console.error('Error parsing settings_push_notification from localStorage:', error);
-      localStorage.removeItem('settings_push_notification');
-      showLocalStorageError(error);
-    }
-
-    try {
-      const pushOptionsItem = localStorage.getItem('settings_push_options');
-      if (pushOptionsItem) {
-        pushOptions = JSON.parse(pushOptionsItem);
-      }
-    } catch (error) {
-      console.error('Error parsing settings_push_options from localStorage:', error);
-      localStorage.removeItem('settings_push_options');
-      showLocalStorageError(error);
-    }
-
-    const isMobileDashboardConnected = notificationSettings && notificationSettings.mobiledashboard;
-    const isAnyOptionSelected = pushOptions && Object.values(pushOptions).some(option => option.values.option.selected);
-
-    if (isMobileDashboardConnected && isAnyOptionSelected) {
-      const formData2 = new FormData();
-      formData2.append('action', 'wptw_global_ajax_handler');
-      formData2.append('action_type', 'wptw_push_notification_activity');
-      formData2.append('nonce', wptw_ajax.nonce);
-      formData2.append('data', JSON.stringify({ 'featureId': featureId, 'is_active': newActiveState }));
-
-      await axios.post(wptw_ajax.ajax_url, formData2, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-    }
-
     return response1.data;
   } catch (error) {
     throw error;
@@ -125,12 +83,12 @@ const InsertData = async (featureId, newActiveState) => {
 
 const updateData = async (formDataObj) => {
   try {
-    const url = new URL(wptw_ajax.ajax_url);
+    const url = new URL(tailwatch_ajax.ajax_url);
 
     const formData = new FormData();
-    formData.append('action', 'wptw_global_ajax_handler');
-    formData.append('action_type', 'wptw_update_inner_feature');
-    formData.append('nonce', wptw_ajax.nonce);
+    formData.append('action', 'tailwatch_global_ajax_handler');
+    formData.append('action_type', 'tailwatch_update_inner_feature');
+    formData.append('nonce', tailwatch_ajax.nonce);
     formData.append('data', JSON.stringify(formDataObj));
 
     const response = await axios.post(url.toString(), formData, {

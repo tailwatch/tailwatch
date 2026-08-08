@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
     Palette, Monitor, Smartphone, Eye, Type, MessageSquare, ToggleRight,
-    Image as ImageIcon, ChevronDown, Settings, AlertCircle, RefreshCcw, Loader2, Info
+    ChevronDown, Settings, AlertCircle, RefreshCcw, Loader2, Info
 } from 'lucide-react';
 import { useFormData } from '../../../../Components/Context/FormContext';
 import { useDesignPreview } from '../../../../Components/Hooks/useDesignPreview/useDesignPreview';
@@ -19,13 +19,6 @@ const SECTIONS = [
         description: 'Background and accent colors.',
         icon: Palette,
         match: (f) => f.type === 'color' || /color/i.test(f.register || ''),
-    },
-    {
-        key: 'media',
-        title: 'Media',
-        description: 'Images and uploads.',
-        icon: ImageIcon,
-        match: (f) => f.type === 'file' || /image|logo_url|media/i.test(f.register || ''),
     },
     {
         key: 'text',

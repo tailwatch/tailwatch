@@ -69,7 +69,7 @@ const TableControlStrip = ({
   filterOptions = [],
   handleFilterSelect,
 
-  // Dynamic log filters (Filter button + modal, driven by wptw_logs_filter_options)
+  // Dynamic log filters (Filter button + modal, driven by tailwatch_logs_filter_options)
   showLogFilter = false,
   logFilterOptions = {},
   logSelectedFilters = {},

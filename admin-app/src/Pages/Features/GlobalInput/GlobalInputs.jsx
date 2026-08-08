@@ -8,7 +8,6 @@ import InputComponent from './FormElements/InputComponent';
 import ColorPickerComponent from './FormElements/ColorPickerComponent';
 import SelectComponent from "./FormElements/SelectComponent";
 import ToggleSwitchComponent from './FormElements/ToggleSwitchComponent';
-import FileInputComponent from "./FormElements/FileInputComponent";
 import TextareaComponent from "./FormElements/TextAreaComponent";
 import ButtonComponent from "./FormElements/ButtonComponent";
 import InfoComponent from "./FormElements/InfoComponent";
@@ -18,7 +17,7 @@ import { useFeaturesData } from "../../../Components/Context/FeaturesDataContext
 import { resolveIsLocked } from "../../../Components/Utils/HelperFunctions/LockHelper";
 
 const GlobalInputs = ({ id, type, label,links, disabled, placeholder, values, onChange,planRequired, description,field, subOptions, display, action, isSubOption, handleNestedSubmit, removebtn = "remove",hide }) => {
-  const { checked, selectedValue, handleCheckboxChange, handleInputChange, handleRadioChange, handleSelectChange, handleFileChange, setChecked,shouldShowSubOptions,handleMultipleCheckboxChange, multipleCheckboxValues } = useGlobalInput(id, values, onChange,type,display);
+  const { checked, selectedValue, handleCheckboxChange, handleInputChange, handleRadioChange, handleSelectChange, setChecked,shouldShowSubOptions,handleMultipleCheckboxChange, multipleCheckboxValues } = useGlobalInput(id, values, onChange,type,display);
   const { proPluginActive } = useFeaturesData();
   // Render sub options as a grid/table when display is "grid"  
   const renderSubOptions = (subOptions, action, removebtn, handleNestedSubmit) => {
@@ -68,7 +67,7 @@ const GlobalInputs = ({ id, type, label,links, disabled, placeholder, values, on
   let wrapperClass = "rounded-lg border-[rgb(197,197,197)]";
 
   const hasInteraction = () => {
-    switch (type) { case "radio": return !!selectedValue; case "multiple_checkbox": return multipleCheckboxValues && Object.values(multipleCheckboxValues).some(option => option.selected); case "checkbox": case "toggleSwitch": return checked; case"copy":  case "input": case "email": case "number": case "password": case "textarea": case "select": case "file": case "color": return selectedValue !== "";  default: return false; }
+    switch (type) { case "radio": return !!selectedValue; case "multiple_checkbox": return multipleCheckboxValues && Object.values(multipleCheckboxValues).some(option => option.selected); case "checkbox": case "toggleSwitch": return checked; case"copy":  case "input": case "email": case "number": case "password": case "textarea": case "select": case "color": return selectedValue !== "";  default: return false; }
   };
 
   if (type === "design") {
@@ -78,7 +77,7 @@ const GlobalInputs = ({ id, type, label,links, disabled, placeholder, values, on
     wrapperClass = "rounded-lg";
   } else if (!disabled && !isSubOption && !field?.is_locked) {
     // Standard styling for non-disabled, non-subOption elements
-    if (type === "checkbox" || type === "input" || type ==="number" || type === "password" || type === "email" || type ==="copy" || type === "textarea" || type === "file" || type === "multiple_checkbox" || type === "color") {
+    if (type === "checkbox" || type === "input" || type ==="number" || type === "password" || type === "email" || type ==="copy" || type === "textarea" || type === "multiple_checkbox" || type === "color") {
       wrapperClass += ` ${hasInteraction() ? 'bg-gradient-to-br from-blue-50 to-[#85cbcf] border border-[#85cbcf] shadow-md' : 'bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-300 shadow-md '}`;
     }
     if (type === "toggleSwitch") {
@@ -132,11 +131,6 @@ const GlobalInputs = ({ id, type, label,links, disabled, placeholder, values, on
     case "textarea":
       FormElement = (
         <TextareaComponent id={id} label={label} description={description} placeholder={placeholder} selectedValue={selectedValue} handleInputChange={handleInputChange} />
-      );
-      break;
-    case "file":
-      FormElement = (
-        <FileInputComponent id={id} type={type} label={label} selectedValue={selectedValue} description={description} handleFileChange={handleFileChange} />
       );
       break;
     case "button":

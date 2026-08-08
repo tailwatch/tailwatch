@@ -38,21 +38,21 @@ class SearchReplaceController extends BaseController {
 	 *
 	 * @var string
 	 */
-	private $logs_directory = WPTW_LOGS_DIRECTORY . '/search-replace/';
+	private $logs_directory = TAILWATCH_LOGS_DIRECTORY . '/search-replace/';
 
 	/**
 	 * Live logs JSON file path.
 	 *
 	 * @var string
 	 */
-	private $get_live_logs = WPTW_LOGS_DIRECTORY . '/search-replace/search_replace_logs.json';
+	private $get_live_logs = TAILWATCH_LOGS_DIRECTORY . '/search-replace/search_replace_logs.json';
 
 	/**
 	 * Search-replace tables count log file path.
 	 *
 	 * @var string
 	 */
-	private $search_replace_count = WPTW_LOGS_DIRECTORY . '/search-replace/search_replace_tables_count.json';
+	private $search_replace_count = TAILWATCH_LOGS_DIRECTORY . '/search-replace/search_replace_tables_count.json';
 
 	/**
 	 * Process manager instance for monitoring.
@@ -71,10 +71,10 @@ class SearchReplaceController extends BaseController {
 		ProcessManager::register_process(
 			array(
 				'process_type'    => 'search_replace',
-				'cron_hooks'      => array( 'wptw_search_replace_cron' ),
+				'cron_hooks'      => array( 'tailwatch_search_replace_cron' ),
 				'data_source'     => 'wp_tw_settings',
 				'data_key'        => 'default_search_replace',
-				'data_option'     => 'wptw_search_replace',
+				'data_option'     => 'tailwatch_search_replace',
 				'stuck_threshold' => 300,
 				'max_retries'     => 3,
 				'description'     => 'Search & Replace Process',
@@ -98,9 +98,9 @@ class SearchReplaceController extends BaseController {
 		);
 
 		$hook_controller = new HookControllers();
-		$hook_controller->add_action_hook( 'wptw_search_replace_cron', array( $this, 'wptw_search_and_replace_with' ) );
-		$hook_controller->add_action_hook( 'wptw_update_table_status_on_cancel_cron', array( $this, 'wptw_update_table_status_on_cancel' ) );
-		$hook_controller->add_action_hook( 'init', array( $this, 'wptw_search_replace_feature' ) );
+		$hook_controller->add_action_hook( 'tailwatch_search_replace_cron', array( $this, 'tailwatch_search_and_replace_with' ) );
+		$hook_controller->add_action_hook( 'tailwatch_update_table_status_on_cancel_cron', array( $this, 'tailwatch_update_table_status_on_cancel' ) );
+		$hook_controller->add_action_hook( 'init', array( $this, 'tailwatch_search_replace_feature' ) );
 	}
 
 	/**
@@ -121,11 +121,11 @@ class SearchReplaceController extends BaseController {
 	 *
 	 * @return array Search-replace data.
 	 */
-	public function wptw_get_search_replace_data() {
+	public function tailwatch_get_search_replace_data() {
 		$feature_controller = new DBModel();
-		$wptw_key           = 'default_search_replace';
-		$option             = 'wptw_search_replace';
-		return $feature_controller->get_recent_data( $option, $wptw_key );
+		$tailwatch_key           = 'default_search_replace';
+		$option             = 'tailwatch_search_replace';
+		return $feature_controller->get_recent_data( $option, $tailwatch_key );
 	}
 
 	/**
@@ -138,7 +138,7 @@ class SearchReplaceController extends BaseController {
 		$key               = 'default_feature_settings';
 		$option            = 'default_search_replace';
 		$field_name        = 'field_1';
-		return $push_notification->wptw_notification_enable_for_feature( $key, $option, $field_name );
+		return $push_notification->tailwatch_notification_enable_for_feature( $key, $option, $field_name );
 	}
 
 	/**
@@ -146,8 +146,8 @@ class SearchReplaceController extends BaseController {
 	 *
 	 * @return array Associative array with search, replace, dry_run, guid, case_insensitive, all_tables.
 	 */
-	public function wptw_get_selected_options() {
-		$existing_data = $this->wptw_get_search_replace_data();
+	public function tailwatch_get_selected_options() {
+		$existing_data = $this->tailwatch_get_search_replace_data();
 
 		$all_tables       = isset( $existing_data['all_tables'] ) ? $existing_data['all_tables'] : array();
 		$search           = isset( $existing_data['search'] ) ? $existing_data['search'] : '';
@@ -175,9 +175,9 @@ class SearchReplaceController extends BaseController {
 	 */
 	public function search_replace_cancel_pause_data() {
 		$feature_controller = new DBModel();
-		$wptw_key           = 'default_search_replace';
+		$tailwatch_key           = 'default_search_replace';
 		$option             = 'search_replace_pause_cancel';
-		return $feature_controller->get_recent_data( $option, $wptw_key );
+		return $feature_controller->get_recent_data( $option, $tailwatch_key );
 	}
 
 	/**
@@ -185,7 +185,7 @@ class SearchReplaceController extends BaseController {
 	 *
 	 * @return array With keys parent_enable, feature_enable (booleans).
 	 */
-	public function wptw_search_replace_feature_enable() {
+	public function tailwatch_search_replace_feature_enable() {
 		$feature_enable = $this->get_features_options();
 
 		if ( empty( $feature_enable ) ) {
@@ -211,24 +211,24 @@ class SearchReplaceController extends BaseController {
 	}
 
 	/**
-	 * Gets feature status (wrapper for wptw_search_replace_feature_enable).
+	 * Gets feature status (wrapper for tailwatch_search_replace_feature_enable).
 	 *
 	 * @return array Parent and feature enable flags.
 	 */
-	protected function wptw_get_feature_status() {
-		return $this->wptw_search_replace_feature_enable();
+	protected function tailwatch_get_feature_status() {
+		return $this->tailwatch_search_replace_feature_enable();
 	}
 
 	/**
 	 * Unschedule search-replace cron if feature is disabled.
 	 *
 	 */
-	public function wptw_search_replace_feature() {
+	public function tailwatch_search_replace_feature() {
 		$get_feature = $this->get_features_options();
 		if ( ! isset( $get_feature['field_1']['options']['option']['selected'] ) || ! $get_feature['field_1']['options']['option']['selected'] ) {
-			$next_scheduled = wp_next_scheduled( 'wptw_search_replace_cron' );
+			$next_scheduled = wp_next_scheduled( 'tailwatch_search_replace_cron' );
 			if ( $next_scheduled ) {
-				wp_unschedule_event( $next_scheduled, 'wptw_search_replace_cron' );
+				wp_unschedule_event( $next_scheduled, 'tailwatch_search_replace_cron' );
 			}
 		}
 	}
@@ -238,7 +238,7 @@ class SearchReplaceController extends BaseController {
 	 *
 	 * @return array With keys all_tables, message, code.
 	 */
-	public function wptw_get_all_table_names() {
+	public function tailwatch_get_all_table_names() {
 		global $wpdb;
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- SHOW TABLES has no user input.
@@ -265,7 +265,7 @@ class SearchReplaceController extends BaseController {
 	 * @param string $post_data JSON-encoded POST data (search, replace, all_tables, etc.).
 	 * @return array Response with code, message, data.
 	 */
-	public function wptw_start_search_replace( $post_data ) {
+	public function tailwatch_start_search_replace( $post_data ) {
 		try {
 			$json_data = isset( $post_data ) ? wp_unslash( $post_data ) : '';
 			$data      = json_decode( $json_data, true );
@@ -307,7 +307,7 @@ class SearchReplaceController extends BaseController {
 					);
 				}
 			}
-			$this->wptw_remove_search_replace_entries();
+			$this->tailwatch_remove_search_replace_entries();
 
 			$search           = isset( $data['search'] ) ? sanitize_text_field( $data['search'] ) : '';
 			$replace          = isset( $data['replace'] ) ? sanitize_text_field( $data['replace'] ) : '';
@@ -361,7 +361,7 @@ class SearchReplaceController extends BaseController {
 			}
 
 			$cron_status = apply_filters(
-				'wptw_test_http_cron_access_search_replace',
+				'tailwatch_test_http_cron_access_search_replace',
 				( new CronHealthService() )->test( 'search_replace' )
 			);
 			if ( ! is_array( $cron_status ) || empty( $cron_status['success'] ) ) {
@@ -416,7 +416,7 @@ class SearchReplaceController extends BaseController {
 					'user_id'       => '1',
 					'child_of'      => '0',
 					'key'           => 'default_search_replace',
-					'option'        => 'wptw_search_replace',
+					'option'        => 'tailwatch_search_replace',
 					'value'         => wp_json_encode( $selected_options ),
 					'type'          => 'JSON',
 					'type_state'    => 'active',
@@ -442,7 +442,7 @@ class SearchReplaceController extends BaseController {
 
 			$db_model = new DBModel();
 
-			$data_insert = $this->wptw_insert_data_in_db( $db_model, $db_data_is, $db_data_format );
+			$data_insert = $this->tailwatch_insert_data_in_db( $db_model, $db_data_is, $db_data_format );
 
 			if ( false === $data_insert ) {
 				Log::error(
@@ -460,14 +460,14 @@ class SearchReplaceController extends BaseController {
 				);
 			}
 
-			if ( ! wp_next_scheduled( 'wptw_search_replace_cron' ) ) {
-				$cron_scheduled = wp_schedule_single_event( time(), 'wptw_search_replace_cron' );
+			if ( ! wp_next_scheduled( 'tailwatch_search_replace_cron' ) ) {
+				$cron_scheduled = wp_schedule_single_event( time(), 'tailwatch_search_replace_cron' );
 
 				if ( $cron_scheduled ) {
 					// Create/Get process for monitoring.
 					$process_id = $this->process_manager->get_or_create_process(
 						'search_replace',
-						'wptw_search_replace_cron',
+						'tailwatch_search_replace_cron',
 						array(
 							'search'       => $search,
 							'replace'      => $replace,
@@ -488,10 +488,10 @@ class SearchReplaceController extends BaseController {
 					$live_logs = new LiveLogsController();
 					$live_logs->insert_live_logs_records( $message, $this->logs_directory, $this->get_live_logs );
 
-					$get_data = $this->wptw_get_search_replace_data();
+					$get_data = $this->tailwatch_get_search_replace_data();
 
 					if ( empty( $get_data ) ) {
-						$data_insert = $this->wptw_insert_data_in_db( $db_model, $db_data_is, $db_data_format );
+						$data_insert = $this->tailwatch_insert_data_in_db( $db_model, $db_data_is, $db_data_format );
 						if ( false === $data_insert ) {
 							Log::error(
 								'Failed to retry inserting search and replace data',
@@ -526,7 +526,7 @@ class SearchReplaceController extends BaseController {
 					);
 				} else {
 					Log::error(
-						'Failed to schedule wptw_search_replace_cron',
+						'Failed to schedule tailwatch_search_replace_cron',
 						array(
 							'feature' => 'search_replace',
 							'action'  => 'search_replace_start_failed',
@@ -579,7 +579,7 @@ class SearchReplaceController extends BaseController {
 	 * @param array                                     $db_data_format Format array for prepare.
 	 * @return bool True if all inserts succeeded.
 	 */
-	public function wptw_insert_data_in_db( $db_model, $db_data_is, $db_data_format ) {
+	public function tailwatch_insert_data_in_db( $db_model, $db_data_is, $db_data_format ) {
 		foreach ( $db_data_is as $db_data ) {
 			if ( ! $db_model->insert_row( $db_data, $db_data_format ) ) {
 				return false;
@@ -593,9 +593,9 @@ class SearchReplaceController extends BaseController {
 	 *
 	 * @throws \Throwable On process failure.
 	 */
-	public function wptw_search_and_replace_with() {
+	public function tailwatch_search_and_replace_with() {
 		try {
-			$get_data = $this->wptw_get_search_replace_data();
+			$get_data = $this->tailwatch_get_search_replace_data();
 
 			if ( empty( $get_data ) ) {
 				Log::error(
@@ -627,7 +627,7 @@ class SearchReplaceController extends BaseController {
 			if ( ! $process_id ) {
 				$process_id                      = $this->process_manager->get_or_create_process(
 					'search_replace',
-					'wptw_search_replace_cron',
+					'tailwatch_search_replace_cron',
 					array(
 						'search'   => $get_data['search'] ?? '',
 						'replace'  => $get_data['replace'] ?? '',
@@ -666,14 +666,14 @@ class SearchReplaceController extends BaseController {
 			$case_insensitive = $options['case_insensitive'];
 			$all_completed    = true;
 
-			$stop_execution = $this->wptw_stop_search_replace_execution();
+			$stop_execution = $this->tailwatch_stop_search_replace_execution();
 			if ( true === $stop_execution ) {
 				// Defensive: scan_state may change mid-run via a concurrent request/cron,
 				// so re-schedule the cancel cron if we land here in cancel state.
 				if ( false === $dry_run && 'cancel' === $scan_state && false === $cron_running ) {
-					wp_schedule_single_event( time() + 5, 'wptw_update_table_status_on_cancel_cron' );
+					wp_schedule_single_event( time() + 5, 'tailwatch_update_table_status_on_cancel_cron' );
 				}
-				$this->wptw_search_replace_function_completed();
+				$this->tailwatch_search_replace_function_completed();
 				return;
 			}
 
@@ -771,18 +771,18 @@ class SearchReplaceController extends BaseController {
 							)
 						);
 
-						$stop_execution = $this->wptw_stop_search_replace_execution();
+						$stop_execution = $this->tailwatch_stop_search_replace_execution();
 						if ( true === $stop_execution ) {
 							if ( false === $dry_run && 'cancel' === $scan_state && false === $cron_running ) {
-								wp_schedule_single_event( time() + 5, 'wptw_update_table_status_on_cancel_cron' );
+								wp_schedule_single_event( time() + 5, 'tailwatch_update_table_status_on_cancel_cron' );
 							}
 							// Intentional: return after scheduling.
 						} else {
-							wp_schedule_single_event( time() + 5, 'wptw_search_replace_cron' );
+							wp_schedule_single_event( time() + 5, 'tailwatch_search_replace_cron' );
 							// Intentional: return after scheduling.
 						}
 
-						$this->wptw_search_replace_function_completed();
+						$this->tailwatch_search_replace_function_completed();
 						return;
 					} catch ( \Throwable $e ) {
 						Log::error(
@@ -830,7 +830,7 @@ class SearchReplaceController extends BaseController {
 						$this->process_manager->mark_completed( $process_id );
 					}
 
-					$this->wptw_search_replace_function_completed();
+					$this->tailwatch_search_replace_function_completed();
 
 					if ( false === $dry_run ) {
 						if ( 'reverse' === $options['is_process'] ) {
@@ -849,7 +849,7 @@ class SearchReplaceController extends BaseController {
 
 					// Optional cleanup cron (left disabled; enable if desired).
 					$live_logs = new LiveLogsController();
-					$live_logs->wptw_live_logs_completed( $all_completed, $this->get_live_logs );
+					$live_logs->tailwatch_live_logs_completed( $all_completed, $this->get_live_logs );
 
 					Log::info(
 						$message_is,
@@ -871,7 +871,7 @@ class SearchReplaceController extends BaseController {
 					// Pro's malware-restore R6 waits on this hook to advance.
 					// Gated so standalone SR runs don't fire it. 2nd arg = success.
 					if ( in_array( $options['process_run'], array( 'malware' ), true ) ) {
-						do_action( 'wptw_search_replace_completed', $options['process_run'], true );
+						do_action( 'tailwatch_search_replace_completed', $options['process_run'], true );
 					}
 				} catch ( \Throwable $e ) {
 					Log::error(
@@ -914,7 +914,7 @@ class SearchReplaceController extends BaseController {
 				// assignment; coalesce defensively.
 				$sr_process_run = isset( $options['process_run'] ) ? $options['process_run'] : '';
 				if ( in_array( $sr_process_run, array( 'malware' ), true ) ) {
-					do_action( 'wptw_search_replace_completed', $sr_process_run, false );
+					do_action( 'tailwatch_search_replace_completed', $sr_process_run, false );
 				}
 		}
 	}
@@ -923,7 +923,7 @@ class SearchReplaceController extends BaseController {
 	 * Marks the current cron run as function-completed and updates cancel/pause state.
 	 *
 	 */
-	public function wptw_search_replace_function_completed() {
+	public function tailwatch_search_replace_function_completed() {
 		$cancel_pause_data                         = $this->search_replace_cancel_pause_data();
 		$cancel_pause_data['function_completed']   = true;
 		$cancel_pause_data['function_started']     = false;
@@ -974,7 +974,7 @@ class SearchReplaceController extends BaseController {
 					$updated_value = $this->safe_replace_in_serialized_data( $row->$column, $search, $replace, $case_insensitive );
 
 					if ( $row->$column !== $updated_value ) {
-						if ( ! $dry_run && $wpdb->prefix . WPTW_DB_TABLE_NAME !== $table ) {
+						if ( ! $dry_run && $wpdb->prefix . TAILWATCH_DB_TABLE_NAME !== $table ) {
 							$model->update_row( $table, $column, $primary_key, $row->$primary_key, $updated_value );
 						}
 						++$match_count;
@@ -1234,14 +1234,14 @@ class SearchReplaceController extends BaseController {
 	 */
 	private function update_search_replace_data( $options ) {
 		$db_model = new DBModel();
-		$wptw_key = 'default_search_replace';
-		$option   = 'wptw_search_replace';
+		$tailwatch_key = 'default_search_replace';
+		$option   = 'tailwatch_search_replace';
 
 		$db_data = array(
 			'value' => wp_json_encode( $options ),
 		);
 
-		$db_model->update_recent_row( $db_data, $wptw_key, $option );
+		$db_model->update_recent_row( $db_data, $tailwatch_key, $option );
 	}
 
 	/**
@@ -1251,14 +1251,14 @@ class SearchReplaceController extends BaseController {
 	 */
 	public function update_search_replace_cancel_pause( $options ) {
 		$db_model = new DBModel();
-		$wptw_key = 'default_search_replace';
+		$tailwatch_key = 'default_search_replace';
 		$option   = 'search_replace_pause_cancel';
 
 		$db_data = array(
 			'value' => wp_json_encode( $options ),
 		);
 
-		$db_model->update_recent_row( $db_data, $wptw_key, $option );
+		$db_model->update_recent_row( $db_data, $tailwatch_key, $option );
 	}
 
 	/**
@@ -1267,9 +1267,9 @@ class SearchReplaceController extends BaseController {
 	 * @param string $post_data JSON POST data (e.g. pagination).
 	 * @return array Response with data, message, code.
 	 */
-	public function wptw_live_search_replace_logs( $post_data ) {
+	public function tailwatch_live_search_replace_logs( $post_data ) {
 		try {
-			$get_data = $this->wptw_get_search_replace_data();
+			$get_data = $this->tailwatch_get_search_replace_data();
 
 			if ( empty( $get_data ) ) {
 				Log::error(
@@ -1290,7 +1290,7 @@ class SearchReplaceController extends BaseController {
 			$feature_type    = 'search_replace';
 
 			$livelogs = new LiveLogsController();
-			return $livelogs->wptw_import_live_logs( $post_data, $this->get_live_logs, $get_search_data, $feature_type );
+			return $livelogs->tailwatch_import_live_logs( $post_data, $this->get_live_logs, $get_search_data, $feature_type );
 		} catch ( \Throwable $e ) {
 			Log::error(
 				$e->getMessage(),
@@ -1318,10 +1318,10 @@ class SearchReplaceController extends BaseController {
 		$live_logs = new LiveLogsController();
 		$live_logs->update_live_logs_records( $message, $this->get_live_logs, $level );
 
-		$search_replace_data = $this->wptw_get_search_replace_data();
+		$search_replace_data = $this->tailwatch_get_search_replace_data();
 		if ( is_array( $search_replace_data ) && isset( $search_replace_data['process_run'] )
 			&& 'malware' === $search_replace_data['process_run'] ) {
-			do_action( 'wptw_backup_malware_scan_logs', $message, $level );
+			do_action( 'tailwatch_backup_malware_scan_logs', $message, $level );
 		}
 	}
 
@@ -1330,12 +1330,12 @@ class SearchReplaceController extends BaseController {
 	 *
 	 * @return array Response with data, message, code.
 	 */
-	public function wptw_resume_search_replace() {
+	public function tailwatch_resume_search_replace() {
 		try {
 			$existing_data = $this->search_replace_cancel_pause_data();
 
 			if ( ! empty( $existing_data ) && ! empty( $existing_data['scan_state'] ) && 'pause' === $existing_data['scan_state'] ) {
-				wp_schedule_single_event( time() + 5, 'wptw_search_replace_cron' );
+				wp_schedule_single_event( time() + 5, 'tailwatch_search_replace_cron' );
 
 				$existing_data['scan_state'] = 'in-progress';
 				$this->update_search_replace_cancel_pause( $existing_data );
@@ -1397,7 +1397,7 @@ class SearchReplaceController extends BaseController {
 	 * @param string $post_data JSON with scan_state (pause|cancel).
 	 * @return array Response with code and message.
 	 */
-	public function wptw_cancel_pause_search_replace( $post_data ) {
+	public function tailwatch_cancel_pause_search_replace( $post_data ) {
 		try {
 			$json_data = isset( $post_data ) ? wp_unslash( $post_data ) : '';
 			$data      = json_decode( $json_data, true );
@@ -1418,7 +1418,7 @@ class SearchReplaceController extends BaseController {
 			}
 
 			$existing_data       = $this->search_replace_cancel_pause_data();
-			$search_replace_data = $this->wptw_get_search_replace_data();
+			$search_replace_data = $this->tailwatch_get_search_replace_data();
 
 			if ( ! empty( $data['scan_state'] ) && ( 'pause' === $data['scan_state'] || 'cancel' === $data['scan_state'] ) ) {
 
@@ -1426,8 +1426,8 @@ class SearchReplaceController extends BaseController {
 
 				$this->update_search_replace_cancel_pause( $existing_data );
 
-				$timestamp = wp_next_scheduled( 'wptw_search_replace_cron' );
-				wp_unschedule_event( $timestamp, 'wptw_search_replace_cron' );
+				$timestamp = wp_next_scheduled( 'tailwatch_search_replace_cron' );
+				wp_unschedule_event( $timestamp, 'tailwatch_search_replace_cron' );
 
 				$process_id = $existing_data['process_id'] ?? null;
 
@@ -1438,11 +1438,11 @@ class SearchReplaceController extends BaseController {
 							$this->process_manager->mark_failed( $process_id, 'Search Replace cancelled by user' );
 						}
 					} else {
-						// Table status is updated via wptw_update_table_status_on_cancel_cron.
+						// Table status is updated via tailwatch_update_table_status_on_cancel_cron.
 						if ( $process_id ) {
 							$this->process_manager->update_state( $process_id, 'in_progress' );
 						}
-						wp_schedule_single_event( time() + 10, 'wptw_update_table_status_on_cancel_cron' );
+						wp_schedule_single_event( time() + 10, 'tailwatch_update_table_status_on_cancel_cron' );
 					}
 
 					$message = 'Search Replace cancel successfully.';
@@ -1524,8 +1524,8 @@ class SearchReplaceController extends BaseController {
 	 * Cron callback: reverts table progress and reschedules search-replace to run reverse.
 	 *
 	 */
-	public function wptw_update_table_status_on_cancel() {
-		$options           = $this->wptw_get_search_replace_data();
+	public function tailwatch_update_table_status_on_cancel() {
+		$options           = $this->tailwatch_get_search_replace_data();
 		$cancel_pause_data = $this->search_replace_cancel_pause_data();
 
 		if ( empty( $options ) || empty( $options['all_tables'] ) ) {
@@ -1560,7 +1560,7 @@ class SearchReplaceController extends BaseController {
 
 		$this->update_search_replace_logs_records( 'Reverting changes', 'INFO' );
 
-		wp_schedule_single_event( time() + 10, 'wptw_search_replace_cron' );
+		wp_schedule_single_event( time() + 10, 'tailwatch_search_replace_cron' );
 	}
 
 	/**
@@ -1568,10 +1568,10 @@ class SearchReplaceController extends BaseController {
 	 *
 	 * @return array With is_completed, scan_state, progress, options, message, code.
 	 */
-	public function wptw_verify_search_replace_status() {
+	public function tailwatch_verify_search_replace_status() {
 		try {
 			$existing_data = $this->search_replace_cancel_pause_data();
-			$get_options   = $this->wptw_get_selected_options();
+			$get_options   = $this->tailwatch_get_selected_options();
 
 			if ( ! empty( $existing_data ) && isset( $existing_data['scan_state'] ) ) {
 
@@ -1647,14 +1647,14 @@ class SearchReplaceController extends BaseController {
 	 *
 	 * @return bool True if execution should stop (pause/cancel).
 	 */
-	public function wptw_stop_search_replace_execution() {
+	public function tailwatch_stop_search_replace_execution() {
 		$existing_data = $this->search_replace_cancel_pause_data();
 
 		if ( ! empty( $existing_data['scan_state'] ) && ( 'pause' === $existing_data['scan_state'] || 'cancel' === $existing_data['scan_state'] ) ) {
 
-			$timestamp = wp_next_scheduled( 'wptw_search_replace_cron' );
+			$timestamp = wp_next_scheduled( 'tailwatch_search_replace_cron' );
 			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'wptw_search_replace_cron' );
+				wp_unschedule_event( $timestamp, 'tailwatch_search_replace_cron' );
 			}
 
 			if ( true === $existing_data['cron_running'] ) {
@@ -1673,12 +1673,12 @@ class SearchReplaceController extends BaseController {
 	 *
 	 * @return array Response with data, message, code.
 	 */
-	public function wptw_search_replace_cron_if_failed() {
+	public function tailwatch_search_replace_cron_if_failed() {
 		try {
 			$existing_data = $this->search_replace_cancel_pause_data();
 			if ( false === $existing_data['cron_running'] ) {
-				if ( ! wp_next_scheduled( 'wptw_search_replace_cron' ) ) {
-					$cron_scheduled = wp_schedule_single_event( time() + 5, 'wptw_search_replace_cron' );
+				if ( ! wp_next_scheduled( 'tailwatch_search_replace_cron' ) ) {
+					$cron_scheduled = wp_schedule_single_event( time() + 5, 'tailwatch_search_replace_cron' );
 
 					if ( $cron_scheduled ) {
 						Log::info(
@@ -1695,7 +1695,7 @@ class SearchReplaceController extends BaseController {
 						);
 					} else {
 						Log::error(
-							'Failed to schedule wptw_search_replace_cron',
+							'Failed to schedule tailwatch_search_replace_cron',
 							array(
 								'feature' => 'search_replace',
 								'action'  => 'search_replace_cron_if_failed_on_attempt',
@@ -1757,10 +1757,10 @@ class SearchReplaceController extends BaseController {
 	 *
 	 * @return bool True on success.
 	 */
-	public function wptw_remove_search_replace_entries() {
+	public function tailwatch_remove_search_replace_entries() {
 		try {
 			$key                = 'default_search_replace';
-			$options            = array( 'wptw_search_replace', 'search_replace_pause_cancel' );
+			$options            = array( 'tailwatch_search_replace', 'search_replace_pause_cancel' );
 			$feature_controller = new DBModel();
 
 			foreach ( $options as $option ) {
@@ -1785,7 +1785,7 @@ class SearchReplaceController extends BaseController {
 				}
 			}
 
-			$this->wptw_delete_files_after_complete();
+			$this->tailwatch_delete_files_after_complete();
 
 			Log::info(
 				'All search and replace entries have been removed.',
@@ -1813,7 +1813,7 @@ class SearchReplaceController extends BaseController {
 	 * Deletes live logs and search-replace count JSON files.
 	 *
 	 */
-	public function wptw_delete_files_after_complete() {
+	public function tailwatch_delete_files_after_complete() {
 		if ( file_exists( $this->get_live_logs ) ) {
 			wp_delete_file( $this->get_live_logs );
 		}

@@ -2,17 +2,17 @@ import axios from "axios";
 import { toast } from "react-toastify";
 import { alertService } from "../../../Components/AlertService/AlertService";
 
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 export const addToBlackList = async ({ setLoading, onClose, payload, getData }) => {
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_handle_add_ip_rule');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_handle_add_ip_rule');
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (response.data.data.code === 200) {
@@ -37,11 +37,11 @@ export const updateBlackList = async ({ setLoading, onClose, payload, getData })
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_handle_update_ip_rule');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_handle_update_ip_rule');
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (response.data.data.code === 200) {
@@ -63,11 +63,11 @@ export const getBlackList = async ({ setLoading, setBlackListData, page = 1, lim
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_handle_get_blocked_ip_ranges');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_handle_get_blocked_ip_ranges');
         formData.append('data', JSON.stringify({ page, limit }));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (response.data.data.code === 200) {
@@ -101,11 +101,11 @@ export const handleDeleteIp = async ({ setLoading, payload, getBlackListIpRanges
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_handle_delete_ip_rule');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_handle_delete_ip_rule');
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (response.data.data.code === 200) {
@@ -126,11 +126,11 @@ export const handleUnblockIp = async ({ setLoading, payload, getBlackListIpRange
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_handle_unblock_ip_range');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_handle_unblock_ip_range');
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (response.data.data.code === 200) {
@@ -151,11 +151,11 @@ export const blockCountries = async ({ setLoading, onClose, payload, getBlockCou
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_handle_add_country_rule');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_handle_add_country_rule');
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (response.data.data.code === 200) {
@@ -177,11 +177,11 @@ export const getBlockCountries = async ({ setLoading, setBlockCountriesData, pag
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_handle_get_blocked_countries');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_handle_get_blocked_countries');
         formData.append('data', JSON.stringify({ page, limit }));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
 
@@ -226,11 +226,11 @@ export const handleUnblockCountry = async ({ setLoading, payload, getBlockCountr
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_handle_unblock_country_rule');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_handle_unblock_country_rule');
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
 
@@ -252,11 +252,11 @@ export const handleDeleteCountry = async ({ setLoading, payload, getBlockCountri
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_handle_delete_country_rule');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_handle_delete_country_rule');
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (response.data.data.code === 200) {
@@ -277,11 +277,11 @@ export const updateCountries = async ({ setLoading, onClose, payload, getBlockCo
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_handle_update_country_rule');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_handle_update_country_rule');
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (response.data.data.code === 200) {
@@ -303,11 +303,11 @@ export const getIpWhiteList = async ({ setLoading, setIpWhiteListData, page = 1,
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_handle_get_ip_whitelists');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_handle_get_ip_whitelists');
         formData.append('data', JSON.stringify({ page, limit }));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (response.data.data.code === 200) {
@@ -337,11 +337,11 @@ export const handleDeleteWhitelistIp = async ({ setLoading, payload, getWhiteLis
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_handle_delete_ip_whitelist');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_handle_delete_ip_whitelist');
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (response.data.data.code === 200) {
@@ -362,11 +362,11 @@ export const addIpToWhiteList = async ({ setLoading, onClose, payload, getData }
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_handle_add_ip_whitelist');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_handle_add_ip_whitelist');
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (response.data.data.code === 200) {
@@ -391,11 +391,11 @@ export const updateIpWhiteList = async ({ setLoading, onClose, payload, getData 
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_handle_update_ip_whitelist');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_handle_update_ip_whitelist');
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (response.data.data.code === 200) {
@@ -417,11 +417,11 @@ export const getWhitelistCountries = async ({ setLoading, setWhitlistCountries, 
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_handle_get_country_whitelists');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_handle_get_country_whitelists');
         formData.append('data', JSON.stringify({ page, limit }));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (response.data.data.code === 200) {
@@ -451,11 +451,11 @@ export const handleDeleteWhitelistCountry = async ({ setLoading, payload, getWhi
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_handle_delete_country_whitelist');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_handle_delete_country_whitelist');
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (response.data.data.code === 200) {
@@ -476,11 +476,11 @@ export const addwhitelistCountries = async ({ setLoading, onClose, payload, getB
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_handle_add_country_whitelist');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_handle_add_country_whitelist');
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (response.data.data.code === 200) {
@@ -502,11 +502,11 @@ export const updatewhitelistCountries = async ({ setLoading, onClose, payload, g
     setLoading(true);
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_handle_update_country_whitelist');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_handle_update_country_whitelist');
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         if (response.data.data.code === 200) {
@@ -527,11 +527,11 @@ export const updatewhitelistCountries = async ({ setLoading, onClose, payload, g
 export const previewBlockPage = async (payload = {}) => {
     try {
         const formData = new FormData();
-        formData.append('action', 'wptw_global_ajax_handler');
-        formData.append('action_type', 'wptw_preview_block_page');
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_preview_block_page');
         formData.append('data', JSON.stringify(payload));
-        formData.append('nonce', wptw_ajax.nonce);
-        const response = await axios.post(wptw_ajax.ajax_url, formData, {
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         const body = response?.data?.data;

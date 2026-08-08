@@ -104,7 +104,7 @@ class InterfaceController {
 		}
 		$file_urls = array_map(
 			function ( $file ) use ( $dir ) {
-				return WPTW_URI . str_replace( WPTW_DIR, '', $file );
+				return TAILWATCH_URI . str_replace( TAILWATCH_DIR, '', $file );
 			},
 			$files
 		);
@@ -119,8 +119,8 @@ class InterfaceController {
 	 */
 	public function enqueue_dashboard_script( $hook_suffix ) {
 		// Define directories
-		$js_directory  = WPTW_DIR . 'Admin/View/Static/js/';
-		$css_directory = WPTW_DIR . 'Admin/View/Static/css/';
+		$js_directory  = TAILWATCH_DIR . 'Admin/View/Static/js/';
+		$css_directory = TAILWATCH_DIR . 'Admin/View/Static/css/';
 
 		$js_files  = $this->get_all_files( $js_directory, 'js' );
 		$css_files = $this->get_all_files( $css_directory, 'css' );
@@ -135,10 +135,10 @@ class InterfaceController {
 			// Enqueue all JavaScript files
 			foreach ( $js_files as $index => $js_file ) {
 				wp_enqueue_script(
-					'wptw-dashboard-js-' . $index,
+					'tailwatch-dashboard-js-' . $index,
 					$js_file,
 					array(),
-					WPTW_VERSION,
+					TAILWATCH_VERSION,
 					true
 				);
 			}
@@ -146,21 +146,21 @@ class InterfaceController {
 			// Localize script
 			if ( ! empty( $js_files ) ) {
 				wp_localize_script(
-					'wptw-dashboard-js-0',
-					'wptw_ajax',
+					'tailwatch-dashboard-js-0',
+					'tailwatch_ajax',
 					array(
 						'ajax_url'  => admin_url( 'admin-ajax.php' ),
-						'nonce'     => wp_create_nonce( 'wp_ajax_nonce' ),
+						'nonce'     => wp_create_nonce( 'tailwatch_ajax_nonce' ),
 						'admin_url' => admin_url(),
-						'base_url'  => WPTW_GET_SITE_URL,
-						'asset_url' => WPTW_URI . 'Admin/View/Static/images/',
+						'base_url'  => TAILWATCH_GET_SITE_URL,
+						'asset_url' => TAILWATCH_URI . 'Admin/View/Static/images/',
 					)
 				);
 			}
 
 			// Enqueue all CSS files
 			foreach ( $css_files as $index => $css_file ) {
-				wp_enqueue_style( 'wptw-dashboard-css-' . $index, $css_file, array(), WPTW_VERSION );
+				wp_enqueue_style( 'tailwatch-dashboard-css-' . $index, $css_file, array(), TAILWATCH_VERSION );
 			}
 		}
 	}
@@ -218,10 +218,10 @@ class InterfaceController {
 			'admin_enqueue_scripts',
 			function () {
 				wp_enqueue_style(
-					'wptw-admin-notice-hide',
-					WPTW_URI . 'Admin/Assets/css/wptw-admin-notice-hide.css',
+					'tailwatch-admin-notice-hide',
+					TAILWATCH_URI . 'Admin/Assets/css/tailwatch-admin-notice-hide.css',
 					array(),
-					WPTW_VERSION
+					TAILWATCH_VERSION
 				);
 			}
 		);

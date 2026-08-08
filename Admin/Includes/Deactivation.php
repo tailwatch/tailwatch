@@ -44,10 +44,10 @@ class Deactivation {
 	 */
 	public function __construct() {
 		$this->deactivation = new DeactivationAlert();
-		add_action( 'admin_enqueue_scripts', array( $this->deactivation, 'wptw_enqueue_deactivate_assets' ) );
-		add_action( 'admin_footer', array( $this->deactivation, 'wptw_add_deactivate_popup' ) );
-		add_action( 'wp_ajax_wptw_delete_plugin_data', array( $this, 'wptw_ajax_delete_plugin_data' ) );
-		add_action( 'wp_ajax_wptw_submit_deactivation_feedback', array( $this, 'wptw_ajax_submit_deactivation_feedback' ) );
+		add_action( 'admin_enqueue_scripts', array( $this->deactivation, 'tailwatch_enqueue_deactivate_assets' ) );
+		add_action( 'admin_footer', array( $this->deactivation, 'tailwatch_add_deactivate_popup' ) );
+		add_action( 'wp_ajax_tailwatch_delete_plugin_data', array( $this, 'tailwatch_ajax_delete_plugin_data' ) );
+		add_action( 'wp_ajax_tailwatch_submit_deactivation_feedback', array( $this, 'tailwatch_ajax_submit_deactivation_feedback' ) );
 	}
 
 	/**
@@ -55,33 +55,33 @@ class Deactivation {
 	 *
 	 * @return void
 	 */
-	public function wptw_remove_plugin_data() {
-		$set_value = get_option( 'wptw_deactivate_plugin' );
+	public function tailwatch_remove_plugin_data() {
+		$set_value = get_option( 'tailwatch_deactivate_plugin' );
 
 		if ( $set_value ) {
 			// Clear all feature caches before removing data.
 			( new FeatureCacheController() )->invalidate_all_caches();
 
 			$db_model = new DBModel();
-			$db_model->wptw_drop_tables();
+			$db_model->tailwatch_drop_tables();
 
-			$this->wptw_remove_all_option_meta_data( $db_model );
+			$this->tailwatch_remove_all_option_meta_data( $db_model );
 
 			// Clean up plugin directories: the wp-content backup folder and the
 			// slug-named folder inside the uploads directory that holds logs.
 			$folders = array(
-				WPTW_CONTENT_DIR_BASE,
-				dirname( WPTW_LOGS_DIRECTORY ),
+				TAILWATCH_CONTENT_DIR_BASE,
+				dirname( TAILWATCH_LOGS_DIRECTORY ),
 			);
 
 			foreach ( $folders as $folder ) {
 				if ( is_dir( $folder ) ) {
-					$this->wptw_delete_directory( $folder );
+					$this->tailwatch_delete_directory( $folder );
 				}
 			}
 
 			// Remove the deactivation flag.
-			delete_option( 'wptw_deactivate_plugin' );
+			delete_option( 'tailwatch_deactivate_plugin' );
 		}
 	}
 
@@ -91,7 +91,7 @@ class Deactivation {
 	 * @param string $dir Directory path to delete.
 	 * @return bool True on success, false on failure.
 	 */
-	private function wptw_delete_directory( $dir ) {
+	private function tailwatch_delete_directory( $dir ) {
 		$target_dir = rtrim( wp_normalize_path( $dir ), '/' );
 
 		// Only allow deletion inside WordPress-managed storage roots (wp-content or
@@ -136,7 +136,7 @@ class Deactivation {
 			$path = $target_dir . DIRECTORY_SEPARATOR . $item;
 
 			if ( is_dir( $path ) ) {
-				$this->wptw_delete_directory( $path );
+				$this->tailwatch_delete_directory( $path );
 			} else {
 				wp_delete_file( $path );
 			}
@@ -157,15 +157,15 @@ class Deactivation {
 	 * @param DBModel $db_model Database model instance.
 	 * @return void
 	 */
-	private function wptw_remove_all_option_meta_data( $db_model ) {
+	private function tailwatch_remove_all_option_meta_data( $db_model ) {
 		// Visit data.
-		delete_option( WPTW_VISIT_DATA );
-		delete_option( 'wptw_plugin_activation_redirect' );
-		delete_option( 'wptw_deactivate_plugin' );
-		delete_option( 'wptw_db_version' );
+		delete_option( TAILWATCH_VISIT_DATA );
+		delete_option( 'tailwatch_plugin_activation_redirect' );
+		delete_option( 'tailwatch_deactivate_plugin' );
+		delete_option( 'tailwatch_db_version' );
 
 		// Additional cleanup.
-		$db_model->wptw_delete_data_on_deactivate();
+		$db_model->tailwatch_delete_data_on_deactivate();
 	}
 
 	/**
@@ -173,9 +173,9 @@ class Deactivation {
 	 *
 	 * @return void
 	 */
-	public function wptw_ajax_delete_plugin_data() {
+	public function tailwatch_ajax_delete_plugin_data() {
 		// Verify nonce.
-		check_ajax_referer( 'wptw_nonce', 'nonce' );
+		check_ajax_referer( 'tailwatch_nonce', 'nonce' );
 
 		// Require manage_options: this flag triggers permanent deletion of all plugin
 		// data on deactivation (tables, options, settings, logs). The lower
@@ -191,7 +191,7 @@ class Deactivation {
 		}
 
 		// Set deactivation flag.
-		$result = update_option( 'wptw_deactivate_plugin', true, false );
+		$result = update_option( 'tailwatch_deactivate_plugin', true, false );
 
 		if ( $result ) {
 			wp_send_json_success(
@@ -216,9 +216,9 @@ class Deactivation {
 	 *
 	 * @return void
 	 */
-	public function wptw_ajax_submit_deactivation_feedback() {
+	public function tailwatch_ajax_submit_deactivation_feedback() {
 		// Verify nonce.
-		check_ajax_referer( 'wptw_nonce', 'nonce' );
+		check_ajax_referer( 'tailwatch_nonce', 'nonce' );
 
 		// Verify user capability.
 		if ( ! current_user_can( 'activate_plugins' ) ) {
@@ -241,7 +241,7 @@ class Deactivation {
 		$domain = isset( $_POST['domain'] ) ? sanitize_text_field( wp_unslash( $_POST['domain'] ) ) : '';
 
 		// Get plugin version.
-		$plugin_version = defined( 'WPTW_VERSION' ) ? WPTW_VERSION : 'unknown';
+		$plugin_version = defined( 'TAILWATCH_VERSION' ) ? TAILWATCH_VERSION : 'unknown';
 
 		// Prepare API payload matching the external endpoint requirements.
 		// Required fields: domain, reason.
@@ -255,7 +255,7 @@ class Deactivation {
 		);
 
 		// Send feedback to external API.
-		$api_endpoint = WPTW_PLUGIN_FEEDBACK;
+		$api_endpoint = TAILWATCH_PLUGIN_FEEDBACK;
 
 		$response = wp_remote_post(
 			$api_endpoint,
@@ -287,7 +287,7 @@ class Deactivation {
 		 * @param array $api_payload The feedback data sent to API.
 		 * @param mixed $response    The API response (WP_Error or response array).
 		 */
-		do_action( 'wptw_deactivation_feedback_submitted', $api_payload, $response );
+		do_action( 'tailwatch_deactivation_feedback_submitted', $api_payload, $response );
 
 		wp_send_json_success(
 			array(

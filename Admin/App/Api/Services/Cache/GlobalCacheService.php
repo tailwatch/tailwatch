@@ -36,7 +36,7 @@ class GlobalCacheService {
 	 *
 	 * @var string
 	 */
-	private const CACHE_PREFIX = 'wptw_cache_';
+	private const CACHE_PREFIX = 'tailwatch_cache_';
 
 	/**
 	 * Cache statistics

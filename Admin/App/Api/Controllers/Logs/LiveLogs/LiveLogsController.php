@@ -29,7 +29,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class LiveLogsController {
 
-	public function wptw_import_live_logs( $post_data, $live_logs, $get_progress, $feature_type, $extra_params = null ) {
+	public function tailwatch_import_live_logs( $post_data, $live_logs, $get_progress, $feature_type, $extra_params = null ) {
 		try {
 
 			$json_data = isset( $post_data ) ? wp_unslash( $post_data ) : '';
@@ -150,7 +150,7 @@ class LiveLogsController {
 			}
 
 			try {
-				$this->wptw_update_progress_status( $get_progress, $feature_type );
+				$this->tailwatch_update_progress_status( $get_progress, $feature_type );
 			} catch ( \Throwable $e ) {
 				Log::error(
 					'Failed to update progress status: ' . $e->getMessage(),
@@ -169,7 +169,7 @@ class LiveLogsController {
 
 			$estimation_time = null;
 			if ( ! $is_completed && $scan_state === 'in-progress' ) {
-				$estimation_data = $this->wptw_calculate_estimated_completion_time( $feature_type, $get_progress, $extra_params );
+				$estimation_data = $this->tailwatch_calculate_estimated_completion_time( $feature_type, $get_progress, $extra_params );
 				$estimation_time = $estimation_data['estimated_completion_timestamp'];
 			}
 
@@ -221,7 +221,7 @@ class LiveLogsController {
 		}
 	}
 
-	public function wptw_calculate_estimated_completion_time( $feature_type, $get_progress, $extra_params = array() ) {
+	public function tailwatch_calculate_estimated_completion_time( $feature_type, $get_progress, $extra_params = array() ) {
 		// Use time() (UTC) because all controllers store started_time as time() (UTC).
 		// Using current_time('timestamp') here would add the timezone offset to the
 		// elapsed calculation, producing wrong ETA on non-UTC servers.
@@ -329,8 +329,8 @@ class LiveLogsController {
 		);
 	}
 
-	public function wptw_update_progress_status( $get_progress, $feature_type ) {
-		$premium_handled = apply_filters( 'wptw_handle_premium_progress_update', false, $get_progress, $feature_type );
+	public function tailwatch_update_progress_status( $get_progress, $feature_type ) {
+		$premium_handled = apply_filters( 'tailwatch_handle_premium_progress_update', false, $get_progress, $feature_type );
 		if ( $premium_handled !== false ) {
 			return;
 		}
@@ -449,7 +449,7 @@ class LiveLogsController {
 		}
 	}
 
-	public function wptw_live_logs_completed( $is_completed, $get_live_logs, $clear_message = false ) {
+	public function tailwatch_live_logs_completed( $is_completed, $get_live_logs, $clear_message = false ) {
 		$fs            = FilesystemService::get_filesystem();
 		$existing_logs = $fs ? $fs->get_contents( $get_live_logs ) : false;
 		$get_data      = ( false === $existing_logs ) ? array() : (array) json_decode( $existing_logs, true );

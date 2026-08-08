@@ -34,7 +34,7 @@ class DBModel {
 	 */
 	public function get_features( $is_active = 0, $option = null ) {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 
 		if ( $option !== null ) {
 			if ( $is_active ) {
@@ -87,13 +87,13 @@ class DBModel {
 	 *
 	 * @return void
 	 */
-	public function wptw_drop_tables() {
+	public function tailwatch_drop_tables() {
 		global $wpdb;
 		$tables = array(
-			$wpdb->prefix . WPTW_DB_TABLE_NAME,
-			$wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME,
-			$wpdb->prefix . WPTW_DB_FILEMON_BASELINE_TABLE,
-			$wpdb->prefix . WPTW_DB_FILEMON_SCANS_TABLE,
+			$wpdb->prefix . TAILWATCH_DB_TABLE_NAME,
+			$wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME,
+			$wpdb->prefix . TAILWATCH_DB_FILEMON_BASELINE_TABLE,
+			$wpdb->prefix . TAILWATCH_DB_FILEMON_SCANS_TABLE,
 		);
 		foreach ( $tables as $table_name ) {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange -- Plugin deactivation: dropping custom tables. Schema change is intentional.
@@ -113,7 +113,7 @@ class DBModel {
 	public function get_value( $option, $key ) {
 		global $wpdb;
 
-		$table_name = $wpdb->prefix . WPTW_DB_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 
 		$sql = $wpdb->prepare(
 			'SELECT * FROM %i WHERE `key` = %s AND `option` = %s',
@@ -145,7 +145,7 @@ class DBModel {
 	public function get_log_value( $key, $option ) {
 		global $wpdb;
 
-		$table_name = $wpdb->prefix . WPTW_DB_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 
 		$sql = $wpdb->prepare(
 			'SELECT * FROM %i WHERE `key` = %s AND `option` = %s',
@@ -163,10 +163,10 @@ class DBModel {
 	 *
 	 * @param array  $db_data        Data to insert (column => value).
 	 * @param array  $db_data_format Format of the data values.
-	 * @param string $table          Optional. Table name constant. Default WPTW_DB_TABLE_NAME.
+	 * @param string $table          Optional. Table name constant. Default TAILWATCH_DB_TABLE_NAME.
 	 * @return int|false The inserted ID or false on error.
 	 */
-	public function insert_row( $db_data, $db_data_format, $table = WPTW_DB_TABLE_NAME ) {
+	public function insert_row( $db_data, $db_data_format, $table = TAILWATCH_DB_TABLE_NAME ) {
 		global $wpdb;
 		$db_table_name = $wpdb->prefix . $table;
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Inserting into custom table. No caching for write operations.
@@ -194,39 +194,47 @@ class DBModel {
 		global $wpdb;
 		$table_name = $wpdb->prefix . $table;
 
-		// Column identifiers come from caller code-literals (see method
-		// docblock). We still backtick them defensively in case a column
-		// name collides with a MySQL reserved word like `key`.
-		$select_parts = array();
+		// Column identifiers are bound as identifiers through the %i placeholder
+		// (WP 6.2+) rather than concatenated into the query.
+		$select_placeholders = array();
+		$select_args         = array();
 		foreach ( $columns as $column ) {
-			$select_parts[] = '`' . $column . '`';
+			$select_placeholders[] = '%i';
+			$select_args[]         = $column;
 		}
-		$select = implode( ', ', $select_parts );
+		$select = implode( ', ', $select_placeholders );
 
 		$where_extras = '';
-		$args         = array( $table_name );
+		$where_args   = array();
 
 		foreach ( $conditions as $column => $condition ) {
-			$column_sql = '`' . $column . '`';
 			if ( is_array( $condition ) && $condition[0] === 'LIKE' ) {
-				$where_extras .= ' AND ' . $column_sql . ' LIKE %s';
-				$args[]        = $condition[1];
+				$where_extras .= ' AND %i LIKE %s';
+				$where_args[]  = $column;
+				$where_args[]  = $condition[1];
 			} else {
-				$where_extras .= ' AND ' . $column_sql . ' = %s';
-				$args[]        = $condition;
+				$where_extras .= ' AND %i = %s';
+				$where_args[]  = $column;
+				$where_args[]  = $condition;
 			}
 		}
 
-		$args[] = (int) $limit;
-		$args[] = (int) $offset;
-
 		$sql = 'SELECT ' . $select . ' FROM %i WHERE 1=1' . $where_extras . ' LIMIT %d OFFSET %d';
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter -- $sql built from code-literal fragments + caller-provided code-literal column names (see docblock); user values bound via prepare() args.
+		// Placeholder order: SELECT columns (%i), table (%i), each WHERE column (%i) + its
+		// value (%s), then LIMIT/OFFSET (%d). Every identifier and value is bound by prepare().
+		$args = array_merge(
+			$select_args,
+			array( $table_name ),
+			$where_args,
+			array( (int) $limit, (int) $offset )
+		);
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter -- $sql is assembled only from code-literal SQL fragments and %i/%s/%d placeholders; every identifier and value is bound through prepare().
 		return $wpdb->get_results( $wpdb->prepare( $sql, ...$args ) );
 	}
 
-	public function get_recent_row( $option, $key, $table = WPTW_DB_TABLE_NAME ) {
+	public function get_recent_row( $option, $key, $table = TAILWATCH_DB_TABLE_NAME ) {
 		global $wpdb;
 		$table_name = $wpdb->prefix . $table;
 
@@ -249,11 +257,11 @@ class DBModel {
 	 *
 	 * @param array  $db_data           Data to update (column => value).
 	 * @param array  $where             Where clause (column => value).
-	 * @param string $table             Optional. Table name constant. Default WPTW_DB_TABLE_NAME.
+	 * @param string $table             Optional. Table name constant. Default TAILWATCH_DB_TABLE_NAME.
 	 * @param bool   $table_with_prefix Optional. Whether table name already includes prefix. Default false.
 	 * @return bool True on success, false on error.
 	 */
-	public function update_rows( $db_data, $where, $table = WPTW_DB_TABLE_NAME, $table_with_prefix = false ) {
+	public function update_rows( $db_data, $where, $table = TAILWATCH_DB_TABLE_NAME, $table_with_prefix = false ) {
 		global $wpdb;
 		$db_table_name = $table_with_prefix ? $table : $wpdb->prefix . $table;
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Updating custom table. No caching for write operations.
@@ -269,10 +277,10 @@ class DBModel {
 	 * @param array  $db_data Data to update.
 	 * @param string $key     Key to match.
 	 * @param string $option  Option to match.
-	 * @param string $table   Optional. Table name constant. Default WPTW_DB_TABLE_NAME.
+	 * @param string $table   Optional. Table name constant. Default TAILWATCH_DB_TABLE_NAME.
 	 * @return bool True on success, false on failure or if no row found.
 	 */
-	public function update_recent_row( $db_data, $key, $option, $table = WPTW_DB_TABLE_NAME ) {
+	public function update_recent_row( $db_data, $key, $option, $table = TAILWATCH_DB_TABLE_NAME ) {
 		global $wpdb;
 		$db_table_name = $wpdb->prefix . $table;
 
@@ -299,10 +307,10 @@ class DBModel {
 	 *
 	 * @param string $key    Key to match.
 	 * @param string $option Option to match.
-	 * @param string $table  Optional. Table name constant. Default WPTW_DB_TABLE_NAME.
+	 * @param string $table  Optional. Table name constant. Default TAILWATCH_DB_TABLE_NAME.
 	 * @return bool True on success, false on failure.
 	 */
-	public function delete_recent_row( $key, $option, $table = WPTW_DB_TABLE_NAME ) {
+	public function delete_recent_row( $key, $option, $table = TAILWATCH_DB_TABLE_NAME ) {
 		global $wpdb;
 		$db_table_name = $wpdb->prefix . $table;
 
@@ -332,7 +340,7 @@ class DBModel {
 	 */
 	public function delete_rows( $where ) {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 
 		if ( empty( $where ) ) {
 			return false;
@@ -351,10 +359,10 @@ class DBModel {
 	 * Similar to delete_rows but allows specifying table name.
 	 *
 	 * @param array  $where Where clause (column => value).
-	 * @param string $table Optional. Table name constant. Default WPTW_DB_TABLE_NAME.
+	 * @param string $table Optional. Table name constant. Default TAILWATCH_DB_TABLE_NAME.
 	 * @return bool True on success, false on error.
 	 */
-	public function delete_table_rows( $where, $table = WPTW_DB_TABLE_NAME ) {
+	public function delete_table_rows( $where, $table = TAILWATCH_DB_TABLE_NAME ) {
 		global $wpdb;
 		$table_name = $wpdb->prefix . $table;
 
@@ -374,15 +382,15 @@ class DBModel {
 	 * Optionally filters by log type. Uses direct query because $wpdb->delete() doesn't support != operator or IN clause. // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table, no WP cache API.
 	 *
 	 * @param string|null $type Optional. Log type to filter by ('error_logs', 'activity_logs', or null for both).
-	 * @param string      $table Table name constant. Default WPTW_DB_LOGS_TABLE_NAME.
+	 * @param string      $table Table name constant. Default TAILWATCH_DB_LOGS_TABLE_NAME.
 	 *
 	 * @return int|false Number of deleted rows, or false on failure.
 	 */
-	public function delete_unified_logs( $type = null, $table = WPTW_DB_LOGS_TABLE_NAME ) {
+	public function delete_unified_logs( $type = null, $table = TAILWATCH_DB_LOGS_TABLE_NAME ) {
 		global $wpdb;
 
 		// Validate constant exists.
-		if ( ! defined( 'WPTW_DB_LOGS_TABLE_NAME' ) && $table === WPTW_DB_LOGS_TABLE_NAME ) {
+		if ( ! defined( 'TAILWATCH_DB_LOGS_TABLE_NAME' ) && $table === TAILWATCH_DB_LOGS_TABLE_NAME ) {
 			return false;
 		}
 
@@ -419,15 +427,15 @@ class DBModel {
 	 * (excludes old logs with key = 'default_feature_logs').
 	 *
 	 * @param int    $log_id Log entry ID.
-	 * @param string $table  Table name constant. Default WPTW_DB_LOGS_TABLE_NAME.
+	 * @param string $table  Table name constant. Default TAILWATCH_DB_LOGS_TABLE_NAME.
 	 *
 	 * @return array|false Log entry data with 'key' and 'type', or false if not found or not a unified log.
 	 */
-	public function is_unified_log( $log_id, $table = WPTW_DB_LOGS_TABLE_NAME ) {
+	public function is_unified_log( $log_id, $table = TAILWATCH_DB_LOGS_TABLE_NAME ) {
 		global $wpdb;
 
 		// Validate constant exists.
-		if ( ! defined( 'WPTW_DB_LOGS_TABLE_NAME' ) && $table === WPTW_DB_LOGS_TABLE_NAME ) {
+		if ( ! defined( 'TAILWATCH_DB_LOGS_TABLE_NAME' ) && $table === TAILWATCH_DB_LOGS_TABLE_NAME ) {
 			return false;
 		}
 
@@ -468,7 +476,7 @@ class DBModel {
 	 */
 	public function get_feature_value( $id ) {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table; value lookup by id.
 		$value = $wpdb->get_var(
 			$wpdb->prepare(
@@ -489,7 +497,7 @@ class DBModel {
 	 *                            id can only resolve within its own log category.
 	 * @return array|null Row data or null when not found.
 	 */
-	public function get_data_by_id( $id, $table = WPTW_DB_TABLE_NAME, $option = null ) {
+	public function get_data_by_id( $id, $table = TAILWATCH_DB_TABLE_NAME, $option = null ) {
 		global $wpdb;
 		$table_name = $wpdb->prefix . $table;
 		if ( null !== $option ) {
@@ -539,7 +547,7 @@ class DBModel {
 	 * @param int    $page    1-based page.
 	 * @return array data/total/page/limit/total_pages.
 	 */
-	public function get_logs_filtered( $key, $option, $filters, $table = WPTW_DB_LOGS_TABLE_NAME, $limit = 10, $page = 1 ) {
+	public function get_logs_filtered( $key, $option, $filters, $table = TAILWATCH_DB_LOGS_TABLE_NAME, $limit = 10, $page = 1 ) {
 		global $wpdb;
 		$table_name = $wpdb->prefix . $table;
 		$limit      = max( 1, absint( $limit ) );
@@ -558,7 +566,8 @@ class DBModel {
 				continue;
 			}
 			$placeholders = implode( ', ', array_fill( 0, count( $vals ), '%s' ) );
-			$where[]      = '`' . $col . '` IN (' . $placeholders . ')';
+			$where[]      = '%i IN (' . $placeholders . ')';
+			$args[]       = $col;
 			$args         = array_merge( $args, $vals );
 		}
 
@@ -573,7 +582,7 @@ class DBModel {
 
 		$where_sql = implode( ' AND ', $where );
 
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, PluginCheck.Security.DirectDB.UnescapedDBParameter -- WHERE is assembled only from the code-literal column whitelist above with %s placeholders; the dynamic IN() length requires an assembled string and every value is bound through prepare().
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, PluginCheck.Security.DirectDB.UnescapedDBParameter -- WHERE is assembled from code-literal fragments, %i identifier placeholders (the dynamic filter column) and %s value placeholders; the dynamic IN() length requires an assembled string and every identifier/value is bound through prepare().
 		$result = $wpdb->get_results( $wpdb->prepare(
 			"SELECT * FROM %i WHERE {$where_sql} ORDER BY id DESC LIMIT %d OFFSET %d",
 			array_merge( array( $table_name ), $args, array( $limit, $offset ) )
@@ -604,7 +613,7 @@ class DBModel {
 	 * @param string $table   Bare table name.
 	 * @return array column => list of distinct non-empty values.
 	 */
-	public function get_logs_distinct_facets( $key, $option, $columns, $table = WPTW_DB_LOGS_TABLE_NAME ) {
+	public function get_logs_distinct_facets( $key, $option, $columns, $table = TAILWATCH_DB_LOGS_TABLE_NAME ) {
 		global $wpdb;
 		$table_name = $wpdb->prefix . $table;
 		$allowed    = array( 'type', 'type_state', 'username', 'ip_address', 'action', 'facet_1', 'facet_2' );
@@ -625,7 +634,7 @@ class DBModel {
 		return $out;
 	}
 
-	public function get_logs_count_by_type( $key = null, $option = null, $type_state = null, $table = WPTW_DB_LOGS_TABLE_NAME, $distinct = false ) {
+	public function get_logs_count_by_type( $key = null, $option = null, $type_state = null, $table = TAILWATCH_DB_LOGS_TABLE_NAME, $distinct = false ) {
 		global $wpdb;
 		$table_name = $wpdb->prefix . $table;
 
@@ -684,12 +693,12 @@ class DBModel {
 	 * @param string      $option     Log option.
 	 * @param string      $key        Log key.
 	 * @param string|null $type_state Optional. Type state.
-	 * @param string      $table      Optional. Table name constant. Default WPTW_DB_TABLE_NAME.
+	 * @param string      $table      Optional. Table name constant. Default TAILWATCH_DB_TABLE_NAME.
 	 * @param int|null    $limit      Optional. Limit for pagination.
 	 * @param int|null    $page       Optional. Page number for pagination.
 	 * @return array|null Logs data or null if empty. Returns pagination array if limit/page provided.
 	 */
-	public function get_logs_only_by_type( $option, $key, $type_state = null, $table = WPTW_DB_TABLE_NAME, $limit = null, $page = null ) {
+	public function get_logs_only_by_type( $option, $key, $type_state = null, $table = TAILWATCH_DB_TABLE_NAME, $limit = null, $page = null ) {
 		global $wpdb;
 		$table_name = $wpdb->prefix . $table;
 		$paginate   = ( $limit !== null && $page !== null );
@@ -759,10 +768,10 @@ class DBModel {
 	 * @param string      $option     Row option name.
 	 * @param string      $key        Row key name.
 	 * @param string|null $type_state Optional. type_state value to filter by.
-	 * @param string      $table      Optional. Table name constant. Default WPTW_DB_TABLE_NAME.
+	 * @param string      $table      Optional. Table name constant. Default TAILWATCH_DB_TABLE_NAME.
 	 * @return array|null Array of rows or null when empty.
 	 */
-	public function get_logs_by_type_state( $option, $key, $type_state = null, $table = WPTW_DB_TABLE_NAME ) {
+	public function get_logs_by_type_state( $option, $key, $type_state = null, $table = TAILWATCH_DB_TABLE_NAME ) {
 		global $wpdb;
 		$table_name = $wpdb->prefix . $table;
 
@@ -788,10 +797,10 @@ class DBModel {
 	 *
 	 * @param string $option Option name.
 	 * @param string $key    Key name.
-	 * @param string $table  Optional. Table name constant. Default WPTW_DB_TABLE_NAME.
+	 * @param string $table  Optional. Table name constant. Default TAILWATCH_DB_TABLE_NAME.
 	 * @return array|null Decoded value or null.
 	 */
-	public function get_recent_data( $option, $key, $table = WPTW_DB_TABLE_NAME ) {
+	public function get_recent_data( $option, $key, $table = TAILWATCH_DB_TABLE_NAME ) {
 		global $wpdb;
 		$table_name = $wpdb->prefix . $table;
 
@@ -821,10 +830,10 @@ class DBModel {
 	 * @param string      $option     Log option.
 	 * @param int         $type       Log type code.
 	 * @param string|null $type_state Optional. Type state.
-	 * @param string      $table      Optional. Table name constant. Default WPTW_DB_LOGS_TABLE_NAME.
+	 * @param string      $table      Optional. Table name constant. Default TAILWATCH_DB_LOGS_TABLE_NAME.
 	 * @return array|null Log row or null.
 	 */
-	public function get_error_logs( $key, $option, $type, $type_state = null, $table = WPTW_DB_LOGS_TABLE_NAME ) {
+	public function get_error_logs( $key, $option, $type, $type_state = null, $table = TAILWATCH_DB_LOGS_TABLE_NAME ) {
 		global $wpdb;
 		$table_name = $wpdb->prefix . $table;
 		$time_limit = gmdate( 'Y-m-d H:i:s', strtotime( '-24 hours' ) );
@@ -869,7 +878,7 @@ class DBModel {
 	 * @param string|null $option Optional option filter (e.g., 'high', 'medium', 'low').
 	 * @param int         $limit  Number of records per page. Default 10.
 	 * @param int         $page   Page number. Default 1.
-	 * @param string      $table  Table name constant. Default WPTW_DB_LOGS_TABLE_NAME.
+	 * @param string      $table  Table name constant. Default TAILWATCH_DB_LOGS_TABLE_NAME.
 	 *
 	 * @return array|false {
 	 *     Query result array or false on failure.
@@ -879,10 +888,10 @@ class DBModel {
 	 *     @type int   $total_pages Total pages.
 	 * }
 	 */
-	public function get_logs( $type = null, $key = null, $option = null, $limit = 10, $page = 1, $table = WPTW_DB_LOGS_TABLE_NAME ) {
+	public function get_logs( $type = null, $key = null, $option = null, $limit = 10, $page = 1, $table = TAILWATCH_DB_LOGS_TABLE_NAME ) {
 		global $wpdb;
 
-		if ( ! defined( 'WPTW_DB_LOGS_TABLE_NAME' ) && $table === WPTW_DB_LOGS_TABLE_NAME ) {
+		if ( ! defined( 'TAILWATCH_DB_LOGS_TABLE_NAME' ) && $table === TAILWATCH_DB_LOGS_TABLE_NAME ) {
 			return false;
 		}
 
@@ -956,7 +965,7 @@ class DBModel {
 	 */
 	public function get_log_data( $key = null, $option = null, $conditions = array(), $multiple = false, $limit = null, $page = null ) {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_LOGS_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 
 		// $where_extras is built from code-literal column+placeholder fragments
 		// only. Column names in $conditions are filtered through an allowlist
@@ -980,7 +989,8 @@ class DBModel {
 				continue;
 			}
 			// $field is from the allowlist above — safe to use as identifier.
-			$where_extras .= ' AND `' . $field . '` = %s';
+			$where_extras .= ' AND %i = %s';
+			$args[]        = $field;
 			$args[]        = $value;
 		}
 
@@ -1027,10 +1037,10 @@ class DBModel {
 	 * @param string $type_state Type state.
 	 * @param int    $limit      Limit per page.
 	 * @param int    $page       Page number.
-	 * @param string $table      Optional. Table name constant. Default WPTW_DB_TABLE_NAME.
+	 * @param string $table      Optional. Table name constant. Default TAILWATCH_DB_TABLE_NAME.
 	 * @return array Pagination result array.
 	 */
-	public function getAllRedirectRules( $key, $type_state, $limit = 10, $page = 1, $table = WPTW_DB_TABLE_NAME ) {
+	public function getAllRedirectRules( $key, $type_state, $limit = 10, $page = 1, $table = TAILWATCH_DB_TABLE_NAME ) {
 		global $wpdb;
 		$table_name = $wpdb->prefix . $table;
 		$offset     = ( $page - 1 ) * $limit;
@@ -1063,14 +1073,14 @@ class DBModel {
 	 *
 	 * @return void
 	 */
-	public function wptw_delete_data_on_deactivate() {
+	public function tailwatch_delete_data_on_deactivate() {
 		global $wpdb;
 
 		$delete_patterns = array(
-			'wptw_cta_secret_',
-			'wptw_token_jti_',
-			'wptw_token_revoked_',
-			'wptw_recovery_token_',
+			'tailwatch_cta_secret_',
+			'tailwatch_token_jti_',
+			'tailwatch_token_revoked_',
+			'tailwatch_recovery_token_',
 		);
 
 		foreach ( $delete_patterns as $pattern ) {
@@ -1091,7 +1101,7 @@ class DBModel {
 		$transient = $wpdb->get_var( $wpdb->prepare(
 			'SELECT option_name FROM %i WHERE option_name LIKE %s ORDER BY option_id DESC LIMIT 1',
 			$wpdb->options,
-			'_transient_wptw_import_%'
+			'_transient_tailwatch_import_%'
 		) );
 		if ( $transient ) {
 			return str_replace( '_transient_', '', $transient );
@@ -1105,7 +1115,7 @@ class DBModel {
 		$transient = $wpdb->get_var( $wpdb->prepare(
 			'SELECT option_name FROM %i WHERE option_name LIKE %s ORDER BY option_id DESC LIMIT 1',
 			$wpdb->options,
-			'_transient_wptw_reset_%'
+			'_transient_tailwatch_reset_%'
 		) );
 		if ( $transient ) {
 			return str_replace( '_transient_', '', $transient );
@@ -1115,7 +1125,7 @@ class DBModel {
 
 	public function get_features_option_by_key() {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 
 		// Both `key` and `option` are MySQL reserved words and MUST be backticked,
 		// otherwise strict servers reject the query with a syntax error and the
@@ -1137,7 +1147,7 @@ class DBModel {
 
 	public function get_user_data( $user_id, $key, $option ) {
 		global $wpdb;
-		$table_name = $wpdb->prefix . WPTW_DB_TABLE_NAME;
+		$table_name = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 		$value      = $wpdb->get_row( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$wpdb->prepare(
 				'SELECT * FROM %i WHERE `user_id` = %d AND `key` = %s AND `option` = %s',

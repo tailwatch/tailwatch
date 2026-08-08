@@ -1,11 +1,11 @@
 import { RefreshCw } from "lucide-react";
 import DOMPurify from 'dompurify';
 
-/* global wptw_ajax */
+/* global tailwatch_ajax */
 
 const VisitModal = ({ isOpen, message }) => {
   const handleBackToWordPress = () => {
-    window.location.href = wptw_ajax.admin_url;
+    window.location.href = tailwatch_ajax.admin_url;
   };
 
   const handleRefresh = () => {

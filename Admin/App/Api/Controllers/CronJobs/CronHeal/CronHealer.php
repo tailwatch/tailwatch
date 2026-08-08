@@ -13,7 +13,7 @@ class CronHealer {
 	public function __construct() {
 	}
 
-	public function wptw_cron_healer() {
+	public function tailwatch_cron_healer() {
 		try {
 			// Prevent infinite loops caused by lack of wp-cron.php.
 			if ( ( defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON ) ) {
