@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { FaCheckCircle, FaSpinner, FaTimesCircle } from "react-icons/fa";
+import { FaCheckCircle, FaSpinner, FaTimesCircle, FaRocket } from "react-icons/fa";
 import { useVerifyVisitStatus } from '../../Components/Hooks/VerifyVisitStatus/VerifyVisitStatus';
 import { verifyVisitStatus, checkPhpVersion, checkWpVersion, checkCronStatus, check_tailwatch_table } from "./VisitServices/VisitServices";
 import VisitModal from "./VisitModal/VisitModal";
@@ -14,6 +14,7 @@ const Visit = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
   const [progressValue, setProgressValue] = useState(0);
+  const [hasStarted, setHasStarted] = useState(false);
   const { visitStep, visitCompleted, setVisitStep, isVerifyLoading, visitData } = useVerifyVisitStatus(navigate);
   const [isVisitCompleted, setVisitCompleted] = useState(false);
   const [visibleMessages, setVisibleMessages] = useState([]);
@@ -211,6 +212,11 @@ const Visit = () => {
 
   useEffect(() => {
     const performSteps = async () => {
+      // Consent gate: setup (compatibility checks and database preparation)
+      // only runs after the user explicitly clicks "Start Setup".
+      if (!hasStarted) {
+        return;
+      }
       if (!visitCompleted) {
         await executeStep();
       } else {
@@ -218,7 +224,7 @@ const Visit = () => {
       }
     };
     performSteps();
-  }, [visitStep]);
+  }, [visitStep, hasStarted]);
   useEffect(() => {
     const step = stepMessages[currentStep];
     if (!step) return;
@@ -255,6 +261,35 @@ const Visit = () => {
                 <div className="absolute inset-0 blur-xl bg-teal-400 opacity-30 animate-pulse"></div>
               </div>
               <p className="mt-6 text-gray-600 text-lg">Preparing your installation...</p>
+            </div>
+          ) : !hasStarted ? (
+            <div className="flex justify-center">
+              <div className="bg-white bg-opacity-95 border border-teal-200 backdrop-blur-sm shadow-2xl rounded-3xl p-10 w-full max-w-2xl text-center">
+                <div className="flex justify-center mb-6">
+                  <div className="bg-gradient-to-br from-teal-500 to-emerald-600 text-white rounded-full p-6 shadow-xl">
+                    <FaRocket className="text-4xl" />
+                  </div>
+                </div>
+                <h2 className="text-3xl font-bold mb-4 text-gray-800">Welcome to Tailwatch</h2>
+                <p className="text-gray-600 text-lg leading-relaxed mb-2">
+                  To finish setting up, Tailwatch will run a few quick compatibility checks and prepare its database.
+                </p>
+                <p className="text-gray-500 mb-8">Nothing runs until you choose to begin.</p>
+                <div className="flex items-center justify-center gap-4">
+                  <button
+                    onClick={() => setHasStarted(true)}
+                    className="px-8 py-3.5 bg-[#007980] text-white rounded-xl hover:bg-opacity-90 transition-colors font-semibold text-lg shadow-lg"
+                  >
+                    Start Setup
+                  </button>
+                  <button
+                    onClick={() => { window.location.href = tailwatch_ajax.admin_url; }}
+                    className="px-6 py-3.5 text-gray-600 hover:text-gray-800 transition-colors font-medium"
+                  >
+                    Not now
+                  </button>
+                </div>
+              </div>
             </div>
           ) : (
             <>
