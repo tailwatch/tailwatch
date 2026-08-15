@@ -6,29 +6,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use Tailwatch\Admin\App\Api\Models\OptionsModel;
-use Tailwatch\Admin\App\Api\Controllers\Hooks\HookControllers;
 use Tailwatch\Admin\App\Api\Services\Cron\CronHealthService;
 
 class VisitController {
-
-	/**
-	 * Constructor - Register hooks
-	 */
-	public function __construct() {
-		$hook_controller = new HookControllers();
-		$hook_controller->add_action_hook( 'admin_init', array( $this, 'tailwatch_check_activation_redirect' ) );
-	}
-
-	/**
-	 * Check and handle activation redirect
-	 */
-	public function tailwatch_check_activation_redirect() {
-		if ( get_option( 'tailwatch_plugin_activation_redirect', false ) ) {
-			delete_option( 'tailwatch_plugin_activation_redirect' );
-			wp_safe_redirect( admin_url( 'admin.php?page=tailwatch' ) );
-			exit;
-		}
-	}
 
 	/**
 	 * Insert initial visit data structure

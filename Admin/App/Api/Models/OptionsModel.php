@@ -161,8 +161,6 @@ class OptionsModel {
 			update_option( 'tailwatch_db_version', TAILWATCH_DB_VERSION, false );
 		}
 
-		add_option( 'tailwatch_plugin_activation_redirect', true, '', false );
-
 		// Seed operational options as NON-autoloaded. They are read only on specific
 		// admin screens (Cron Manager), so they must not load on every page request.
 		// Creating them here means later update_option() calls preserve the non-autoload
