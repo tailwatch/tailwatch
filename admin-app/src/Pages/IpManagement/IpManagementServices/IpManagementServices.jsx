@@ -546,3 +546,18 @@ export const previewBlockPage = async (payload = {}) => {
         return { success: false, message: msg };
     }
 };
+
+export const getGeoLiteConnection = async () => {
+    try {
+        const formData = new FormData();
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_is_geo_lite_connected_or_exist');
+        formData.append('nonce', tailwatch_ajax.nonce);
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return response.data.data;
+    } catch (error) {
+        return null;
+    }
+};

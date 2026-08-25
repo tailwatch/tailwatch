@@ -99,6 +99,10 @@ class DBModel {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange -- Plugin deactivation: dropping custom tables. Schema change is intentional.
 			$wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS %i', $table_name ) );
 		}
+
+		// Invalidate the positive existence cache so any insert_row() later in this same
+		// request re-probes instead of writing to a table that has just been dropped.
+		self::$table_exists_cache = array();
 	}
 
 	/**
@@ -159,6 +163,17 @@ class DBModel {
 	}
 
 	/**
+	 * Per-request cache of table names confirmed to exist. Positive results only:
+	 * a table found missing is re-probed on the next call (so one created later in the
+	 * same request is picked up), while tailwatch_drop_tables() clears the whole cache
+	 * (so one dropped mid-request is re-probed). Lets bulk insert_row() loops skip the
+	 * existence probe after the first row.
+	 *
+	 * @var array<string,bool>
+	 */
+	private static $table_exists_cache = array();
+
+	/**
 	 * Insert a new row into the database.
 	 *
 	 * @param array  $db_data        Data to insert (column => value).
@@ -169,8 +184,23 @@ class DBModel {
 	public function insert_row( $db_data, $db_data_format, $table = TAILWATCH_DB_TABLE_NAME ) {
 		global $wpdb;
 		$db_table_name = $wpdb->prefix . $table;
-        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Inserting into custom table. No caching for write operations.
-		$result = $wpdb->insert( $db_table_name, $db_data, $db_data_format ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table, no WP cache API.
+
+		// Skip the write when the target table is absent (e.g. the admin declined setup,
+		// or data was removed on deactivation). Without this, WordPress core runs a
+		// SHOW FULL COLUMNS during $wpdb->insert() and logs a "table doesn't exist"
+		// database error. esc_like() keeps the table name's underscores literal so the
+		// LIKE matches only the exact table; only positive results are cached.
+		if ( empty( self::$table_exists_cache[ $db_table_name ] ) ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Schema-metadata probe for a custom table; positive result cached per-request in self::$table_exists_cache and invalidated on drop.
+			$found = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $db_table_name ) ) );
+			if ( $found !== $db_table_name ) {
+				return false;
+			}
+			self::$table_exists_cache[ $db_table_name ] = true;
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table, no WP cache API.
+		$result = $wpdb->insert( $db_table_name, $db_data, $db_data_format );
 		return $result !== false ? $wpdb->insert_id : false;
 	}
 
@@ -1067,6 +1097,79 @@ class DBModel {
 	}
 
 	/**
+	 * Delete all Connect pairing (CTA) keys.
+	 *
+	 * Removes the pairing id, the auth header key and every rotating CTA secret
+	 * so a disconnected site can no longer authenticate the mobile app / cloud to
+	 * the Connect REST API.
+	 *
+	 * @return void
+	 */
+	public function tailwatch_delete_all_cta_keys() {
+		global $wpdb;
+
+		delete_option( 'tailwatch_cta_id' );
+		delete_option( 'tailwatch_auth_header_key' );
+
+		$like_pattern = $wpdb->esc_like( 'tailwatch_cta_secret_' ) . '%';
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Core options table; CTA-secret cleanup.
+		$options = $wpdb->get_results(
+			$wpdb->prepare(
+				'SELECT option_name FROM %i WHERE option_name LIKE %s',
+				$wpdb->options,
+				$like_pattern
+			),
+			ARRAY_A
+		);
+
+		if ( is_array( $options ) ) {
+			foreach ( $options as $option ) {
+				if ( isset( $option['option_name'] ) ) {
+					delete_option( $option['option_name'] );
+				}
+			}
+		}
+	}
+
+	/**
+	 * Revoke all outstanding JWT tokens.
+	 *
+	 * Marks every recorded token id as revoked so existing mobile/cloud access
+	 * and refresh tokens stop validating immediately. Used on license disconnect.
+	 *
+	 * @return void
+	 */
+	public function tailwatch_revoke_all_tokens() {
+		global $wpdb;
+
+		$like_pattern = $wpdb->esc_like( 'tailwatch_token_jti_' ) . '%';
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Core options table; JWT-token revocation sweep.
+		$options = $wpdb->get_results(
+			$wpdb->prepare(
+				'SELECT option_name FROM %i WHERE option_name LIKE %s',
+				$wpdb->options,
+				$like_pattern
+			),
+			ARRAY_A
+		);
+
+		if ( is_array( $options ) ) {
+			foreach ( $options as $option ) {
+				if ( ! isset( $option['option_name'] ) ) {
+					continue;
+				}
+				$jti = str_replace( 'tailwatch_token_jti_', '', $option['option_name'] );
+				if ( ! \Tailwatch\Admin\App\Api\Services\Auth\JwtService::is_valid_jti_format( $jti ) ) {
+					continue;
+				}
+				update_option( 'tailwatch_token_revoked_' . $jti, true, false );
+			}
+		}
+	}
+
+	/**
 	 * Delete all plugin data on deactivation.
 	 *
 	 * Cleanup operation to remove all plugin options from the database.
@@ -1078,9 +1181,11 @@ class DBModel {
 
 		$delete_patterns = array(
 			'tailwatch_cta_secret_',
+			'tailwatch_cta_user_',
 			'tailwatch_token_jti_',
 			'tailwatch_token_revoked_',
 			'tailwatch_recovery_token_',
+			'tailwatch_auto_login_token_',
 		);
 
 		foreach ( $delete_patterns as $pattern ) {
@@ -1093,6 +1198,10 @@ class DBModel {
 				$like_pattern
 			) );
 		}
+
+		// Single-row Connect pairing options (exact names, not prefixes).
+		delete_option( 'tailwatch_cta_id' );
+		delete_option( 'tailwatch_auth_header_key' );
 	}
 
 	public function get_latest_import_option_name() {

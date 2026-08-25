@@ -1,5 +1,5 @@
 <?php
-// phpcs:ignoreFile WordPress.Files.FileName -- Legacy controller filename.
+// phpcs:disable WordPress.Files.FileName -- Legacy controller filename.
 /**
  * Cron Job Manager
  *
@@ -29,6 +29,8 @@ use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\HardeningAuditCronJob;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\HardeningAuditMaintenanceCronJob;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\LoginDefenderExpiredBlocksCronJob;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\LoginDefenderLogsCleanupCronJob;
+use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\JwtCleanupCronJob;
+use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\AutoLoginTokenCleanupCronJob;
 
 /**
  * Class CronJobManager
@@ -122,6 +124,12 @@ class CronJobManager {
 
 		// Login Defender — purge old login-attempt activity logs (cleanup maintenance).
 		$this->cron_jobs['login_defender_logs_cleanup'] = new LoginDefenderLogsCleanupCronJob();
+
+		// Connect — prune expired JWT token tracking rows (daily maintenance).
+		$this->cron_jobs['jwt_cleanup'] = new JwtCleanupCronJob();
+
+		// Auto-login — prune expired one-time login token records (daily maintenance).
+		$this->cron_jobs['auto_login_cleanup'] = new AutoLoginTokenCleanupCronJob();
 
 		/**
 		 * Filter to add custom cron jobs.
@@ -359,6 +367,12 @@ class CronJobManager {
 			// Login Defender maintenance.
 			'tailwatch_login_defender_cleanup_expired',
 			'tailwatch_login_defender_cleanup',
+
+			// Connect JWT token cleanup (daily maintenance).
+			'tailwatch_jwt_cleanup',
+
+			// Auto-login token cleanup (daily maintenance).
+			'tailwatch_auto_login_cleanup',
 
 			// Legacy unprefixed names — keep in the uninstall sweep for one release cycle.
 			'login_defender_cleanup_expired',

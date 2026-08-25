@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { LicenseTabSkeleton } from "../../../Components/Skeleton/LoaderSkeleton";
-import { handleConfirmDisconnect, fetchData, handleConnect } from './LicenseTabServices/LicenseTabServices';
+import { handleConfirmDisconnect, getSecretKeys, fetchData, handleConnect, getCookies } from './LicenseTabServices/LicenseTabServices';
 import { ConnectedLicenseView, NoLicenseView } from "./LicenseComponents/LicenseComponents";
 import { useFeaturesData } from "../../../Components/Context/FeaturesDataContext";
 import { alertService } from "../../../Components/AlertService/AlertService";
@@ -52,19 +52,30 @@ const LicenseTab = ({ activeTab, loading: parentLoading, setLoading }) => {
   }, [activeTab]);
 
   const handleConnectClick = async () => {
-    setConnecting(true);
-    try {
-      await handleConnect({
-        setLoading: setLoading,
-        tailwatch_ajax,
-        successCallback: async () => {
-          await fetchFeaturesData();
-          await fetchData({setEmail, setLicenseKey, setConnectionDateTime, setPlanName, setDevices, setStartData, setEndData, setLoading,setIsExpiry, setRole});
-        },
-      });
-    } finally {
-      setConnecting(false);
+    // Provision the pairing credentials the dashboard needs before opening the
+    // sign-in popup: the CTA keys (client_id / client_secret / auth_header_key) that
+    // authenticate the inbound Connect API, and a recovery cookie the dashboard stores
+    // so it can reach the site if it later becomes unreachable. Both manage the
+    // connecting state themselves; if either fails we abort without opening the popup.
+    const secretKeys = await getSecretKeys({ setConnecting });
+    const cookies = await getCookies({ setConnecting });
+    if (!secretKeys || !cookies) {
+      return;
     }
+
+    await handleConnect({
+      setLoading: setLoading,
+      tailwatch_ajax,
+      ctaId: secretKeys.cta_id,
+      ctaSecret: secretKeys.cta_secret,
+      authHeaderKey: secretKeys.auth_header_key,
+      cookieName: cookies.name,
+      cookieValue: cookies.value,
+      successCallback: async () => {
+        await fetchFeaturesData();
+        await fetchData({setEmail, setLicenseKey, setConnectionDateTime, setPlanName, setDevices, setStartData, setEndData, setLoading,setIsExpiry, setRole});
+      },
+    });
   };
 
   if (isLoading) {

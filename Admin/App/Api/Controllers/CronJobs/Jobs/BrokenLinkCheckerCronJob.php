@@ -1,5 +1,5 @@
 <?php
-// phpcs:ignoreFile WordPress.Files.FileName -- Legacy controller filename.
+// phpcs:disable WordPress.Files.FileName -- Legacy controller filename.
 /**
  * Broken Link Checker Cron Job
  *

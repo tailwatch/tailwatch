@@ -13,12 +13,12 @@ import { useState } from 'react';
 
 const IpManagement = () => {
     const { ipManagement,refreshIpStatus } = useIpFeature();
-    const { activeTab, handleTabChange } = useIpManagement();                
+    const { activeTab, handleTabChange, isGeoLicense } = useIpManagement();                
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const {featureEnable,parentEnable,setParentEnable,isLicenseConnect,setIsLicenseConnect} = useBlackList();
     const { proPluginActive } = useFeaturesData();
-    // Country allow/block is a Pro capability; hide its tab + panel unless the Pro plugin is active.
-    const visibleTabs = proPluginActive ? Iptabs : Iptabs.filter((tab) => tab.key !== 'county');
+    // Country allow/block is a Pro capability. The tab is always shown; when Pro is
+    // inactive its panel renders locked behind an upsell overlay instead of being hidden.
 
     const handleFeatureToggle = async () => {
     await refreshIpStatus();
@@ -31,11 +31,16 @@ const IpManagement = () => {
         <div>
             <Header title="Geo-blocking" />
             <div className='p-4'>
-                <TableTabs tabs={visibleTabs} activeTab={activeTab} setActiveTab={handleTabChange} />
+                <TableTabs tabs={Iptabs} activeTab={activeTab} setActiveTab={handleTabChange} />
                 {(parentEnable === false || isLicenseConnect === true) && <LockCard featureName="Geo-blocking" featureDescription="Block or allow individual IPs or IP ranges, temporarily or permanently." featureId={ipManagement?.featureId} isActive={ipManagement?.isActiveState} afterToggleCallback={handleFeatureToggle}/>}
-                {activeTab === 'black-list' && <BlackListContent refreshTrigger={refreshTrigger} />}
-                {activeTab === 'white-list' && <WhiteListContent />}
-                {activeTab === 'county' && proPluginActive && <CountryListContent />}
+                {activeTab === 'black-list' && <BlackListContent refreshTrigger={refreshTrigger} isGeoLicense={isGeoLicense} />}
+                {activeTab === 'white-list' && <WhiteListContent isGeoLicense={isGeoLicense} />}
+                {activeTab === 'county' && (
+                    <div className="relative">
+                        {!proPluginActive && <LockCard isLocked={true} featureName="Country Blocking" featureDescription="Block or allow visitors by country, applied to login forms or your entire site." afterToggleCallback={handleFeatureToggle} />}
+                        <CountryListContent isGeoLicense={isGeoLicense} />
+                    </div>
+                )}
                 
             </div>           
         </div>

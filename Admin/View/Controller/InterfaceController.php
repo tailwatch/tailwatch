@@ -112,6 +112,28 @@ class InterfaceController {
 	}
 
 	/**
+	 * External Tailwatch service URLs handed to the React dashboard.
+	 *
+	 * Values come from the plugin constants so PHP and the bundled app link to the
+	 * same properties. Campaign (utm_*) parameters are appended by each link position
+	 * in the app, not stored here.
+	 *
+	 * @return array Map of URL keys to absolute URLs.
+	 */
+	public static function get_service_urls() {
+		return array(
+			'website'   => TAILWATCH_WEBSITE_URL,
+			'dashboard' => TAILWATCH_DASHBOARD_URL,
+			'docs'      => TAILWATCH_DOCS_URL,
+			'pricing'   => TAILWATCH_PRICING_URL,
+			'roadmap'   => TAILWATCH_ROADMAP_URL,
+			'contact'   => TAILWATCH_CONTACT_URL,
+			'privacy'   => TAILWATCH_PRIVACY_POLICY_URL,
+			'support_email' => TAILWATCH_SUPPORT_EMAIL,
+		);
+	}
+
+	/**
 	 * Enqueue dashboard scripts and styles.
 	 *
 	 * @param string $hook_suffix Current admin page hook.
@@ -154,6 +176,7 @@ class InterfaceController {
 						'admin_url' => admin_url(),
 						'base_url'  => TAILWATCH_GET_SITE_URL,
 						'asset_url' => TAILWATCH_URI . 'Admin/View/Static/images/',
+						'urls'      => self::get_service_urls(),
 					)
 				);
 			}

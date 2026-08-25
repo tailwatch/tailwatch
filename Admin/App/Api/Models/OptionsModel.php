@@ -45,7 +45,20 @@ class OptionsModel {
 	 *
 	 * @return void
 	 */
-	public function tailwatch_upon_activation() {
+	public function tailwatch_maybe_upgrade_schema() {
+		// Version-gated schema migration, run on load so it also applies on plugin update
+		// (register_activation_hook does NOT fire on update). Cheap early return on the
+		// common path: a matching version costs one option read.
+		if ( get_option( 'tailwatch_db_version' ) === TAILWATCH_DB_VERSION ) {
+			return;
+		}
+		// Concurrency lock so two requests right after an update don't both run dbDelta
+		// (idempotent, but wasteful).
+		if ( get_transient( 'tailwatch_db_upgrading' ) ) {
+			return;
+		}
+		set_transient( 'tailwatch_db_upgrading', 1, 5 * MINUTE_IN_SECONDS );
+
 		global $wpdb;
 		$settings_table_name = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 		$logs_table_name     = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
@@ -147,19 +160,32 @@ class OptionsModel {
 			) $charset_collate;",
 		);
 
-		// Only run the schema build when the stored schema version differs from the
-		// current one. dbDelta re-parses every CREATE TABLE definition to diff it
-		// against the live tables on each call, so gating it keeps routine
-		// re-activations from repeating that work once the schema is already current.
-		if ( get_option( 'tailwatch_db_version' ) !== TAILWATCH_DB_VERSION ) {
-			require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+		// The version gate + lock at the top already decided a (re)build is needed.
+		// dbDelta re-parses every CREATE TABLE definition, diffs it against the live
+		// table, and applies only the differences (new tables, added columns/keys).
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
+		try {
 			foreach ( $create_tables as $sql ) {
 				dbDelta( $sql );
 			}
 
 			update_option( 'tailwatch_db_version', TAILWATCH_DB_VERSION, false );
+		} finally {
+			// Always release the lock — even if a dbDelta call throws — so the next
+			// request can retry immediately instead of waiting for the transient TTL.
+			delete_transient( 'tailwatch_db_upgrading' );
 		}
+	}
+
+	/**
+	 * First-install entry point (register_activation_hook). Plugin UPDATES do not fire
+	 * the activation hook, so the schema is kept current by tailwatch_maybe_upgrade_schema()
+	 * running on load (Bootstrap::load_autoload) — the WordPress-standard load-time
+	 * migration pattern.
+	 */
+	public function tailwatch_upon_activation() {
+		$this->tailwatch_maybe_upgrade_schema();
 
 		// Seed operational options as NON-autoloaded. They are read only on specific
 		// admin screens (Cron Manager), so they must not load on every page request.
@@ -1501,6 +1527,106 @@ class OptionsModel {
 						'description'         => 'AI-powered malware scanning with one-click remediation, automatic quarantine of detected threats, and pre-scan backup for safe recovery. Continuous monitoring scans only modified files after the initial baseline for minimal performance impact.',
 						'is_upgrade_feature'  => true,
 						'options'             => array(),
+					)
+				),
+				'type'          => 'json',
+				'type_state'    => 'inactive',
+				'date_created'  => current_time( 'mysql' ),
+				'date_modified' => current_time( 'mysql' ),
+				'is_active'     => 0,
+			),
+			// Updates & Rollback (plugin + theme update / rollback / history).
+			'default_updates_rollback'       => array(
+				'user_id'       => $user_id,
+				'child_of'      => 0,
+				'key'           => 'default_feature_settings',
+				'option'        => 'default_updates_rollback',
+				'value'         => wp_json_encode(
+					array(
+						'icon'                => 'shield-check',
+						'title'               => 'Updates & Rollback',
+						'category'            => array( 'performance', 'security' ),
+						'description'         => 'Confidently update your WordPress plugins and themes. Review changes, apply updates, or instantly roll back to a previous version when needed, with a complete update history.',
+						'verify_status'       => 'check_updates_rollback',
+						'mobile_notification' => true,
+						'recommended_feature' => true,
+						'display_as_tabs'     => true,
+						'tab_config'          => array(
+							array(
+								'field_ids' => array( 'field_1' ),
+								'tab_title' => 'Theme Updates',
+								'tab_icon'  => 'paint-brush',
+							),
+							array(
+								'field_ids' => array( 'field_4' ),
+								'tab_title' => 'Plugin Updates',
+								'tab_icon'  => 'plug',
+							),
+							array(
+								'field_ids' => array( 'field_7' ),
+								'tab_title' => 'Core Updates',
+								'tab_icon'  => 'wordpress',
+							),
+						),
+						'options'             => array(
+							'field_1' => array(
+								'key'                           => 'enable_updates_rollback_theme',
+								'id'                            => 'enable_updates_rollback_theme',
+								'type'                          => 'checkbox',
+								'push_notification'             => true,
+								'push_notification_title'       => 'Theme Update / Rollback',
+								'push_notification_description' => 'You will receive a notification on your mobile each time a theme is updated or rolled back on your site.',
+								'label'                         => 'Theme Updates & Rollback Management',
+								'description'                   => 'Enable or disable theme update management and rollback functionality.',
+								'placeholder'                   => 'Updates & Rollback for Theme',
+								'required'                      => true,
+								'register'                      => 'enable_updates_rollback_theme',
+								'values'                        => array(
+									'option' => array(
+										'value'    => '',
+										'selected' => true,
+									),
+								),
+							),
+							'field_4' => array(
+								'key'                           => 'enable_updates_rollback_plugin',
+								'id'                            => 'enable_updates_rollback_plugin',
+								'type'                          => 'checkbox',
+								'push_notification'             => true,
+								'push_notification_title'       => 'Plugin Update / Rollback',
+								'push_notification_description' => 'You will receive a notification on your mobile each time a plugin is updated or rolled back on your site.',
+								'label'                         => 'Plugin Updates & Rollback Management',
+								'description'                   => 'Enable or disable plugin update management and rollback functionality.',
+								'placeholder'                   => 'Updates & Rollback for Plugin',
+								'required'                      => true,
+								'register'                      => 'enable_updates_rollback_plugin',
+								'values'                        => array(
+									'option' => array(
+										'value'    => '',
+										'selected' => true,
+									),
+								),
+							),
+							'field_7' => array(
+								'key'                           => 'enable_updates_rollback_core',
+								'id'                            => 'enable_updates_rollback_core',
+								'type'                          => 'checkbox',
+								'push_notification'             => true,
+								'push_notification_title'       => 'WordPress Core Update / Rollback',
+								'push_notification_description' => 'You will receive a notification on your mobile each time WordPress core is updated or rolled back on your site.',
+								'label'                         => 'Core Updates & Rollback Management',
+								'description'                   => 'Enable or disable WordPress core update management and rollback functionality.',
+								'placeholder'                   => 'Updates & Rollback for Core',
+								'required'                      => true,
+								'register'                      => 'enable_updates_rollback_core',
+								'values'                        => array(
+									'option' => array(
+										'value'    => '',
+										'selected' => true,
+									),
+								),
+							),
+						),
 					)
 				),
 				'type'          => 'json',
@@ -3102,6 +3228,73 @@ class OptionsModel {
 			$visit_data['db_initialize']['is_completed'] = true;
 			update_option( TAILWATCH_VISIT_DATA, wp_json_encode( $visit_data ) );
 		}
+	}
+
+	/**
+	 * Backfill feature/option rows introduced by a plugin update.
+	 *
+	 * The initial feature set is seeded once, batch-wise, when the setup wizard
+	 * runs (insert_site_data / insert_rows_batch_wise). That batch walks the array
+	 * by index and never runs again, so features added to
+	 * tailwatch_complete_site_data() in a later release are absent on a site that
+	 * was seeded before the update. This routine reconciles that gap.
+	 *
+	 * It is strictly additive and idempotent: it inserts only rows whose
+	 * key+option pair is not already present, and never edits or removes an
+	 * existing row. Each inserted row keeps its default type_state / is_active from
+	 * the canonical set, so a newly shipped feature arrives disabled (opt-in) — no
+	 * feature turns on without the administrator enabling it.
+	 *
+	 * @return int Rows inserted, or -1 when the site is not in a reconcilable
+	 *             state yet (initial seed unfinished) so the caller can retry later.
+	 */
+	public function tailwatch_sync_missing_features() {
+		global $wpdb;
+		$table = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
+
+		// Only reconcile a site whose initial seed has finished. A fresh install,
+		// or one still mid-seed, is left to the wizard's batch loop so this never
+		// races it into duplicate rows.
+		$visit_data = json_decode( get_option( TAILWATCH_VISIT_DATA ), true );
+		if ( empty( $visit_data['db_initialize']['is_completed'] ) ) {
+			return -1;
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- one-time feature backfill after a plugin update; a schema-wide existence read that no feature cache layer covers
+		$existing_rows = $wpdb->get_results( $wpdb->prepare( 'SELECT `key`, `option`, user_id FROM %i', $table ), ARRAY_A );
+		if ( empty( $existing_rows ) ) {
+			return -1;
+		}
+
+		$existing_set = array();
+		$seed_user_id = 0;
+		foreach ( $existing_rows as $existing_row ) {
+			$existing_set[ $existing_row['key'] . '|' . $existing_row['option'] ] = true;
+			if ( 0 === $seed_user_id && ! empty( $existing_row['user_id'] ) ) {
+				$seed_user_id = (int) $existing_row['user_id'];
+			}
+		}
+
+		$inserted = 0;
+		foreach ( $this->tailwatch_complete_site_data() as $row ) {
+			if ( isset( $existing_set[ $row['key'] . '|' . $row['option'] ] ) ) {
+				continue;
+			}
+
+			// Mirror insert_rows_batch_wise(): only the owning user_id is overridden;
+			// the row's canonical default state is preserved as authored.
+			$row['user_id'] = $seed_user_id > 0 ? $seed_user_id : get_current_user_id();
+
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- mirrors insert_rows_batch_wise(); backfilling a single missing default row
+			$wpdb->insert( $table, $row );
+			++$inserted;
+		}
+
+		if ( $inserted > 0 ) {
+			( new \Tailwatch\Admin\App\Api\Controllers\Features\FeatureCacheController() )->invalidate_all_caches();
+		}
+
+		return $inserted;
 	}
 
 	public function get_last_insert_index() {

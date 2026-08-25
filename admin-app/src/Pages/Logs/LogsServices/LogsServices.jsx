@@ -114,6 +114,21 @@ export const handleDelete = async ({deleteData,setIsDeleting,fetchTabData}) => {
   }
 };
 
+// Send a single SMTP configuration test email through the site's configured
+// provider. Returns the backend response payload ({ code, message }) or null.
+export const sendTestEmail = async (testEmail) => {
+  const formData = new FormData();
+  formData.append('action', 'tailwatch_global_ajax_handler');
+  formData.append('action_type', 'tailwatch_smtp_test_email');
+  formData.append('data', JSON.stringify({ test_email: testEmail }));
+  formData.append('nonce', tailwatch_ajax.nonce);
+
+  const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+  return response.data?.data ?? null;
+};
+
 export const checkLocalStorage = async (setShowTabs) => {
   try {
     const localStorageData = getLocalStorage('features_data', 'data');

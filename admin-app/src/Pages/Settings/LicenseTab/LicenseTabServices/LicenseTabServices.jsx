@@ -153,11 +153,62 @@ export const fetchData = async ({
     }
 };
 
-export const handleConnect = async ({ setLoading, tailwatch_ajax, successCallback }) => {
+export const getSecretKeys = async ({ setConnecting }) => {
+    setConnecting(true);
+    try {
+        const formData = new FormData();
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_get_generated_cta_keys');
+        formData.append('nonce', tailwatch_ajax.nonce);
+
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        });
+        if (response.data.success && response.data.data) {
+            const { cta_id, cta_secret, auth_header_key } = response.data.data;
+            return { cta_id, cta_secret, auth_header_key };
+        }
+        return null;
+    } catch (error) {
+        return null;
+    } finally {
+        setConnecting(false);
+    }
+};
+
+export const getCookies = async ({ setConnecting }) => {
+    setConnecting(true);
+    try {
+        const formData = new FormData();
+        formData.append('action', 'tailwatch_global_ajax_handler');
+        formData.append('action_type', 'tailwatch_generate_recovery_cookie');
+        formData.append('nonce', tailwatch_ajax.nonce);
+
+        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        });
+        if (response.data.success && response.data.data) {
+            const { name, value } = response.data.data;
+            return { name, value };
+        }
+        return null;
+    } catch (error) {
+        toast.error("Network error");
+        return null;
+    } finally {
+        setConnecting(false);
+    }
+};
+
+export const handleConnect = async ({ setLoading, tailwatch_ajax, successCallback, ctaId, ctaSecret, cookieName, cookieValue, authHeaderKey }) => {
     const website = encodeURIComponent(tailwatch_ajax.base_url);
     const ac = encodeURIComponent('link');
     const env = encodeURIComponent('production');
-    const popupUrl = `https://dashboard.wptailwatch.com/signin?ip=true&website=${website}&ac=${ac}&env=${env}`;
+    const popupUrl = `https://dashboard.wptailwatch.com/signin?ip=true&website=${website}&ac=${ac}&env=${env}&client_id=${ctaId}&client_secret=${ctaSecret}&cookie_name=${cookieName}&cookie_value=${cookieValue}&auth_header_key=${authHeaderKey}`;
 
     // If the popup is already open from a previous click, refresh it so a re-click always
     // reflects the latest sign-in URL instead of a stale one.

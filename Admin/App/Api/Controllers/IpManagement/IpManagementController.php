@@ -555,30 +555,24 @@ class IpManagementController {
 	}
 
 	private function show_default_block_page( $block_data ) {
+		if ( ! headers_sent() ) {
+			status_header( 403 );
+			nocache_headers();
+		}
+
 		// Full custom HTML override (advanced) still wins.
 		$custom_template = apply_filters( 'tailwatch_entire_site_block_template', null, $block_data );
 		if ( $custom_template ) {
-			if ( ! headers_sent() ) {
-				status_header( 403 );
-				nocache_headers();
-			}
 			echo wp_kses_post( $custom_template );
 			exit;
 		}
 
-		$design  = $this->tailwatch_get_block_page_design();
-		$is_temp = ( 'temporary' === ( $block_data['block_type'] ?? 'permanent' ) );
-		$heading = $is_temp ? $design['heading_temporary'] : $design['heading_permanent'];
-
-		wp_die(
-			wp_kses_post( nl2br( esc_html( $this->build_block_page_html( $block_data, $design ) ) ) ),
-			esc_html( $heading ),
-			array( 'response' => 403 )
-		);
+		echo $this->build_block_page_html( $block_data, $this->tailwatch_get_block_page_design() ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- composed from sanitized design values + esc_* in the builder.
+		exit;
 	}
 
 	/**
-	 * Build the plain-text block message from the resolved design. Returns a
+	 * Build the built-in block page HTML from the resolved design. Returns a
 	 * string (no exit) so it is unit-testable.
 	 *
 	 * @param array $block_data Block result (block_type, reason, retry_time).
@@ -586,18 +580,196 @@ class IpManagementController {
 	 * @return string
 	 */
 	private function build_block_page_html( $block_data, $design ) {
-		$is_temp = ( 'temporary' === ( $block_data['block_type'] ?? 'permanent' ) );
+		$block_type = $block_data['block_type'] ?? 'permanent';
+		$retry_time = $block_data['retry_time'] ?? null;
+		$is_temp    = ( 'temporary' === $block_type );
 
+		$heading = $is_temp ? $design['heading_temporary'] : $design['heading_permanent'];
+		// Per-rule reason wins; otherwise the design's message for this type.
 		$message = ! empty( $block_data['reason'] )
 			? $block_data['reason']
 			: ( $is_temp ? $design['message_temporary'] : $design['message_permanent'] );
 
-		$parts = array( $message );
-		if ( $is_temp && ! empty( $block_data['retry_time'] ) ) {
-			$parts[] = __( 'This is a temporary restriction. Please try again later.', 'tailwatch' );
+		$bg             = $design['background_color'];
+		$accent         = $design['accent_color'];
+		$bg_image       = $design['background_image'] ?? '';
+		// data:image URLs (validated upstream, preview only) survive as-is; esc_url()
+		// would strip them. Saved settings are always real http(s) URLs → esc_url().
+		$bg_image_css   = '';
+		if ( '' !== $bg_image ) {
+			$bg_image_css = ( 0 === strpos( $bg_image, 'data:image/' ) ) ? $bg_image : esc_url( $bg_image );
 		}
-		$parts[] = __( 'If you believe this is an error, please contact the website administrator.', 'tailwatch' );
+		$icon_bg        = $is_temp ? '#f59e0b' : '#ef4444';
+		$icon           = $is_temp ? '⏱️' : '🚫';
+		$site_name      = get_bloginfo( 'name' );
+		$logo_url       = ! empty( $design['show_logo'] ) ? get_site_icon_url( 64 ) : '';
+		$show_countdown = ( $is_temp && $retry_time && ! empty( $design['show_countdown'] ) );
 
-		return implode( "\n\n", array_filter( array_map( 'trim', $parts ) ) );
+		// retry_time is in WP-local basis (strtotime(current_time(...)) + duration);
+		// the JS countdown compares against Date.now() (real UTC), so convert to a
+		// real UTC epoch by removing the GMT offset — otherwise the timer is skewed
+		// by the offset on non-UTC sites.
+		$retry_utc = (int) $retry_time - (int) round( (float) get_option( 'gmt_offset', 0 ) * HOUR_IN_SECONDS );
+
+		ob_start();
+		?>
+		<!DOCTYPE html>
+		<html <?php language_attributes(); ?>>
+		<head>
+			<meta charset="<?php bloginfo( 'charset' ); ?>">
+			<meta name="viewport" content="width=device-width, initial-scale=1.0">
+			<title><?php echo esc_html__( 'Access Restricted', 'tailwatch' ); ?> - <?php echo esc_html( $site_name ); ?></title>
+			<style>
+				* {
+					margin: 0;
+					padding: 0;
+					box-sizing: border-box;
+				}
+				body {
+					font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+					<?php
+					$bg_css = $bg_image_css
+						? esc_attr( $bg ) . " url('" . $bg_image_css . "') center / cover no-repeat"
+						: 'linear-gradient(135deg, ' . esc_attr( $bg ) . ' 0%, ' . esc_attr( $accent ) . ' 100%)';
+					?>
+					background: <?php echo $bg_css; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped, PluginCheck.Security.EscapeOutput -- bg/accent esc_attr'd; bg_image_css esc_url'd or validated data:image at construction (line 600). ?>;
+					min-height: 100vh;
+					display: flex;
+					align-items: center;
+					justify-content: center;
+					padding: 20px;
+				}
+				.container {
+					background: white;
+					border-radius: 12px;
+					box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+					max-width: 600px;
+					width: 100%;
+					padding: 40px;
+					text-align: center;
+				}
+				.logo {
+					width: 64px;
+					height: 64px;
+					margin: 0 auto 20px;
+					border-radius: 50%;
+				}
+				.icon {
+					width: 80px;
+					height: 80px;
+					margin: 0 auto 24px;
+					background: <?php echo esc_attr( $icon_bg ); ?>;
+					border-radius: 50%;
+					display: flex;
+					align-items: center;
+					justify-content: center;
+					font-size: 40px;
+					color: white;
+				}
+				h1 {
+					font-size: 32px;
+					color: #1f2937;
+					margin-bottom: 16px;
+					font-weight: 700;
+				}
+				.reason {
+					font-size: 18px;
+					color: #6b7280;
+					margin-bottom: 32px;
+					line-height: 1.6;
+				}
+				.timer-container {
+					background: #f3f4f6;
+					padding: 24px;
+					border-radius: 8px;
+					margin-bottom: 24px;
+				}
+				.timer {
+					font-size: 48px;
+					font-weight: 700;
+					color: #1f2937;
+					font-family: 'Courier New', monospace;
+				}
+				.timer-label {
+					font-size: 14px;
+					color: #6b7280;
+					margin-top: 8px;
+					text-transform: uppercase;
+					letter-spacing: 1px;
+				}
+				.footer {
+					font-size: 14px;
+					color: #9ca3af;
+					margin-top: 24px;
+				}
+				@media (max-width: 640px) {
+					.container {
+						padding: 24px;
+					}
+					h1 {
+						font-size: 24px;
+					}
+					.timer {
+						font-size: 36px;
+					}
+				}
+			</style>
+		</head>
+		<body>
+			<div class="container">
+				<?php if ( $logo_url ) : ?>
+					<img src="<?php echo esc_url( $logo_url ); ?>" alt="Logo" class="logo">
+				<?php endif; ?>
+
+				<div class="icon">
+					<?php echo esc_html( $icon ); ?>
+				</div>
+
+				<h1><?php echo esc_html( $heading ); ?></h1>
+
+				<p class="reason"><?php echo nl2br( esc_html( $message ) ); ?></p>
+
+				<?php if ( $show_countdown ) : ?>
+					<div class="timer-container">
+						<div class="timer" id="countdown"><?php echo esc_html__( 'Calculating...', 'tailwatch' ); ?></div>
+						<div class="timer-label"><?php echo esc_html__( 'Time Remaining', 'tailwatch' ); ?></div>
+					</div>
+
+					<script>
+						const retryTime = <?php echo esc_js( absint( $retry_utc ) ); ?>;
+
+						function updateCountdown() {
+							const now = Math.floor(Date.now() / 1000);
+							const remaining = retryTime - now;
+
+							if (remaining <= 0) {
+								document.getElementById('countdown').textContent = '00:00:00';
+								setTimeout(() => {
+									window.location.reload();
+								}, 1000);
+								return;
+							}
+
+							const hours = Math.floor(remaining / 3600);
+							const minutes = Math.floor((remaining % 3600) / 60);
+							const seconds = remaining % 60;
+
+							const formatted = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+							document.getElementById('countdown').textContent = formatted;
+						}
+
+						updateCountdown();
+						setInterval(updateCountdown, 1000);
+					</script>
+				<?php endif; ?>
+
+				<div class="footer">
+					<?php echo esc_html__( 'If you believe this is an error, please contact the website administrator.', 'tailwatch' ); ?>
+				</div>
+			</div>
+		</body>
+		</html>
+		<?php
+		return ob_get_clean();
 	}
 }

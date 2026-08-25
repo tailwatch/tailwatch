@@ -8,10 +8,11 @@ import LoaderSkeleton from '../../../Components/Skeleton/LoaderSkeleton'
 import LockCard from '../../../Components/LockCard/LockCard'
 import { useNavigate } from 'react-router-dom'
 import InfoBar from '../../../Components/InfoBar/InfoBar'
+import GeoLicenseNotice from '../../../Components/InfoBar/GeoLicenseNotice'
 const IpBasedProtection = ({ widget = false, limit = 10 }) => {
     const navigate = useNavigate();
     const { searchTerm, checkBruteForceStatus, featureEnable, parentEnable, isLicenseConnect, bruteForceRule, setSearchTerm, isLoading, columns, filteredData, renderRow, pagination, handlePageChange, ipDetailsData, handleDeletAll,
-        selectedItems, handleBulkDelete, handleUnblockIpAddress, handleAddToBlackList, handleAddToWhitelist, handlePageSizeChange
+        selectedItems, handleBulkDelete, handleUnblockIpAddress, handleAddToBlackList, handleAddToWhitelist, handlePageSizeChange, isGeoLicense
     } = useBruteForce(limit, widget);
     const handleViewMore = () => {
         navigate('/dashboard/login-defender/ip-based');
@@ -39,7 +40,9 @@ const IpBasedProtection = ({ widget = false, limit = 10 }) => {
                 <LoaderSkeleton count="0" />
             ) : (
                 <>
-                {(featureEnable === false || parentEnable === false || isLicenseConnect === true) && (<InfoBar type="info" message={isLicenseConnect ? "License not connected. Please connect your license to use this feature." : "Please Configure your Settings First"}/>)}                
+                {(featureEnable === false || parentEnable === false || isLicenseConnect === true) && (<InfoBar type="info" message={isLicenseConnect ? "License not connected. Please connect your license to use this feature." : "Please Configure your Settings First"}/>)}
+                    <GeoLicenseNotice isGeoLicense={isGeoLicense} />
+
                     <Table columns={columns} data={filteredData} renderRow={renderRow} noDataMessage={searchTerm ? `No IP details found matching "${searchTerm}"` : "No IP details available"} />
                     {!widget && (
                         <Pagination currentPage={pagination.page} totalPages={pagination.total_pages} onPageChange={handlePageChange} hasData={ipDetailsData.length > 0} pageSizeOptions={[5, 10, 20, 30, 50, 100]} totalItems={pagination.total_items} showPageSizeFilter={true} pageSize={pagination.limit} onPageSizeChange={handlePageSizeChange} />

@@ -29,6 +29,8 @@ import UserManagement from "./Pages/UserManagement/UserManagement.jsx";
 import BruteForce from "./Pages/BruteForce/BruteForce.jsx";
 import IpDetails from "./Pages/BruteForce/IpDetails/IpDetails.jsx";
 import IpManagement from "./Pages/IpManagement/IpManagement.jsx";
+import Updates from "./Pages/Updates/Updates.jsx";
+import Innerscreen from "./Pages/Updates/InnerContent/InnerScreen.jsx";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -74,6 +76,10 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           {/* Database Optimizer */}
           <Route path="database-optimizer" element={<DatabaseOptimizer />} />
           <Route path="database-optimizer/*" element={<Navigate to="/dashboard/database-optimizer" replace />} />
+
+          {/* Updates & Rollback */}
+          <Route path="updates/details/:pluginSlug" element={<Innerscreen />} />
+          <Route path="updates/*" element={<Updates />} />
 
           {/* Malware Scanner */}
           <Route path="malwarescanner" element={<MalwareScanner />} />

@@ -24,6 +24,7 @@ use Tailwatch\Admin\App\Api\Controllers\Base\BaseController;
 use Tailwatch\Admin\App\Api\Models\DBModel;
 use Tailwatch\Admin\App\Api\Models\IntegrityWatch\FileMonModel;
 use Tailwatch\Admin\App\Api\Services\Common\FilesystemService;
+use Tailwatch\Admin\App\Api\Controllers\LimitIncrease\PerformanceOptimizerController;
 
 /**
  * Controller for file integrity monitoring (scan, compare, logs, cron).
@@ -648,6 +649,10 @@ class IntegrityWatchController extends BaseController {
 
 			if ( isset( $data['instant_scan'] ) && true === $data['instant_scan'] ) {
 
+				// Instant scans load/decode large baseline files; boost before that so we
+				// don't OOM before the cron worker's own boost. Runtime-only, idempotent.
+				( new PerformanceOptimizerController() )->tailwatch_boost_for_scanning();
+
 				$cron_status = ( new CronHealthService() )->test( 'files_integrity' );
 				if ( ! $cron_status['success'] ) {
 					Log::error(
@@ -877,6 +882,10 @@ class IntegrityWatchController extends BaseController {
 						'message'      => __( 'You can now run the file comparison.', 'tailwatch' ),
 						'code'         => 200,
 					);
+					// Emit the terminal state so the stuck-process self-heal can detect completion.
+					if ( ! empty( $existing_data['scan_state'] ) && 'completed' === $existing_data['scan_state'] ) {
+						$response['scan_state'] = 'completed';
+					}
 				}
 			}
 
@@ -1633,6 +1642,8 @@ class IntegrityWatchController extends BaseController {
 		$reschedule_delay = 0;
 
 		try {
+			// Raise PHP limits before the integrity tick. Runtime-only, idempotent.
+			( new PerformanceOptimizerController() )->tailwatch_boost_for_scanning();
 
 			$existing_entry  = $this->tailwatch_get_is_completed();
 			$path_to_monitor = $this->get_path_to_monitor();
@@ -1654,6 +1665,10 @@ class IntegrityWatchController extends BaseController {
 				// Comparison loop. Per-tick state flags are written once up front, then
 				// batches run until the comparison completes/pauses/fails or the budget is hit.
 				$existing_data = $this->get_files_integrity_progress();
+				// A duplicate tick after completion must not reactivate the finished row or restart the scan.
+				if ( ! empty( $existing_data['scan_state'] ) && 'completed' === $existing_data['scan_state'] ) {
+					return;
+				}
 				$process_id    = isset( $existing_data['process_id'] ) ? $existing_data['process_id'] : ( $this->current_process_id ?? null );
 				if ( ! $process_id ) {
 					$process_id               = $this->process_manager->get_or_create_process( 'files_integrity', 'tailwatch_files_integrity_scan', array() );

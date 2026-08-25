@@ -74,6 +74,7 @@ class HardeningChecksController {
 			'user_enumeration'         => 'check_user_enumeration',
 			'plugin_updates'           => 'check_plugin_updates',
 			'theme_updates'            => 'check_theme_updates',
+			'file_permissions'         => 'check_file_permissions',
 			// Extended checks ordered after the originals so partial scans
 			// complete the canonical set first: backdoor surface (PHP-in-uploads),
 			// open registration, dashboard file editor, application-password REST
@@ -742,6 +743,83 @@ class HardeningChecksController {
 			$label,
 			self::STATUS_SECURE,
 			__( 'No common admin usernames were detected.', 'tailwatch' )
+		);
+	}
+
+	public function check_file_permissions() {
+		$label = __( 'File Permissions', 'tailwatch' );
+
+		$uploads_basedir = wp_get_upload_dir()['basedir'] ?? ( WP_CONTENT_DIR . '/uploads' );
+		$wp_config_path  = WpConfigLocator::locate();
+		$paths           = array(
+			ABSPATH . '.htaccess',
+			WP_CONTENT_DIR,
+			$uploads_basedir,
+			WP_PLUGIN_DIR,
+			get_theme_root(),
+		);
+		if ( null !== $wp_config_path ) {
+			array_unshift( $paths, $wp_config_path );
+		}
+
+		$issues = array();
+
+		foreach ( $paths as $path ) {
+			if ( ! file_exists( $path ) ) {
+				continue;
+			}
+
+			$perms     = fileperms( $path );
+			$octal     = substr( sprintf( '%o', $perms ), -4 );
+			$is_config = ( 'wp-config.php' === basename( $path ) );
+
+			if ( $is_config ) {
+				if ( ! in_array( $octal, self::SAFE_WP_CONFIG_PERMS, true ) ) {
+					$issues[] = array(
+						'path'        => $this->relative_path( $path ),
+						'current'     => $octal,
+						'recommended' => '0440 or 0640',
+						'severity'    => self::STATUS_CRITICAL,
+					);
+				}
+				continue;
+			}
+
+			// World-writable bit (0002) catches 0666, 0777, 0775, etc. — not
+			// just the literal 0777 a naive check would flag.
+			if ( $perms & 0002 ) {
+				$issues[] = array(
+					'path'        => $this->relative_path( $path ),
+					'current'     => $octal,
+					'recommended' => is_dir( $path ) ? '0755' : '0644',
+					'severity'    => self::STATUS_WARNING,
+				);
+			}
+		}
+
+		if ( ! empty( $issues ) ) {
+			$has_critical = false;
+			foreach ( $issues as $issue ) {
+				if ( self::STATUS_CRITICAL === $issue['severity'] ) {
+					$has_critical = true;
+					break;
+				}
+			}
+
+			return $this->build_result(
+				'file_permissions',
+				$label,
+				$has_critical ? self::STATUS_CRITICAL : self::STATUS_WARNING,
+				__( 'One or more files have insecure permissions.', 'tailwatch' ),
+				array( 'issues' => $issues )
+			);
+		}
+
+		return $this->build_result(
+			'file_permissions',
+			$label,
+			self::STATUS_SECURE,
+			__( 'File permissions look good.', 'tailwatch' )
 		);
 	}
 

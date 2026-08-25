@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { FiSend } from 'react-icons/fi';
 import Table from '../../../Components/Table/Table.jsx';
-import { EmailModal, ErrorModal } from "../EmailModal/EmailModal.jsx";
+import { EmailModal, ErrorModal, SendTestEmailModal } from "../EmailModal/EmailModal.jsx";
 import TableRows from '../TableRows/TableRows.jsx';
 import { useLogsActivity } from '../../../Components/Hooks/useLogsActivity/useLogsActivity.jsx';
 import LoaderSkeleton from '../../../Components/Skeleton/LoaderSkeleton';
@@ -54,6 +55,7 @@ const EmailLogs = () => {
     clearFilters
   } = useLogsActivity(activeTab, key, option);
   const isTabDisabled = parentEnable === false;
+  const [isTestEmailModalOpen, setIsTestEmailModalOpen] = useState(false);
 
   const columns = [
     <CheckboxField checked={allSelected} onChange={handleSelectAll} disabled={tabData.length === 0 || isTabDisabled} />,
@@ -109,6 +111,16 @@ const EmailLogs = () => {
         <LoaderSkeleton count="0" />
       ) : (
         <>
+          <div className="flex justify-end mb-3">
+            <button
+              type="button"
+              onClick={() => setIsTestEmailModalOpen(true)}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-white rounded bg-[#007980] hover:bg-opacity-80 transition-all"
+            >
+              <FiSend className="w-4 h-4" />
+              Send Test Email
+            </button>
+          </div>
 
           <TableControlStrip
             showControls={true}
@@ -188,6 +200,12 @@ const EmailLogs = () => {
         <EmailModal
           handleModalClose={handleModalClose}
           currentDetail={currentDetail}
+        />
+      )}
+
+      {isTestEmailModalOpen && (
+        <SendTestEmailModal
+          handleModalClose={() => setIsTestEmailModalOpen(false)}
         />
       )}
     </div>

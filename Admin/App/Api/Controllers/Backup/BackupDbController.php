@@ -8,6 +8,7 @@ use Tailwatch\Admin\App\Api\Controllers\Hooks\HookControllers;
 use Tailwatch\Admin\App\Api\Services\ProcessManager;
 use Tailwatch\Admin\App\Api\Services\Common\SecureDirectoryService;
 use Tailwatch\Admin\App\Api\Logging\Log;
+use Tailwatch\Admin\App\Api\Controllers\LimitIncrease\PerformanceOptimizerController;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -120,6 +121,10 @@ class BackupDbController {
 
 	public function tailwatch_create_db_backup() {
 		try {
+			// Raise memory/time before dumping — large BLOB chunks are an OOM/timeout
+			// source on small hosts. Runtime-only, idempotent, never lowers.
+			( new PerformanceOptimizerController() )->tailwatch_boost_for_scanning();
+
 			$feature_controller = new DBModel();
 			$tailwatch_key           = 'default_backup_scan';
 			$option             = 'scan_backp';

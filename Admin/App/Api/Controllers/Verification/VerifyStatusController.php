@@ -628,6 +628,8 @@ class VerifyStatusController {
 			}
 			$delete_key = $data;
 
+			$db_model = new DBModel();
+
 			// Remove stale verification metadata that would otherwise leak
 			// the last-known plan/user info even after the license is gone.
 			delete_option( 'tailwatch_last_license_check' );
@@ -663,6 +665,13 @@ class VerifyStatusController {
 						// for any other unrelated keys this method might delete.
 						if ( 'extended_connected' === $delete_key ) {
 							do_action( 'tailwatch_license_disconnected', true );
+
+							// Sever the Connect session on disconnect: drop the pairing
+							// (CTA) keys so the mobile app / cloud can no longer
+							// re-authenticate, and revoke every outstanding JWT so
+							// existing access/refresh tokens stop validating.
+							$db_model->tailwatch_delete_all_cta_keys();
+							$db_model->tailwatch_revoke_all_tokens();
 
 							try {
 								( new SecurityFeaturesVerifyController() )->tailwatch_start_security_features_process();
@@ -863,7 +872,7 @@ class VerifyStatusController {
 
 		if ( $force_refresh ) {
 			delete_transient( self::VERIFY_CACHE_KEY );
-			return $this->run_verify_and_cache();
+			return $this->run_verify_and_cache( $post_data );
 		}
 
 		$cached = get_transient( self::VERIFY_CACHE_KEY );
@@ -873,8 +882,8 @@ class VerifyStatusController {
 		return $this->run_verify_and_cache();
 	}
 
-	private function run_verify_and_cache() {
-		$result = $this->run_verify_internal();
+	private function run_verify_and_cache( $post_data = false ) {
+		$result = $this->run_verify_internal( $post_data );
 
 		// Cache only settled states. Network failures and the no-license
 		// fast-path re-check every call — transient retries are cheap and
@@ -889,7 +898,7 @@ class VerifyStatusController {
 		return $result;
 	}
 
-	private function run_verify_internal() {
+	private function run_verify_internal( $post_data = false ) {
 		try {
 			// Compute before any early return so pro_plugin_active is
 			// always accurate regardless of license state.
@@ -921,7 +930,7 @@ class VerifyStatusController {
 
 			// When pro is active it owns the entire verification via this
 			// filter — independent API call, never trusts stored DB data.
-			$pro_result = apply_filters( 'tailwatch_perform_license_verification', null, $user_id, $get_extended_data );
+			$pro_result = apply_filters( 'tailwatch_perform_license_verification', null, $user_id, $get_extended_data, $post_data );
 			if ( null !== $pro_result ) {
 				return $pro_result;
 			}

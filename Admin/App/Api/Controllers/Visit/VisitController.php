@@ -119,6 +119,7 @@ class VisitController {
 				'db_initialize'        => $get_data['db_initialize']['is_completed'],
 				'recommended_features' => $get_data['recommended_features']['is_completed'],
 				'features_implemented' => $get_data['features_implemented']['is_completed'],
+				'setup_started'        => (bool) get_option( 'tailwatch_setup_started', false ),
 			);
 
 			$steps = array(
@@ -469,6 +470,27 @@ class VisitController {
 		}
 
 		return $this->tailwatch_get_db_initialize_progress();
+	}
+
+	/**
+	 * Persist the admin's explicit consent to begin setup.
+	 *
+	 * Called once when the admin clicks "Start Setup" on the visit screen, before any
+	 * compatibility check or database work runs. Recording the consent server-side lets a
+	 * page refresh resume the in-progress wizard instead of re-showing the consent screen,
+	 * while a fresh install (flag absent) still shows it — nothing runs without this click.
+	 * The wp-admin AJAX entry point already enforces a nonce and the manage_options
+	 * capability, so no per-request input is accepted or needed here.
+	 *
+	 * @return array Result payload.
+	 */
+	public function tailwatch_mark_setup_started() {
+		update_option( 'tailwatch_setup_started', true, false );
+
+		return array(
+			'code'    => 200,
+			'message' => __( 'Setup started.', 'tailwatch' ),
+		);
 	}
 
 	/**

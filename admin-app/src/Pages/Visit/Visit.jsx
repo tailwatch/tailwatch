@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { FaCheckCircle, FaSpinner, FaTimesCircle, FaRocket } from "react-icons/fa";
 import { useVerifyVisitStatus } from '../../Components/Hooks/VerifyVisitStatus/VerifyVisitStatus';
-import { verifyVisitStatus, checkPhpVersion, checkWpVersion, checkCronStatus, check_tailwatch_table } from "./VisitServices/VisitServices";
+import { verifyVisitStatus, checkPhpVersion, checkWpVersion, checkCronStatus, check_tailwatch_table, markSetupStarted } from "./VisitServices/VisitServices";
 import VisitModal from "./VisitModal/VisitModal";
 import VisitSteps from "./VisitSteps/VisitSteps";
 import { CronHealer } from "../../Components/CroneHealer/CronHealer";
@@ -15,7 +15,7 @@ const Visit = () => {
   const [currentStep, setCurrentStep] = useState(0);
   const [progressValue, setProgressValue] = useState(0);
   const [hasStarted, setHasStarted] = useState(false);
-  const { visitStep, visitCompleted, setVisitStep, isVerifyLoading, visitData } = useVerifyVisitStatus(navigate);
+  const { visitStep, visitCompleted, setVisitStep, isVerifyLoading, visitData, setupStarted } = useVerifyVisitStatus(navigate);
   const [isVisitCompleted, setVisitCompleted] = useState(false);
   const [visibleMessages, setVisibleMessages] = useState([]);
   const [stepMessages, setStepMessages] = useState([
@@ -211,6 +211,16 @@ const Visit = () => {
   }, [visitStep, visitData]);
 
   useEffect(() => {
+    // Resume across refresh: consent is persisted server-side (tailwatch_setup_started),
+    // so once the admin has clicked "Start Setup" the wizard continues from the current
+    // step instead of showing the consent screen again. A fresh install has the flag
+    // unset, so the consent screen still gates the very first run.
+    if (setupStarted) {
+      setHasStarted(true);
+    }
+  }, [setupStarted]);
+
+  useEffect(() => {
     const performSteps = async () => {
       // Consent gate: setup (compatibility checks and database preparation)
       // only runs after the user explicitly clicks "Start Setup".
@@ -277,7 +287,10 @@ const Visit = () => {
                 <p className="text-gray-500 mb-8">Nothing runs until you choose to begin.</p>
                 <div className="flex items-center justify-center gap-4">
                   <button
-                    onClick={() => setHasStarted(true)}
+                    onClick={() => {
+                      markSetupStarted();
+                      setHasStarted(true);
+                    }}
                     className="px-8 py-3.5 bg-[#007980] text-white rounded-xl hover:bg-opacity-90 transition-colors font-semibold text-lg shadow-lg"
                   >
                     Start Setup

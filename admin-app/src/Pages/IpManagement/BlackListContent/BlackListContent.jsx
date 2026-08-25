@@ -8,8 +8,9 @@ import Pagination from '../../../Components/Pagination/Pagination';
 import { useBlackList } from '../../../Components/Hooks/useIpManagement/useBlackList';
 import { useNavigate } from 'react-router-dom';
 import InfoBar from '../../../Components/InfoBar/InfoBar';
+import GeoLicenseNotice from '../../../Components/InfoBar/GeoLicenseNotice';
 
-const BlackListContent = ({inActive, refreshTrigger, widget = false, limit = 10 }) => {    
+const BlackListContent = ({inActive, refreshTrigger, widget = false, limit = 10, isGeoLicense }) => {    
     const navigate = useNavigate();
     const { selectedItems, handleDeletAll, handleBulkDelete, featureEnable, parentEnable, isDeleting, searchTerm, setSearchTerm, filteredData, handleAddToBlacklist, loading, columns, renderRow, pagination, handlePageChange, blackListData, showModal, handleCloseModal, getBlackListIpRanges, editingIpData, handlePageSizeChange, ipManagement, checkBlackListStatus, isLicenseConnect } = useBlackList(limit, widget);
     
@@ -37,7 +38,9 @@ const BlackListContent = ({inActive, refreshTrigger, widget = false, limit = 10 
                     {(featureEnable === false || parentEnable === false || inActive) && (
                         <InfoBar type="info" message={isLicenseConnect ? "License not connected. Please connect your license to use this feature." : "Please Configure your Settings First"} />
                     )}
-                    
+
+                    <GeoLicenseNotice isGeoLicense={isGeoLicense} />
+
                     {widget && (
                         <ActionButton defaultText="Add to BlackList" isDisabled={featureEnable === false || inActive || parentEnable === false} onClick={handleAddToBlacklist} />
                     )}
