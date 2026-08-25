@@ -285,9 +285,20 @@ class IpAccessService {
 			return false;
 		}
 
-		// Whitelisted IP = trusted: do not count failed attempts against it.
-		if ( $this->whitelist->is_ip_whitelisted( $ip ) ) {
-			return false;
+		// Whitelisted IP or country = trusted: do not count failed attempts against it.
+		// Mirrors check_access — a fully trusted entry bypasses brute-force tracking too,
+		// not just the IP-scoped block checks — and, like check_access, this exemption
+		// applies only while the whitelist feature is enabled, so stale rows left behind
+		// after it is turned off are ignored.
+		$ip_managment_settings = $this->tailwatch_ip_managment_settings();
+		if ( ! empty( $ip_managment_settings['whitelist_feature'] ) ) {
+			if ( $this->whitelist->is_ip_whitelisted( $ip ) ) {
+				return false;
+			}
+			$country = $this->geoip->get_country( $ip );
+			if ( $country && 'Unknown' !== $country && $this->whitelist->is_country_whitelisted( $country ) ) {
+				return false;
+			}
 		}
 
 		unset( self::$access_cache[ $ip ] );

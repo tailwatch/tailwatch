@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import PopUpModal from '../../../Components/Modal/PopUpModal';
 import { FiMail } from 'react-icons/fi';
 import { XCircle, CheckCircle } from 'lucide-react';
 import DOMPurify from 'dompurify';
+import { toast } from 'react-toastify';
+import { sendTestEmail } from '../LogsServices/LogsServices';
 
 export const EmailModal = ({ handleModalClose, currentDetail }) => {
   const formatDate = (dateString) => {
@@ -73,6 +75,73 @@ export const EmailModal = ({ handleModalClose, currentDetail }) => {
   return (
     <PopUpModal title="View Email"  onClose={handleModalClose} width="w-full max-w-4xl" height="max-h-[90vh]" showExpandIcon={true} showCloseIcon={true} cancelButtonText="Close" >
       {emailContent}
+    </PopUpModal>
+  );
+};
+
+export const SendTestEmailModal = ({ handleModalClose }) => {
+  const [email, setEmail] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+
+  const handleSend = async () => {
+    const address = email.trim();
+    if (!isValidEmail(address)) {
+      toast.error('Please enter a valid email address.');
+      return;
+    }
+    setSending(true);
+    try {
+      const result = await sendTestEmail(address);
+      if (result && result.code === 200) {
+        toast.success(result.message || 'Test email sent successfully.');
+        handleModalClose();
+      } else {
+        toast.error((result && result.message) || 'Failed to send test email.');
+      }
+    } catch (error) {
+      toast.error('Network error while sending the test email.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <PopUpModal
+      title="Send Test Email"
+      onClose={handleModalClose}
+      onSave={handleSend}
+      saveButtonText="Send Test Email"
+      cancelButtonText="Cancel"
+      isLoading={sending}
+      disabled={email.trim() === '' || sending}
+      width="w-full max-w-lg"
+      height="max-h-[60vh]"
+      showCloseIcon={true}
+    >
+      <div className="space-y-3">
+        <div className="flex items-center">
+          <div className="bg-[#07C07E1A] rounded-full p-3">
+            <FiMail className="w-6 h-6 text-[#007980]" />
+          </div>
+          <p className="ml-4 text-sm text-gray-600">
+            Send a test email using your current SMTP settings to confirm that email delivery is working.
+          </p>
+        </div>
+        <label htmlFor="tailwatch-test-email" className="block text-sm font-medium text-gray-800">
+          Recipient email address
+        </label>
+        <input
+          id="tailwatch-test-email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleSend(); }}
+          placeholder="you@example.com"
+          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#007980]"
+        />
+      </div>
     </PopUpModal>
   );
 };

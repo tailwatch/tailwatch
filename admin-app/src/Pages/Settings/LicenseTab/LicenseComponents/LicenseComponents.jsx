@@ -301,6 +301,7 @@ const ConnectedDevices = ({ devices = [] }) => {
 };
 
 export const NoLicenseView = ({ handleConnectClick, connecting }) => {
+  const privacyPolicyUrl = window.tailwatch_ajax?.urls?.privacy;
   return (
     <div className="space-y-4 sm:space-y-6 lg:space-y-8">
       {/* License Status Banner */}
@@ -318,6 +319,11 @@ export const NoLicenseView = ({ handleConnectClick, connecting }) => {
 
           <ActionButton defaultText="Connect to Tailwatch" onClick={handleConnectClick} isDisabled={connecting} className="rounded-md shadow hover:bg-[#007980] transition-colors duration-200 font-medium text-sm sm:text-base w-full md:w-auto" />
         </div>
+
+        <p className="text-xs text-gray-500 mt-3 sm:mt-4">
+          Connecting links this site to your Tailwatch account and sends your site URL, environment type, and a WordPress recovery credential to dashboard.wptailwatch.com so the dashboard can help restore access if your site later becomes unreachable. See our{' '}
+          <a href="https://wptailwatch.com/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-700">Privacy Policy</a>.
+        </p>
       </div>
 
       {/* License Benefits */}

@@ -358,15 +358,24 @@ class FilesPermissionController {
 				}
 			);
 
-			// Remove DNS prefetch for emoji CDN
+			// Remove the DNS-prefetch resource hint for emoji assets. The hint is matched
+			// by its path segment rather than a hard-coded remote URL, so no external
+			// asset reference is shipped in the plugin.
 			add_filter(
 				'wp_resource_hints',
 				function ( $urls, $relation_type ) {
-					if ( 'dns-prefetch' === $relation_type ) {
-						$emoji_svg_url = apply_filters( 'emoji_svg_url', 'https://s.w.org/images/core/emoji/' ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WP core filter; not ours to prefix.
-						$urls          = array_diff( $urls, array( $emoji_svg_url ) );
+					if ( 'dns-prefetch' !== $relation_type ) {
+						return $urls;
 					}
-					return $urls;
+					return array_values(
+						array_filter(
+							$urls,
+							function ( $url ) {
+								$href = is_array( $url ) && isset( $url['href'] ) ? $url['href'] : ( is_string( $url ) ? $url : '' );
+								return false === strpos( $href, 'emoji' );
+							}
+						)
+					);
 				},
 				10,
 				2

@@ -14,6 +14,7 @@ use Tailwatch\Admin\App\Api\Models\DBModel;
 use Tailwatch\Admin\App\Api\Models\HardeningAuditModel;
 use Tailwatch\Admin\App\Api\Services\ProcessGuard;
 use Tailwatch\Admin\App\Api\Services\ProcessManager;
+use Tailwatch\Admin\App\Api\Controllers\LimitIncrease\PerformanceOptimizerController;
 
 /**
  * Hardening Audit lifecycle controller — schedules, chunked worker,
@@ -1252,6 +1253,11 @@ class HardeningAuditController {
 		if ( in_array( $cancel_pause['scan_state'], array( 'pause', 'cancel', 'completed' ), true ) ) {
 			return;
 		}
+
+		// Raise PHP limits before the chunked worker runs — mirrors Backup and File
+		// Integrity so a large site's audit doesn't hit host default limits. Runtime-only,
+		// idempotent; gated past the bail-outs above.
+		( new PerformanceOptimizerController() )->tailwatch_boost_for_scanning();
 
 		$process_id = isset( $cancel_pause['process_id'] ) ? $cancel_pause['process_id'] : null;
 		if ( $process_id ) {

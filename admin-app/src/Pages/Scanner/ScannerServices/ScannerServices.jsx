@@ -792,3 +792,96 @@ export const viewInfectedContent = async (pid, file_path) => {
   }
 };
 
+export const fetchUnresolvedMalware = async () => {
+  try {
+    const formData = new FormData();
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_get_unresolved_malware_files");
+    formData.append("nonce", tailwatch_ajax.nonce);
+
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+
+    if (response.data?.data?.code === 200) {
+      return response.data.data.data; // { files, count, guidance }
+    }
+    return { files: [], count: 0, guidance: "" };
+  } catch (error) {
+    return { files: [], count: 0, guidance: "" };
+  }
+};
+
+export const retryMalwareFileRemoval = async (path) => {
+  try {
+    const formData = new FormData();
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_retry_malware_file_removal");
+    formData.append("data", JSON.stringify({ path }));
+    formData.append("nonce", tailwatch_ajax.nonce);
+
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data?.data || { code: 500, message: "Request failed." };
+  } catch (error) {
+    return { code: 500, message: "Request failed." };
+  }
+};
+
+export const markMalwareFileReviewed = async (path) => {
+  try {
+    const formData = new FormData();
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_mark_malware_file_reviewed");
+    formData.append("data", JSON.stringify({ path }));
+    formData.append("nonce", tailwatch_ajax.nonce);
+
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data?.data || { code: 500, message: "Request failed." };
+  } catch (error) {
+    return { code: 500, message: "Request failed." };
+  }
+};
+
+export const fetchMalwareStatusNotice = async () => {
+  try {
+    const formData = new FormData();
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_get_malware_status_notice");
+    formData.append("nonce", tailwatch_ajax.nonce);
+
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    if (response.data?.data?.code === 200) {
+      return response.data.data.data; // { state, severity, title, message, actions, pid }
+    }
+    return { state: "none" };
+  } catch (error) {
+    return { state: "none" };
+  }
+};
+
+
+// One call for the malware page's read surfaces. Pass the parts you need
+// (e.g. ["status_notice","unresolved","scan_start"]); only those are returned.
+// Non-fatal: returns {} on failure so each component falls back on its own.
+export const fetchMalwareBundle = async (parts = []) => {
+  try {
+    const formData = new FormData();
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_get_malware_bundle");
+    formData.append("nonce", tailwatch_ajax.nonce);
+    formData.append("data", JSON.stringify({ parts }));
+    const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    if (response.data?.success) return response.data.data?.data || {};
+  } catch (error) {
+    // ignore — callers fall back to their own hardcoded/empty state
+  }
+  return {};
+};

@@ -5,6 +5,7 @@ import { addToBlackList, addIpToWhiteList } from '../../../Pages/IpManagement/Ip
 import { alertService } from '../../AlertService/AlertService';
 import { CheckboxField } from '../../Fields/CheckboxField';
 import { useBruteForceFeature } from '../Features/UseFeatures';
+import { getGeoLiteConnection } from '../../../Pages/IpManagement/IpManagementServices/IpManagementServices';
 export const useBruteForce = (initialLimit = 10, widget) => {
     const { bruteForceRule, refreshBruteForceStatus } = useBruteForceFeature()
     const [selectedItems, setSelectedItems] = useState([]);
@@ -17,6 +18,7 @@ export const useBruteForce = (initialLimit = 10, widget) => {
     const [featureEnable, setFeatureEnable] = useState(null);
     const [parentEnable, setParentEnable] = useState(null);
     const [isLicenseConnect, setIsLicenseConnect] = useState(null);
+    const [isGeoLicense, setGeoLicense] = useState(null);
     const isChecking = useRef(false);
     const getIpDetailsData = async (page = pagination.page, limit = pagination.limit) => {
         await getIpDetails({
@@ -28,6 +30,7 @@ export const useBruteForce = (initialLimit = 10, widget) => {
     };
     useEffect(() => {
         getIpDetailsData();
+        (async () => { setGeoLicense(await getGeoLiteConnection()); })();
     }, []);
 
     const handlePageChange = (newPage) => {
@@ -146,6 +149,6 @@ export const useBruteForce = (initialLimit = 10, widget) => {
     };
 
     return {
-        searchTerm, bruteForceRule, refreshBruteForceStatus, checkBruteForceStatus, featureEnable, parentEnable, setParentEnable, setSearchTerm, isLoading, columns, filteredData, handlePageSizeChange, renderRow, pagination, handlePageChange, ipDetailsData, handleDeletAll, selectedItems, handleBulkDelete, isDeleting, handleUnblockIpAddress, handleAddToBlackList, handleAddToWhitelist, isLicenseConnect, setIsLicenseConnect
+        searchTerm, bruteForceRule, refreshBruteForceStatus, checkBruteForceStatus, featureEnable, parentEnable, setParentEnable, setSearchTerm, isLoading, columns, filteredData, handlePageSizeChange, renderRow, pagination, handlePageChange, ipDetailsData, handleDeletAll, selectedItems, handleBulkDelete, isDeleting, handleUnblockIpAddress, handleAddToBlackList, handleAddToWhitelist, isLicenseConnect, setIsLicenseConnect, isGeoLicense
     }
 }

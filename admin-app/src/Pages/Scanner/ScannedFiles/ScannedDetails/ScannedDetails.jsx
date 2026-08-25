@@ -9,8 +9,10 @@ import { Spinner } from '../../../../Components/Spinner/Spinner';
 import Table from '../../../../Components/Table/Table';
 import PopUpModal from '../../../../Components/Modal/PopUpModal';
 import { useNavigate } from 'react-router-dom';
-import { viewInfectedContent } from '../../ScannerServices/ScannerServices.jsx';
+import { viewInfectedContent, retryMalwareFileRemoval, markMalwareFileReviewed } from '../../ScannerServices/ScannerServices.jsx';
 import { Tooltip } from '../../../../Components/ToolTip/Tooltip';
+import { toast } from 'react-toastify';
+import { useSelector } from 'react-redux';
 /* global tailwatch_ajax */
 
 const ScannedDetails = () => {
@@ -25,7 +27,10 @@ const ScannedDetails = () => {
   const [loadingContent, setLoadingContent] = useState(false);
   const [isRestore, setIsRestore] = useState(null);
   const [isRestoreMessage, setIsRestoreMessage] = useState(null);
+  const [actionBusyPath, setActionBusyPath] = useState(null);
   const navigate = useNavigate();
+  // Lock file actions while a scan/restore is running (report is being written).
+  const isMalwareStarted = useSelector((state) => state.scan.malwareStarted);
   // Function to extract ID from the URL slug
   const extractIdFromSlug = () => {
     const hash = window.location.hash;
@@ -36,47 +41,95 @@ const ScannedDetails = () => {
   // Extract the ID using the custom function
   const pid = paramId || extractIdFromSlug();
 
-  useEffect(() => {
-    const fetchMalwareDetail = async () => {
-      setLoading(true);
-      try {
-        const formData = new FormData();
-        formData.append('action', 'tailwatch_global_ajax_handler');
-        formData.append('action_type', 'tailwatch_get_malware_scanner_report_by_pid');
-        formData.append('data', JSON.stringify({ pid }));
-        formData.append('nonce', tailwatch_ajax.nonce);
+  const fetchMalwareDetail = async (showLoader = true) => {
+    if (showLoader) setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('action', 'tailwatch_global_ajax_handler');
+      formData.append('action_type', 'tailwatch_get_malware_scanner_report_by_pid');
+      formData.append('data', JSON.stringify({ pid }));
+      formData.append('nonce', tailwatch_ajax.nonce);
 
-        const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          }
-        });
-        
-        if (response.data.success) {
-          setScannedData(response.data.data.data);
-          setIsRestore(response?.data?.data?.can_restore)
-          setIsRestoreMessage(response?.data?.data?.restore_reason);
-        } else {
-          setError('Failed to fetch log data');
+      const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
         }
-      } catch (error) {
-        setError('Error fetching log data');
-      }
-      setLoading(false);
-    };
+      });
 
+      if (response.data.success) {
+        setScannedData(response.data.data.data);
+        setIsRestore(response?.data?.data?.can_restore)
+        setIsRestoreMessage(response?.data?.data?.restore_reason);
+      } else {
+        setError('Failed to fetch log data');
+      }
+    } catch (error) {
+      setError('Error fetching log data');
+    }
+    if (showLoader) setLoading(false);
+  };
+
+  useEffect(() => {
     if (pid) {
       fetchMalwareDetail();
     } else {
       setError('Invalid Scanned ID');
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pid]);
+
+  // Delete a file the restore could not remove (confirmed malware still on
+  // disk). Same endpoint + guards as the scanner-page strip.
+  const handleDeleteFile = async (path) => {
+    if (isMalwareStarted) return;
+    const confirmed = await alertService.confirm(
+      (scannedData?.confirms?.delete_file?.body || `This will permanently delete "{path}" from your website. This cannot be undone (the pre-scan backup still holds a copy).`).replace("{path}", path),
+      scannedData?.confirms?.delete_file?.title || "Delete this file?",
+      "Delete file",
+      "Cancel"
+    );
+    if (!confirmed) return;
+    setActionBusyPath(path);
+    const result = await retryMalwareFileRemoval(path);
+    setActionBusyPath(null);
+    if (result?.code === 200) {
+      toast.success(result.message || "File deleted successfully.");
+      fetchMalwareDetail(false);
+    } else if (result?.detail) {
+      // Long "how to fix" guidance goes in a popup, not a cramped toast.
+      alertService.warning(result.detail, result.title || "Removal failed", "Got it");
+    } else {
+      toast.error(result?.message || "Delete failed.");
+    }
+  };
+
+  // Dismiss a "needs review" file the user has inspected (possible false
+  // positive). Offered only for manual_review, never for confirmed malware.
+  const handleIgnoreFile = async (path) => {
+    if (isMalwareStarted) return;
+    const confirmed = await alertService.confirm(
+      (scannedData?.confirms?.ignore_file?.body || `Only ignore "{path}" if you inspected it yourself and are sure it is safe (a false positive). The file stays on your website and will reappear in scan results if its content changes.`).replace("{path}", path),
+      scannedData?.confirms?.ignore_file?.title || "Ignore this file?",
+      "Ignore",
+      "Cancel"
+    );
+    if (!confirmed) return;
+    setActionBusyPath(path);
+    const result = await markMalwareFileReviewed(path);
+    setActionBusyPath(null);
+    if (result?.code === 200) {
+      toast.success(result.message || "File ignored.");
+      fetchMalwareDetail(false);
+    } else {
+      toast.error(result?.message || "Could not ignore the file.");
+    }
+  };
 
   const startMalwareRestore = async (pid) => {
     const isConfirmed = await alertService.verify(
-      "This process may take some time depending on the number of files being deployed. During deployment, your website’s landing page may temporarily enter maintenance mode (though this usually does not occur). Once the process has started, it cannot be undone.",
-      "Deploy the files ?",
+      scannedData?.confirms?.deploy_files?.body || "This process may take some time depending on the number of files being deployed. During deployment, your website’s landing page may temporarily enter maintenance mode (though this usually does not occur). Once the process has started, it cannot be undone.",
+      scannedData?.confirms?.deploy_files?.title || "Deploy the files ?",
       "Yess",
       "Cancel"
     );
@@ -105,18 +158,31 @@ const ScannedDetails = () => {
     }
   };
 
-  const getFileStatusBadge = (status) => {
+  // Deploy-aware per-file badge. Before deploy, the scanner's cleaned copy has
+  // NOT been applied — every detected file is still live, so it reads "Infected"
+  // (matching the aggregate scan status), whatever the node's plan for it was
+  // (removed/cleaned/uncleanable). After deploy, show the real purge outcome.
+  const getFileStatusBadge = (status, restored) => {
+    const infected = { label: 'Infected', bg: 'bg-red-100', text: 'text-red-800', pathColor: 'text-red-600' };
+    const ignored  = { label: 'Ignored', bg: 'bg-blue-100', text: 'text-blue-800', pathColor: 'text-blue-600' };
+
+    if (!restored) {
+      // Pre-deploy: only a user-dismissed file differs from the threat state.
+      return status === 'reviewed' ? ignored : infected;
+    }
+
     switch (status) {
       case 'cleaned':
         return { label: 'Cleaned', bg: 'bg-green-100', text: 'text-green-800', pathColor: 'text-green-600' };
-      case 'infected':
-        return { label: 'Infected', bg: 'bg-red-100', text: 'text-red-800', pathColor: 'text-red-600' };
       case 'manual_review':
-        return { label: 'Manual review needed', bg: 'bg-orange-100', text: 'text-orange-800', pathColor: 'text-orange-600' };
+        return { label: 'Needs review', bg: 'bg-orange-100', text: 'text-orange-800', pathColor: 'text-orange-600' };
       case 'delete_failed':
         return { label: 'Removal failed', bg: 'bg-red-100', text: 'text-red-800', pathColor: 'text-red-600' };
+      case 'reviewed':
+        return ignored;
       default:
-        return { label: 'Unknown', bg: 'bg-gray-100', text: 'text-gray-800', pathColor: 'text-gray-600' };
+        // Anything still flagged after deploy is a threat, never "Unknown".
+        return infected;
     }
   };
 
@@ -247,8 +313,14 @@ const ScannedDetails = () => {
                   {rowData.malwareFiles.map((maliciousFile, idx) => {
                     const isObject = typeof maliciousFile === 'object' && maliciousFile !== null;
                     const path = isObject ? maliciousFile.path : maliciousFile;
-                    const status = isObject ? maliciousFile.status : 'unknown';
-                    const badge = getFileStatusBadge(status);
+                    const status = isObject ? maliciousFile.status : 'infected';
+                    const badge = getFileStatusBadge(status, scannedData?.last_restore_action);
+                    // Actionable = still on disk after restore. Delete for both;
+                    // Ignore only for possible false positives (manual_review),
+                    // never for confirmed malware (delete_failed).
+                    const isUnresolved = status === 'manual_review' || status === 'delete_failed';
+                    const canIgnore = status === 'manual_review';
+                    const isBusy = actionBusyPath === path;
                     return (
                       <tr key={idx} className="hover:bg-red-50 transition-colors">
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-medium">
@@ -266,12 +338,42 @@ const ScannedDetails = () => {
                           </span>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-center text-sm">
-                          <button
-                            className="text-gray-600 hover:text-gray-800 transition-colors"
-                            onClick={() => handleViewClick(path)}
-                          >
-                            <FaEye className="inline-block text-lg" />
-                          </button>
+                          <div className="flex items-center justify-center gap-2">
+                            <Tooltip message="View file content">
+                              <button
+                                className="text-gray-600 hover:text-gray-800 transition-colors"
+                                onClick={() => handleViewClick(path)}
+                              >
+                                <FaEye className="inline-block text-lg" />
+                              </button>
+                            </Tooltip>
+                            {isUnresolved && (
+                              isBusy ? (
+                                <span className="text-xs text-gray-500">Working…</span>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => handleDeleteFile(path)}
+                                    disabled={isMalwareStarted}
+                                    title={isMalwareStarted ? "Paused while a scan is running" : undefined}
+                                    className="rounded bg-red-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    Delete file
+                                  </button>
+                                  {canIgnore && (
+                                    <button
+                                      onClick={() => handleIgnoreFile(path)}
+                                      disabled={isMalwareStarted}
+                                      title={isMalwareStarted ? "Paused while a scan is running" : undefined}
+                                      className="rounded border border-orange-300 bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-700 hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      Ignore
+                                    </button>
+                                  )}
+                                </>
+                              )
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -366,9 +468,23 @@ const ScannedDetails = () => {
                       <path fillRule="evenodd" d="M8.485 2.495a1.75 1.75 0 013.03 0l6.28 10.875A1.75 1.75 0 0116.28 16H3.72a1.75 1.75 0 01-1.515-2.63l6.28-10.875zM10 7a.75.75 0 00-.75.75v3.5a.75.75 0 001.5 0v-3.5A.75.75 0 0010 7zm0 6.5a1 1 0 100 2 1 1 0 000-2z" clipRule="evenodd" />
                     </svg>
                     <div>
-                      <h3 className="text-sm font-semibold text-orange-900 mb-1">Manual Action Required</h3>
+                      <h3 className="text-sm font-semibold text-orange-900 mb-1">{scannedData?.manual_action?.title || "Manual Action Required"}</h3>
                       <p className="text-sm text-orange-800">
-                        Some files could not be cleaned automatically. Review the files flagged below — for files in protected locations, reinstall the plugin or contact support; for files marked “Removal failed,” fix the file permissions and try again.
+                        {scannedData?.manual_action?.body || "Some files could not be cleaned automatically. Review the files flagged below — for files in protected locations, reinstall the plugin or contact support; for files marked “Removal failed,” fix the file permissions and try again."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : scannedData?.website_restore === true ? (
+                <div className="mb-4 bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 text-green-600 mt-0.5 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <div>
+                      <h3 className="text-sm font-semibold text-green-900 mb-1">{scannedData?.cleanup_done?.title || "Malware Cleanup Completed"}</h3>
+                      <p className="text-sm text-green-800">
+                        {scannedData?.cleanup_done?.body || "All malicious content has been removed, and the cleaned files have been deployed successfully."}
                       </p>
                     </div>
                   </div>
@@ -380,9 +496,23 @@ const ScannedDetails = () => {
                       <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                     </svg>
                     <div>
-                      <h3 className="text-sm font-semibold text-blue-900 mb-1">Files Ready to Deploy</h3>
+                      <h3 className="text-sm font-semibold text-blue-900 mb-1">{scannedData?.deploy_ready?.title || "Files Ready to Deploy"}</h3>
                       <p className="text-sm text-blue-800">
-                        The malicious content has been removed, but the cleaned files have not yet been applied to your system. Click “Deploy Files” to apply the changes. This action will expire upon a new scan.
+                        {scannedData?.deploy_ready?.body || "The malicious content has been removed, but the cleaned files have not yet been applied to your system. Click “Deploy Files” to apply the changes. This action will expire upon a new scan."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : scannedData?.malware_found ? (
+                <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 text-red-600 mt-0.5 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M8.485 2.495a1.75 1.75 0 013.03 0l6.28 10.875A1.75 1.75 0 0116.28 16H3.72a1.75 1.75 0 01-1.515-2.63l6.28-10.875zM10 7a.75.75 0 00-.75.75v3.5a.75.75 0 001.5 0v-3.5A.75.75 0 0010 7zm0 6.5a1 1 0 100 2 1 1 0 000-2z" clipRule="evenodd" />
+                    </svg>
+                    <div>
+                      <h3 className="text-sm font-semibold text-red-900 mb-1">{scannedData?.cleanup_expired?.title || "Cleanup expired"}</h3>
+                      <p className="text-sm text-red-800">
+                        {scannedData?.cleanup_expired?.body || "This scan detected malware and prepared cleaned files, but they are no longer available to deploy. Your site may still be infected — run a new scan with auto-clean to remove the threats."}
                       </p>
                     </div>
                   </div>
@@ -394,9 +524,9 @@ const ScannedDetails = () => {
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
                     <div>
-                      <h3 className="text-sm font-semibold text-green-900 mb-1">Malware Cleanup Completed</h3>
+                      <h3 className="text-sm font-semibold text-green-900 mb-1">{scannedData?.cleanup_done?.title || "Malware Cleanup Completed"}</h3>
                       <p className="text-sm text-green-800">
-                        All malicious content has been removed, and the cleaned files have been deployed successfully.
+                        {scannedData?.cleanup_done?.body || "All malicious content has been removed, and the cleaned files have been deployed successfully."}
                       </p>
                     </div>
                   </div>
@@ -486,9 +616,9 @@ const ScannedDetails = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
                   <div className="flex-1">
-                    <p className="text-sm font-semibold text-green-900">✓ Malware Removed</p>
+                    <p className="text-sm font-semibold text-green-900">✓ {fileContent?.removed_notice?.title || "Malware Removed"}</p>
                     <p className="text-xs text-green-700 mt-1">
-                      The malicious code in this file has been removed, and the cleaned version has already been deployed.
+                      {fileContent?.removed_notice?.body || "The malicious code in this file has been removed, and the cleaned version has already been deployed."}
                     </p>
                   </div>
                 </div>
@@ -500,9 +630,9 @@ const ScannedDetails = () => {
                   </svg>
 
                   <div className="flex-1">
-                    <p className="text-sm font-semibold text-red-900">⚠ Malware Not Removed</p>
+                    <p className="text-sm font-semibold text-red-900">⚠ {fileContent?.not_removed_notice?.title || "Malware Not Removed"}</p>
                     <p className="text-xs text-red-700 mt-1">
-                      The malicious code in this file was not removed, and you need to deploy the cleaned version of the file.
+                      {fileContent?.not_removed_notice?.body || "The malicious code in this file was not removed, and you need to deploy the cleaned version of the file."}
                     </p>
                   </div>
                 </div>

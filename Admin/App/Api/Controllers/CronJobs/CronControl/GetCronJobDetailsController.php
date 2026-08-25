@@ -1,5 +1,5 @@
 <?php
-// phpcs:ignoreFile WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Cron-hash signatures mirror WP core's own md5(timestamp . hook . serialize(args)) convention; every serialize() in this file is for that keying purpose.
+// phpcs:disable WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Cron-hash signatures mirror WP core's own md5(timestamp . hook . serialize(args)) convention; every serialize() in this file is for that keying purpose.
 
 namespace Tailwatch\Admin\App\Api\Controllers\CronJobs\CronControl;
 

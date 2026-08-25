@@ -37,6 +37,7 @@ const Sidebar = () => {
   const isRedirectionActive = location.pathname.startsWith("/dashboard/redirection");
   const isBrokenLinksActive = location.pathname.startsWith("/dashboard/broken-links");
   const isSearchReplaceActive = location.pathname.startsWith("/dashboard/search-replace");
+  const isUpdatesActive = location.pathname.startsWith("/dashboard/updates");
   // Recovery
   const isBackupActive = location.pathname.startsWith("/dashboard/backup");
   const isMigrationActive = location.pathname.startsWith("/dashboard/migration");
@@ -50,7 +51,7 @@ const Sidebar = () => {
 
   // Section actives
   const isSecurityActive = isMalwareActive || isFileMonitoringActive || isGeoBlockingActive || isBruteForceActive || isFireWallActive || isTwoFAActive || isHardeningAuditActive;
-  const isOptimizationActive = isDatabaseOptimizerActive || isCronJobActive || isRedirectionActive || isBrokenLinksActive || isSearchReplaceActive;
+  const isOptimizationActive = isDatabaseOptimizerActive || isCronJobActive || isRedirectionActive || isBrokenLinksActive || isSearchReplaceActive || isUpdatesActive;
   const isRecoveryActive = isBackupActive || isMigrationActive;
   const isLogsActivityActive = isLogsActive;
 
@@ -125,6 +126,7 @@ const Sidebar = () => {
                 {renderNavButton("/dashboard/redirection", <ExternalLink size={20} />, "301 Redirection", isRedirectionActive)}
                 {renderNavButton("/dashboard/broken-links", <Unlink size={20} />, "Broken Links", isBrokenLinksActive)}
                 {renderNavButton("/dashboard/search-replace", <Search size={20} />, "Search & Replace", isSearchReplaceActive)}
+                {renderNavButton("/dashboard/updates", <RefreshCw size={20} />, "Updates & Rollback", isUpdatesActive)}
               </div>
             )}
           </div>

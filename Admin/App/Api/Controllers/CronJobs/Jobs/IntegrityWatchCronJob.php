@@ -100,7 +100,7 @@ class IntegrityWatchCronJob extends AbstractCronJob {
 	 * @return string Display name.
 	 */
 	protected function get_schedule_display_name() {
-		return 'Files Integrity';
+		return esc_html__( 'Files Integrity', 'tailwatch' );
 	}
 
 	/**

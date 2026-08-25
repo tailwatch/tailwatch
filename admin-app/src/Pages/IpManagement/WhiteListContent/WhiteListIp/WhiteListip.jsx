@@ -7,8 +7,9 @@ import IpManagementModal from '../../IpManagementModal/IpManagementModal';
 import ActionButton from '../../../../Components/Buttons/ActionButton';
 import { useNavigate } from 'react-router-dom';
 import InfoBar from '../../../../Components/InfoBar/InfoBar';
+import GeoLicenseNotice from '../../../../Components/InfoBar/GeoLicenseNotice';
 
-const WhiteListip = ({widget, limit}) => {
+const WhiteListip = ({widget, limit, isGeoLicense}) => {
     const navigate = useNavigate();
     const { handleDeletAll, selectedItems,featureEnable,parentEnable, handleBulkDelete, isDeleting, searchTerm, setSearchTerm, filteredData, handleAddToBlacklist, loading, columns, renderRow, pagination, handlePageChange, ipWhiteListData, showModal, handleCloseModal, getWhiteListIpRanges, editingIpData, handlePageSizeChange,checkWhiteListIpStatus,ipManagement,isLicenseConnect } = useWhitelistIp(limit,widget);
      const handleViewMore = () => {
@@ -25,6 +26,7 @@ const WhiteListip = ({widget, limit}) => {
             ) : (
                 <div className='space-y-4'>
                     {(featureEnable === false || parentEnable === false || isLicenseConnect === true) && (<InfoBar type="info" message={isLicenseConnect ? "License not connected. Please connect your license to use this feature." : "Please Configure your Settings First"} />)}
+                    <GeoLicenseNotice isGeoLicense={isGeoLicense} />
                     {widget && (
                         <ActionButton defaultText="Add to Whitelist" isDisabled={featureEnable === false || parentEnable === false || isLicenseConnect === true || ipManagement?.isActiveState === '0' } onClick={handleAddToBlacklist} />
                     )}

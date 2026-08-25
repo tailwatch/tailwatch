@@ -153,8 +153,9 @@ class WebsiteStatsController {
 			'allow_url_include'   => ini_get( 'allow_url_include' ) ? true : false,
 			'display_errors'      => ini_get( 'display_errors' ) ? true : false,
 			'log_errors'          => ini_get( 'log_errors' ) ? true : false,
-			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.prevent_path_disclosure_error_reporting -- Only reading current value for system stats display, not changing it.
-			'error_reporting'     => error_reporting(),
+			// Reported via ini_get so this stays a pure read of the configured level for
+			// the system-info snapshot, never a call that could alter error reporting.
+			'error_reporting'     => (int) ini_get( 'error_reporting' ),
 			'session_save_path'   => session_save_path(),
 			'temp_dir'            => sys_get_temp_dir(),
 			'loaded_extensions'   => get_loaded_extensions(),

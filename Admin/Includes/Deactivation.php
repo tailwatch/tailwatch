@@ -160,9 +160,15 @@ class Deactivation {
 	private function tailwatch_remove_all_option_meta_data( $db_model ) {
 		// Visit data.
 		delete_option( TAILWATCH_VISIT_DATA );
+		delete_option( 'tailwatch_setup_started' );
 		delete_option( 'tailwatch_plugin_activation_redirect' );
+		delete_option( 'tailwatch_activation_redirect_done' );
 		delete_option( 'tailwatch_deactivate_plugin' );
 		delete_option( 'tailwatch_db_version' );
+		delete_option( 'tailwatch_features_synced_version' );
+		// Master secret is preserved across deactivation (so encrypted data stays
+		// decryptable) but must be removed on full data deletion.
+		delete_option( 'tailwatch_app_secret_key' );
 
 		// Additional cleanup.
 		$db_model->tailwatch_delete_data_on_deactivate();

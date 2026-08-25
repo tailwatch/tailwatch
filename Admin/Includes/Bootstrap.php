@@ -5,11 +5,13 @@ defined( 'ABSPATH' ) || exit;
 
 use Tailwatch\Admin\App\Api\Models\OptionsModel;
 use Tailwatch\Admin\App\Api\Controllers\Routes\AjaxRequestController;
+use Tailwatch\Admin\App\Api\Rest\Connect\ConnectController;
+use Tailwatch\Admin\App\Api\Services\Login\AutoLogin;
+use Tailwatch\Admin\App\Api\Controllers\RecoveryMode\RecoveryModeController;
 use Tailwatch\Admin\View\Controller\InterfaceController;
 use Tailwatch\Admin\App\Api\Controllers\Logs\LogActivityController;
 use Tailwatch\Admin\App\Api\Controllers\Logs\MonitoringLogController;
 use Tailwatch\Admin\App\Api\Controllers\Features\OptionsController;
-use Tailwatch\Admin\App\Api\Controllers\Visit\VisitController;
 use Tailwatch\Admin\App\Api\Controllers\Features\SecurityFeaturesVerifyController;
 use Tailwatch\Admin\App\Api\Controllers\Visit\RecommendedFeaturesController;
 use Tailwatch\Admin\App\Api\Controllers\Ssl\SslVerificationController;
@@ -33,6 +35,8 @@ use Tailwatch\Admin\App\Api\Controllers\HardeningAudit\HardeningAuditController;
 use Tailwatch\Admin\App\Api\Controllers\IpManagement\IpManagementController;
 use Tailwatch\Admin\App\Api\Controllers\LoginDefender\AuthenticationController;
 use Tailwatch\Admin\App\Api\Controllers\LoginDefender\LoginProtection\LoginProtectionController;
+use Tailwatch\Admin\App\Api\Controllers\History\HistoryHookController;
+use Tailwatch\Admin\App\Api\Controllers\LimitIncrease\PerformanceOptimizerController;
 
 /**
  * Bootstraps the Tailwatch plugin — registers lifecycle hooks
@@ -49,6 +53,8 @@ class Bootstrap {
 		register_deactivation_hook( TAILWATCH_PLUGIN_FILE, array( $this, 'upon_deactivation' ) );
 		add_action( 'plugins_loaded', array( $this, 'plugin_loaded' ) );
 		add_action( 'admin_init', array( $this, 'ensure_private_storage' ) );
+		add_action( 'admin_init', array( $this, 'tailwatch_maybe_backfill_features' ) );
+		add_action( 'admin_init', array( $this, 'tailwatch_maybe_activation_redirect' ) );
 
 		require_once TAILWATCH_ADMIN_API_DIR . 'Models/OptionsModel.php';
 	}
@@ -70,13 +76,21 @@ class Bootstrap {
 			wp_die( esc_html__( 'Something went wrong, please contact plugin support.', 'tailwatch' ) );
 		}
 		new Deactivation();
-		new OptionsModel();
+		// Keep the DB schema current on plugin UPDATE — register_activation_hook does not
+		// fire on update, so this runs the version-gated dbDelta on load, before any
+		// controller below touches the tables.
+		$tailwatch_options_model = new OptionsModel();
+		$tailwatch_options_model->tailwatch_maybe_upgrade_schema();
 		new AjaxRequestController();
+		new ConnectController();
+		( new AutoLogin() )->register();
+		( new RecoveryModeController() )->register();
 		new InterfaceController();
 		new LogActivityController();
 		new MonitoringLogController();
+		new HistoryHookController();
+		new PerformanceOptimizerController();
 		new OptionsController();
-		new VisitController();
 		new SecurityFeaturesVerifyController();
 		new RecommendedFeaturesController();
 		new SslVerificationController();
@@ -117,6 +131,11 @@ class Bootstrap {
 
 		$options_model = new OptionsModel();
 		$options_model->tailwatch_upon_activation();
+
+		// Ensure the plugin's master secret exists. It backs the Connect JWT signing
+		// key and the data-at-rest encryption key, and is stored independently of the
+		// WordPress salts so the security-key rotation feature cannot invalidate it.
+		\Tailwatch\Admin\App\Api\Services\Crypto\AppSecretService::generate_and_store();
 
 		if ( version_compare( PHP_VERSION, TAILWATCH_PHP_VERSION, '<' ) ) {
 			deactivate_plugins( plugin_basename( TAILWATCH_PLUGIN_FILE ) );
@@ -182,6 +201,14 @@ class Bootstrap {
 		// keep those archives from being reachable by direct URL.
 		\Tailwatch\Admin\App\Api\Services\Common\SecureDirectoryService::ensure_private_root( TAILWATCH_BACKUP_DIR );
 
+		// One-time welcome redirect on the first-ever activation only. The admin_init
+		// handler (tailwatch_maybe_activation_redirect) guards bulk/network/AJAX activations
+		// and lands on the PASSIVE "Start Setup / Not now" consent screen — nothing runs
+		// there without the user's explicit click.
+		if ( ! get_option( 'tailwatch_activation_redirect_done' ) ) {
+			set_transient( 'tailwatch_activation_redirect', 1, 30 );
+		}
+
 		$this->rewrite_rules();
 	}
 
@@ -232,6 +259,68 @@ class Bootstrap {
 		if ( $all_sealed ) {
 			set_transient( $sealed_flag, 1, DAY_IN_SECONDS );
 		}
+	}
+
+	/**
+	 * Seed feature rows introduced by a plugin update.
+	 *
+	 * register_activation_hook does not fire on a plugin update, so a site seeded
+	 * by an earlier release would never receive features added later. Gated on the
+	 * stored feature-set version so the reconcile runs at most once per release;
+	 * the underlying OptionsModel::tailwatch_sync_missing_features() is itself
+	 * additive and idempotent. The stored marker is only advanced once the site is
+	 * actually seeded, so a not-yet-configured install keeps retrying on later
+	 * loads instead of being marked prematurely.
+	 *
+	 * @return void
+	 */
+	public function tailwatch_maybe_backfill_features() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		if ( get_option( 'tailwatch_features_synced_version' ) === TAILWATCH_VERSION ) {
+			return;
+		}
+
+		$result = ( new OptionsModel() )->tailwatch_sync_missing_features();
+		if ( $result >= 0 ) {
+			update_option( 'tailwatch_features_synced_version', TAILWATCH_VERSION, false );
+		}
+	}
+
+	/**
+	 * One-time redirect to the plugin's welcome screen on first activation.
+	 *
+	 * The destination (page=tailwatch) shows a PASSIVE "Start Setup / Not now" consent
+	 * screen — the setup wizard runs only after the user clicks Start Setup — so this
+	 * starts no process without consent. Guarded against bulk and network activation,
+	 * AJAX, and non-admins, and fires at most once (first-ever activation).
+	 *
+	 * @return void
+	 */
+	public function tailwatch_maybe_activation_redirect() {
+		if ( ! get_transient( 'tailwatch_activation_redirect' ) ) {
+			return;
+		}
+		if ( wp_doing_ajax() ) {
+			return;
+		}
+		delete_transient( 'tailwatch_activation_redirect' );
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- reading WordPress's own bulk-activation query marker, not processing submitted data.
+		if ( is_network_admin() || isset( $_GET['activate-multi'] ) ) {
+			return;
+		}
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		// Mark done so a later deactivate/reactivate does not redirect again.
+		update_option( 'tailwatch_activation_redirect_done', '1', false );
+
+		wp_safe_redirect( admin_url( 'admin.php?page=tailwatch' ) );
+		exit;
 	}
 
 	public function upon_deactivation() {

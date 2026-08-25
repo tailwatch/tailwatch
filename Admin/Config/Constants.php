@@ -67,7 +67,7 @@ class Constants {
 		self::define( 'TAILWATCH_FILE', TAILWATCH_PLUGIN_FILE );
 
 		// Plugin version number.
-		self::define( 'TAILWATCH_VERSION', '1.0.0' );
+		self::define( 'TAILWATCH_VERSION', '1.0.1' );
 
 		// WordPress plugins directory path.
 		self::define( 'TAILWATCH_PLUGIN_DIR', WP_PLUGIN_DIR );
@@ -124,6 +124,19 @@ class Constants {
 
 		// Plugin feedback endpoint.
 		self::define( 'TAILWATCH_PLUGIN_FEEDBACK', TAILWATCH_API_BASE_URL . '/plugin-feedback/submit' );
+
+		// Public Tailwatch service URLs surfaced in the React dashboard. Handed to the app
+		// via wp_localize_script (see InterfaceController::get_service_urls) so PHP and the
+		// bundled app link to the same properties. Campaign (utm_*) parameters are appended
+		// by each link position in the app, not stored here.
+		self::define( 'TAILWATCH_WEBSITE_URL', 'https://wptailwatch.com' );
+		self::define( 'TAILWATCH_DASHBOARD_URL', 'https://dashboard.wptailwatch.com' );
+		self::define( 'TAILWATCH_DOCS_URL', 'https://doc.wptailwatch.com' );
+		self::define( 'TAILWATCH_PRICING_URL', TAILWATCH_WEBSITE_URL . '/pricing/' );
+		self::define( 'TAILWATCH_ROADMAP_URL', TAILWATCH_WEBSITE_URL . '/roadmap/' );
+		self::define( 'TAILWATCH_CONTACT_URL', TAILWATCH_WEBSITE_URL . '/contact/' );
+		self::define( 'TAILWATCH_PRIVACY_POLICY_URL', TAILWATCH_WEBSITE_URL . '/privacy-policy' );
+		self::define( 'TAILWATCH_SUPPORT_EMAIL', 'support@wptailwatch.com' );
 	}
 
 	/**

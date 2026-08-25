@@ -46,7 +46,7 @@ class LoginProtectionController {
 		// user. The pro plugin loads on plugins_loaded@5 (before free@10), so its
 		// 2FA @30 callback would otherwise run FIRST and wipe the skip session —
 		// then this nonce check, finding no session, would reject the 2FA form
-		// (which has no login_nonce) and bounce the user back to the login form.
+		// (which has no tailwatch_login_nonce) and bounce the user back to the login form.
 		// Running at @25 guarantees the skip session is still intact here.
 		$hook_controller->add_action_hook( 'login_form', array( $this, 'login_form_nonce' ) );
 		$hook_controller->add_filter_hook( 'authenticate', array( $this, 'authenticate_user_nonce' ), 25, 3 );
@@ -113,7 +113,7 @@ class LoginProtectionController {
 	 *
 	 * Without this guard every XML-RPC bot probe and every REST request
 	 * triggers a false "Nonce verification failed" log + notification, since
-	 * those requests have no `login_nonce` in POST.
+	 * those requests have no `tailwatch_login_nonce` in POST.
 	 *
 	 * `log` and `pwd` are wp-login.php's standard field names and are present
 	 * on every submission of that form (even when the fields are empty),
@@ -200,10 +200,10 @@ class LoginProtectionController {
 		}
 		$nonce = $this->with_logged_out_session(
 			static function () {
-				return wp_create_nonce( 'login_nonce_action' );
+				return wp_create_nonce( 'tailwatch_login_nonce_action' );
 			}
 		);
-		echo '<input type="hidden" name="login_nonce" value="' . esc_attr( $nonce ) . '" />';
+		echo '<input type="hidden" name="tailwatch_login_nonce" value="' . esc_attr( $nonce ) . '" />';
 	}
 
 	public function authenticate_user_nonce( $user, $username, $password ) {
@@ -246,7 +246,7 @@ class LoginProtectionController {
 			$nonce_valid = $this->with_logged_out_session(
 				static function () {
 					// phpcs:ignore WordPress.Security.NonceVerification.Missing, PluginCheck.Security.VerifyNonce.UnsafeVerifyNonceStatement -- this IS the nonce verification gate; wp_verify_nonce()'s result is returned from this closure into $nonce_valid and checked below (login is rejected when false).
-					return isset( $_POST['login_nonce'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['login_nonce'] ) ), 'login_nonce_action' );
+					return isset( $_POST['tailwatch_login_nonce'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['tailwatch_login_nonce'] ) ), 'tailwatch_login_nonce_action' );
 				}
 			);
 			if ( ! $nonce_valid ) {

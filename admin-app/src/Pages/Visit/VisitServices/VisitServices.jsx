@@ -123,6 +123,20 @@ export const verifyVisitStatus = async (setVisitStep, navigate) => {
   } catch (e) {
   }
 };
+export const markSetupStarted = async () => {
+  try {
+    const formData = new FormData();
+    formData.append("action", "tailwatch_global_ajax_handler");
+    formData.append("action_type", "tailwatch_mark_setup_started");
+    formData.append("nonce", tailwatch_ajax.nonce);
+
+    await axios.post(tailwatch_ajax.ajax_url, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  } catch (e) {
+  }
+};
+
 export const checkPhpVersion = async () => {
   try {
     const formData = new FormData();
@@ -314,4 +328,4 @@ export const handleSubmitButton = async ({ setLoading, setVisitStep, isProcessin
 
 //     // Check and handle cron execution based on cron_running status
 //     checkCronExecution(cron_running);
-
+

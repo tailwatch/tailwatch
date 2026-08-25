@@ -8,6 +8,7 @@ export const useVerifyVisitStatus = (navigate) => {
     const [visitCompleted, setVisitCompleted] = useState(null);
     const [visitStep, setVisitStep] = useState('');
     const [visitData, setVisitData] = useState({});
+    const [setupStarted, setSetupStarted] = useState(false);
 
     const extractJsonFromResponse = (responseData) => {
         // If responseData is already an object, return it
@@ -56,6 +57,7 @@ export const useVerifyVisitStatus = (navigate) => {
                     setVisitStep(visit_step);
                     setVisitData(visit_data || {});
                     setVisitCompleted(is_completed);
+                    setSetupStarted(!!(visit_data && visit_data.setup_started));
 
                     // Don't redirect if we're on /visit page during db_initialize - let Visit component handle it
                     const currentPath = window.location.pathname;
@@ -91,5 +93,6 @@ export const useVerifyVisitStatus = (navigate) => {
         visitStep,
         setVisitStep,
         visitData,
+        setupStarted,
     };
 };

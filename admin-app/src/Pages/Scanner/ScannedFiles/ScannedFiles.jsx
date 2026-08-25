@@ -31,7 +31,7 @@ const WPButton = ({ children, onClick, disabled }) => (
     {children}
   </button>
 );
-const ScannedFiles = ({ onScannedDataUpdate, isScanInProgress, setIsLicenseConnect, setIsLicenseReq, onViewDetails }) => {
+const ScannedFiles = ({ onScannedDataUpdate, isScanInProgress, confirms, setIsLicenseConnect, setIsLicenseReq, onViewDetails }) => {
   const [loading, setLoading] = useState(true);
   const [malwareData, setMalwareData] = useState([]);
   const navigate = useNavigate();
@@ -81,8 +81,8 @@ const ScannedFiles = ({ onScannedDataUpdate, isScanInProgress, setIsLicenseConne
 
   const handleDeleteAll = async () => {
     const confirmed = await alertService.confirm(
-      "This will permanently delete all scanned files from the database. This action cannot be undone.",
-      "Delete All Scanned Files?",
+      confirms?.delete_all?.body || "This will permanently delete all scanned files from the database. This action cannot be undone.",
+      confirms?.delete_all?.title || "Delete All Scanned Files?",
       "Delete All",
       "Cancel"
     );
@@ -107,8 +107,8 @@ const ScannedFiles = ({ onScannedDataUpdate, isScanInProgress, setIsLicenseConne
     if (selectedFiles.length === 0) return;
 
     const confirmed = await alertService.confirm(
-      `This will permanently delete ${selectedFiles.length} selected file(s) from the database. This action cannot be undone.`,
-      "Delete Selected Files?",
+      (confirms?.delete_selected?.body || `This will permanently delete {count} selected file(s) from the database. This action cannot be undone.`).replace("{count}", selectedFiles.length),
+      confirms?.delete_selected?.title || "Delete Selected Files?",
       "Delete",
       "Cancel"
     );

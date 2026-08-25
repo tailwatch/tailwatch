@@ -33,6 +33,7 @@ use Tailwatch\Admin\App\Api\Controllers\Base\BaseController;
 use Tailwatch\Admin\App\Api\Services\ProcessManager;
 use Tailwatch\Admin\App\Api\Services\ProcessStatusService;
 use Tailwatch\Admin\App\Api\Services\ProcessGuard;
+use Tailwatch\Admin\App\Api\Controllers\LimitIncrease\PerformanceOptimizerController;
 
 /**
  * Class BackupController
@@ -950,6 +951,9 @@ class BackupController extends BaseController {
 	 * finalization. Runs only while holding the single-worker lock (see the wrapper).
 	 */
 	private function tailwatch_run_backup_cron_worker() {
+		// Raise PHP memory/time limits before the heavy backup tick. Runtime-only,
+		// idempotent (only raises when the current value is lower). Mirrors the scanner.
+		( new PerformanceOptimizerController() )->tailwatch_boost_for_scanning();
 
 		$feature_controller = new DBModel();
 

@@ -106,6 +106,7 @@ class ResetAllFeatureController {
 				'truncate_scans',
 				'purge_backup_dir',
 				'purge_logs_dir',
+				'reset_integrations',
 				'reset_pro_data',
 			) : array();
 
@@ -431,6 +432,12 @@ class ResetAllFeatureController {
 				return $this->tailwatch_purge_dir_contents( TAILWATCH_BACKUP_DIR, $deadline );
 			case 'purge_logs_dir':
 				return $this->tailwatch_purge_dir_contents( TAILWATCH_LOGS_DIRECTORY, $deadline );
+			case 'reset_integrations':
+				// Purge free integration data (MaxMind/GeoIP): the stored API key row, the
+				// downloaded GeoLite2 .mmdb database file, and its update/retry crons.
+				( new \Tailwatch\Admin\App\Api\Controllers\Integration\IntegrationController() )
+					->tailwatch_delete_integration_data( wp_json_encode( array( 'section' => 'maxmind' ) ) );
+				return true;
 			case 'reset_pro_data':
 				// Pro (if active) clears its own data — user-meta blocks, GeoIP db, country-rule
 				// caches, pro logs. No-op when pro is inactive.
