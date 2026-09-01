@@ -53,6 +53,8 @@ class NotificationActions {
 		'BrokenLinkChecker'             => 'Tailwatch\Admin\App\Api\Controllers\BrokenLinkChecker\BrokenLinkChecker',
 		'HardeningAuditController'      => 'Tailwatch\Admin\App\Api\Controllers\HardeningAudit\HardeningAuditController',
 		'IpProtectionController'        => 'Tailwatch\Admin\App\Api\Controllers\LoginDefender\IpProtections\IpProtectionController',
+		'ConfigGenerateKeyController'   => 'Tailwatch\Admin\App\Api\Controllers\RewriteRule\ConfigGenerateKeyController',
+		'AutoUpdateController'          => 'Tailwatch\Admin\App\Api\Controllers\AutoUpdate\AutoUpdateController',
 	);
 
 	/**
@@ -686,6 +688,30 @@ class NotificationActions {
 			'value' => false,
 		),
 
+		// Security Keys Rotation operations.
+		'config_key_generate_completed'                => array(
+			'type'    => 'dynamic',
+			'handler' => 'ConfigGenerateKeyController',
+			'method'  => 'config_key_generate_push_notification',
+		),
+
+		// Automatic Updates operations.
+		'plugin_auto_update_completed'                 => array(
+			'type'    => 'dynamic',
+			'handler' => 'AutoUpdateController',
+			'method'  => 'plugin_auto_update_push_notification',
+		),
+		'theme_auto_update_completed'                  => array(
+			'type'    => 'dynamic',
+			'handler' => 'AutoUpdateController',
+			'method'  => 'theme_auto_update_push_notification',
+		),
+		'core_auto_update_completed'                   => array(
+			'type'    => 'dynamic',
+			'handler' => 'AutoUpdateController',
+			'method'  => 'core_auto_update_push_notification',
+		),
+
 		// SSL verification operations.
 		'ssl_verification_completed'                   => array(
 			'type'    => 'dynamic',
@@ -839,18 +865,6 @@ class NotificationActions {
 		),
 
 		// Verification — license/plugin activation verification.
-		'plugin_activation_update_failed'              => array(
-			'type'  => 'static',
-			'value' => false,
-		),
-		'plugin_activation_delete_completed'           => array(
-			'type'  => 'static',
-			'value' => false,
-		),
-		'plugin_activation_delete_failed'              => array(
-			'type'  => 'static',
-			'value' => false,
-		),
 		'post_disconnect_reverify_failed'              => array(
 			'type'  => 'static',
 			'value' => false,
@@ -1010,14 +1024,6 @@ class NotificationActions {
 			'value' => false,
 		),
 		'settings_import_reset_status_verify_failed'   => array(
-			'type'  => 'static',
-			'value' => false,
-		),
-		'feature_reset_completed'                      => array(
-			'type'  => 'static',
-			'value' => false,
-		),
-		'feature_reset_failed'                         => array(
 			'type'  => 'static',
 			'value' => false,
 		),

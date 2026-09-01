@@ -2517,6 +2517,153 @@ class IntegrityWatchController extends BaseController {
 	}
 
 	/**
+	 * Build the list of monitored roots, each as [ root_path, exclude_paths[] ].
+	 *
+	 * A single walk of ABSPATH cannot see a WP area that is a symlink (e.g. a
+	 * symlinked wp-content / plugins / uploads on some managed hosts), because
+	 * RecursiveDirectoryIterator does not descend into symlinked directories by
+	 * default. Opening each area directly as its own root follows that area-level
+	 * symlink. Nested symlinks are still never followed (FOLLOW_SYMLINKS is never
+	 * set), so there is no loop or webroot-escape risk.
+	 *
+	 * Excludes prune subtrees that have their own root so no file is walked twice,
+	 * and drop the plugin's own storage (wp-content/tailwatch, uploads/.../tailwatch-logs)
+	 * so its churning files never register as integrity changes. Only roots literally
+	 * under ABSPATH are kept — downstream (baseline key, change tree) strips the
+	 * ABSPATH prefix by length, so a root outside ABSPATH would corrupt them.
+	 *
+	 * @return array<int, array{0:string,1:string[]}>
+	 */
+	private function tailwatch_monitor_folders() {
+		$abs = rtrim( str_replace( '\\', '/', ABSPATH ), '/' );
+
+		$uploads      = wp_get_upload_dir();
+		$uploads_base = ( is_array( $uploads ) && ! empty( $uploads['basedir'] ) )
+			? $uploads['basedir']
+			: WP_CONTENT_DIR . '/uploads';
+
+		$candidates = array(
+			array( ABSPATH . 'wp-admin', array() ),
+			array( ABSPATH . WPINC, array() ),
+			array(
+				WP_CONTENT_DIR,
+				array( WP_PLUGIN_DIR, get_theme_root(), $uploads_base, TAILWATCH_CONTENT_DIR_BASE ),
+			),
+			array( WP_PLUGIN_DIR, array() ),
+			array( get_theme_root(), array() ),
+			array( $uploads_base, array( TAILWATCH_LOGS_DIRECTORY ) ),
+			array(
+				ABSPATH,
+				array_merge(
+					$this->get_root_folders_name(),
+					array( ABSPATH . 'wp-admin', ABSPATH . WPINC, WP_CONTENT_DIR )
+				),
+			),
+		);
+
+		$folders = array();
+		foreach ( $candidates as $entry ) {
+			$root = rtrim( str_replace( '\\', '/', $entry[0] ), '/' );
+			if ( $root === $abs || 0 === strpos( $root . '/', $abs . '/' ) ) {
+				$folders[] = array( $root, $entry[1] );
+			}
+		}
+
+		return $folders;
+	}
+
+	/**
+	 * Walk ONE root and yield every in-scope file path. When the root has excludes, a
+	 * RecursiveCallbackFilterIterator prunes those subtrees before descending, backed
+	 * by a per-file realpath boundary check; excludes are compared by realpath so
+	 * plugins / themes / uploads dedupe even under a symlinked wp-content. Paths are
+	 * yielded via getPathname() to keep the ABSPATH prefix (realpath is used only for
+	 * exclusion). FOLLOW_SYMLINKS is never set, so nested symlinks are not descended
+	 * into and there is no directory loop. error_log / debug.log and an unopenable
+	 * root are skipped.
+	 *
+	 * @param string   $root          Literal root path to walk.
+	 * @param string[] $exclude_reals Normalised realpaths of subtrees to skip.
+	 * @return \Generator
+	 */
+	private function tailwatch_iterate_root_files( $root, $exclude_reals ) {
+		$has_excludes = ! empty( $exclude_reals );
+
+		try {
+			$dir_iterator = new \RecursiveDirectoryIterator( $root, \FilesystemIterator::SKIP_DOTS );
+
+			if ( $has_excludes ) {
+				$dir_iterator = new \RecursiveCallbackFilterIterator(
+					$dir_iterator,
+					static function ( $current ) use ( $exclude_reals ) {
+						if ( ! $current->isDir() ) {
+							return true; // files are boundary-checked in the loop.
+						}
+						$real = $current->getRealPath();
+						if ( false === $real ) {
+							return true;
+						}
+						return ! in_array( str_replace( '\\', '/', $real ), $exclude_reals, true );
+					}
+				);
+			}
+
+			$iterator = new \RecursiveIteratorIterator( $dir_iterator );
+		} catch ( \Throwable $e ) {
+			return;
+		}
+
+		foreach ( $iterator as $file ) {
+			if ( $has_excludes ) {
+				$abs = $file->getRealPath();
+				if ( false !== $abs ) {
+					$abs = str_replace( '\\', '/', $abs );
+					foreach ( $exclude_reals as $ex ) {
+						// Boundary match (trailing '/') so a sibling like
+						// "uploads-old" is never dropped by the excluded "uploads".
+						if ( 0 === strpos( $abs, $ex . '/' ) ) {
+							continue 2;
+						}
+					}
+				}
+			}
+
+			$base = strtolower( $file->getFilename() );
+			if ( 'error_log' === $base || 'debug.log' === $base ) {
+				continue;
+			}
+
+			yield $file->getPathname();
+		}
+	}
+
+	/**
+	 * Lazily yield every in-scope file path across all monitored roots. Shared by the
+	 * queue builder and scan_files() so both see the same file set (a divergence would
+	 * build a different baseline depending on which path ran).
+	 *
+	 * @return \Generator
+	 */
+	private function tailwatch_iterate_monitor_files() {
+		foreach ( $this->tailwatch_monitor_folders() as $folder ) {
+			$root             = $folder[0];
+			$exclude_literals = $folder[1];
+
+			$exclude_reals = array();
+			foreach ( $exclude_literals as $exclude ) {
+				$real = realpath( $exclude );
+				if ( false !== $real ) {
+					$exclude_reals[] = rtrim( str_replace( '\\', '/', $real ), '/' );
+				}
+			}
+
+			foreach ( $this->tailwatch_iterate_root_files( $root, $exclude_reals ) as $path ) {
+				yield $path;
+			}
+		}
+	}
+
+	/**
 	 * Scans files in directory with optional resume from last file.
 	 *
 	 * @param string      $directory         Directory to scan.
@@ -2525,45 +2672,22 @@ class IntegrityWatchController extends BaseController {
 	 * @return array
 	 */
 	private function scan_files( $directory, $last_scanned_file = null, $batch_size = 500 ) {
+		// $directory (ABSPATH) is unused; the concrete roots come from
+		// tailwatch_monitor_folders() — the same set the queue builder walks.
+		unset( $directory );
+
 		$files              = array();
 		$continue_from_last = is_null( $last_scanned_file );
 
-		$skip_root_folders = $this->get_root_folders_name();
-
-		$skip_folders_in_wp_content = array(
-			str_replace( '\\', '/', TAILWATCH_CONTENT_DIR_BASE ),
-			str_replace( '\\', '/', TAILWATCH_LOGS_DIRECTORY ),
-		);
-
-		$skip_these_folders = array_merge( $skip_root_folders, $skip_folders_in_wp_content );
-
-		$iterator = new \RecursiveIteratorIterator( new \RecursiveDirectoryIterator( $directory, \FilesystemIterator::SKIP_DOTS ) );
-
-		foreach ( $iterator as $file ) {
-			$file_path      = $file->getPathname();
-			$file_path_skip = str_replace( '\\', '/', $file_path );
-
-			foreach ( $skip_these_folders as $skip_folder ) {
-				// Skip folder and file path used for exclusion check.
-				if ( 0 === strpos( $file_path_skip, $skip_folder ) ) {
-					continue 2;
-				}
-			}
-
+		foreach ( $this->tailwatch_iterate_monitor_files() as $file_path ) {
 			if ( ! $continue_from_last ) {
-				if ( $file->getPathname() === $last_scanned_file ) {
+				if ( $file_path === $last_scanned_file ) {
 					$continue_from_last = true;
-					continue;
 				}
 				continue;
 			}
 
-			$base = strtolower( $file->getFilename() );
-			if ( 'error_log' === $base || 'debug.log' === $base ) {
-				continue;
-			}
-
-			$files[] = $file->getPathname();
+			$files[] = $file_path;
 
 			if ( count( $files ) >= $batch_size ) {
 				break;
@@ -2597,13 +2721,10 @@ class IntegrityWatchController extends BaseController {
 	 * @return int|false Number of in-scope files queued, or false on failure.
 	 */
 	private function tailwatch_build_scan_queue( $directory, $queue_file ) {
-		$skip_these_folders = array_merge(
-			$this->get_root_folders_name(),
-			array(
-				str_replace( '\\', '/', TAILWATCH_CONTENT_DIR_BASE ),
-				str_replace( '\\', '/', TAILWATCH_LOGS_DIRECTORY ),
-			)
-		);
+		// $directory (ABSPATH) is unused; the concrete roots come from
+		// tailwatch_monitor_folders() (the same set scan_files() walks). The skip
+		// rules (own-storage + error_log/debug.log) now live inside the walker.
+		unset( $directory );
 
 		$tmp = $queue_file . '.tmp';
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen, WordPress.PHP.NoSilencedErrors.Discouraged -- streaming write of a large cursor file; WP_Filesystem has no append/stream API; @ swallows host warnings, false-check follows.
@@ -2614,23 +2735,7 @@ class IntegrityWatchController extends BaseController {
 
 		$count = 0;
 		try {
-			$iterator = new \RecursiveIteratorIterator( new \RecursiveDirectoryIterator( $directory, \FilesystemIterator::SKIP_DOTS ) );
-
-			foreach ( $iterator as $file ) {
-				$file_path      = $file->getPathname();
-				$file_path_skip = str_replace( '\\', '/', $file_path );
-
-				foreach ( $skip_these_folders as $skip_folder ) {
-					if ( 0 === strpos( $file_path_skip, $skip_folder ) ) {
-						continue 2;
-					}
-				}
-
-				$base = strtolower( $file->getFilename() );
-				if ( 'error_log' === $base || 'debug.log' === $base ) {
-					continue;
-				}
-
+			foreach ( $this->tailwatch_iterate_monitor_files() as $file_path ) {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- streaming write; see fopen above.
 				fwrite( $handle, $file_path . "\n" );
 				++$count;

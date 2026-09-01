@@ -70,13 +70,15 @@ class InterfaceController {
 	 */
 	public function add_tailwatch_page() {
 		add_menu_page(
-			'Tailwatch',
-			'Tailwatch',
+			'Tailwatch Security',
+			'Tailwatch Security',
 			'manage_options',
 			'tailwatch',
 			array( $this, 'tailwatch_option_page' ),
-			'dashicons-admin-settings',
-			99
+			// File URL (not base64) so svg-painter leaves the gradient intact.
+			TAILWATCH_URI . 'Admin/View/Static/images/tailwatch-shield-icon.svg',
+			// Between Tools (75) and Settings (80); clear of the 4/59/99 core menu separators.
+			78
 		);
 
 		add_submenu_page(
@@ -173,6 +175,7 @@ class InterfaceController {
 					array(
 						'ajax_url'  => admin_url( 'admin-ajax.php' ),
 						'nonce'     => wp_create_nonce( 'tailwatch_ajax_nonce' ),
+						'version'   => TAILWATCH_VERSION,
 						'admin_url' => admin_url(),
 						'base_url'  => TAILWATCH_GET_SITE_URL,
 						'asset_url' => TAILWATCH_URI . 'Admin/View/Static/images/',

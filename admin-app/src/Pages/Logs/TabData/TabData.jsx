@@ -3,6 +3,7 @@ export const tabs = [
   { key: "user", label: "Activity Logs" },
   { key: "error", label: "Error Logs" },
   { key: "email", label: "Email Logs" },
+  { key: "network", label: "Network Logs" },
 ];
 
 export const firewallTabs = [

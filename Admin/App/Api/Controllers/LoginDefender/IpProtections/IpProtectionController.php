@@ -42,20 +42,40 @@ class IpProtectionController extends BaseController {
 	private $settings;
 
 	public function __construct() {
-		$this->settings = $this->login_defender_ip_protection_settings();
-
-		$this->geoip               = new GeoIPService();
-		$this->ip_access_service = new IpAccessService(
-			new IpActivityModel( $this->geoip, $this->settings ),
-			new WhitelistModel(),
-			new RuleModel(),
-			$this->geoip,
-			$this->settings
-		);
-
+		// Settings and services are built lazily on first use. Every consumer runs on a
+		// login, admin, AJAX, or cron hook (all on or after init); building them here at
+		// plugins_loaded would query options early and call __() before init.
+		//
 		// Cron scheduling and handler registration for 'tailwatch_login_defender_cleanup' and
 		// 'tailwatch_login_defender_cleanup_expired' is owned by CronJobs framework jobs:
 		// LoginDefenderLogsCleanupCronJob + LoginDefenderExpiredBlocksCronJob.
+	}
+
+	private function get_settings() {
+		if ( null === $this->settings ) {
+			$this->settings = $this->login_defender_ip_protection_settings();
+		}
+		return $this->settings;
+	}
+
+	private function get_geoip() {
+		if ( null === $this->geoip ) {
+			$this->geoip = new GeoIPService();
+		}
+		return $this->geoip;
+	}
+
+	private function get_ip_access_service() {
+		if ( null === $this->ip_access_service ) {
+			$this->ip_access_service = new IpAccessService(
+				new IpActivityModel( $this->get_geoip(), $this->get_settings() ),
+				new WhitelistModel(),
+				new RuleModel(),
+				$this->get_geoip(),
+				$this->get_settings()
+			);
+		}
+		return $this->ip_access_service;
 	}
 
 	public function tailwatch_ips_login_defender_options() {
@@ -116,11 +136,11 @@ class IpProtectionController extends BaseController {
 				'escalation_threshold'     => 3,
 				'escalation_window'        => 86400,
 				'error_messages'           => array(
-					'ip_blocked'           => 'Your access is temporarily blocked due to repeated failed login attempts.',
-					'ip_blocked_permanent' => 'Your access has been permanently blocked due to repeated failed login attempts. Please contact the site administrator.',
-					'country_blocked'      => 'Access from [country] is restricted.',
-					'rate_limit'           => 'Too many attempts. Try again in [minutes] minutes.',
-					'retry_message'        => 'Please try again in about [time].',
+					'ip_blocked'           => __( 'Your access is temporarily blocked due to repeated failed login attempts.', 'tailwatch' ),
+					'ip_blocked_permanent' => __( 'Your access has been permanently blocked due to repeated failed login attempts. Please contact the site administrator.', 'tailwatch' ),
+					'country_blocked'      => __( 'Access from [country] is restricted.', 'tailwatch' ),
+					'rate_limit'           => __( 'Too many attempts. Try again in [minutes] minutes.', 'tailwatch' ),
+					'retry_message'        => __( 'Please try again in about [time].', 'tailwatch' ),
 				),
 				'notifications'            => array(
 					'email'     => get_option( 'admin_email' ),
@@ -172,11 +192,11 @@ class IpProtectionController extends BaseController {
 			'escalation_threshold'     => absint( $temp_sub['field_20']['options']['option']['value'] ?? 3 ),
 			'escalation_window'        => absint( $temp_sub['field_21']['options']['option']['value'] ?? 86400 ),
 			'error_messages'           => array(
-				'ip_blocked'           => sanitize_text_field( $temp_sub['field_22']['options']['option']['value'] ?? 'Your access is temporarily blocked due to repeated failed login attempts.' ),
-				'ip_blocked_permanent' => sanitize_text_field( $perm_sub['field_23']['options']['option']['value'] ?? 'Your access has been permanently blocked due to repeated failed login attempts. Please contact the site administrator.' ),
-				'country_blocked'      => 'Access from [country] is restricted.',
-				'rate_limit'           => 'Too many attempts. Try again in [minutes] minutes.',
-				'retry_message'        => 'Please try again in about [time].',
+				'ip_blocked'           => sanitize_text_field( $temp_sub['field_22']['options']['option']['value'] ?? __( 'Your access is temporarily blocked due to repeated failed login attempts.', 'tailwatch' ) ),
+				'ip_blocked_permanent' => sanitize_text_field( $perm_sub['field_23']['options']['option']['value'] ?? __( 'Your access has been permanently blocked due to repeated failed login attempts. Please contact the site administrator.', 'tailwatch' ) ),
+				'country_blocked'      => __( 'Access from [country] is restricted.', 'tailwatch' ),
+				'rate_limit'           => __( 'Too many attempts. Try again in [minutes] minutes.', 'tailwatch' ),
+				'retry_message'        => __( 'Please try again in about [time].', 'tailwatch' ),
 			),
 			'notifications'            => array(
 				'email'     => get_option( 'admin_email' ),
@@ -188,7 +208,7 @@ class IpProtectionController extends BaseController {
 	}
 
 	public function handle_failed_login( $username, $error ) {
-		if ( ! $this->settings['ip_protection_enabled'] ) {
+		if ( ! $this->get_settings()['ip_protection_enabled'] ) {
 			return;
 		}
 
@@ -213,7 +233,7 @@ class IpProtectionController extends BaseController {
 
 		if ( $ip_blocked['allowed'] === false ) {
 			if ( $ip_blocked['method'] === 'ip_management' ) {
-				$message = ! empty( $ip_blocked['block_reason'] ) ? $ip_blocked['block_reason'] : 'Your access to this site is blocked.';
+				$message = ! empty( $ip_blocked['block_reason'] ) ? $ip_blocked['block_reason'] : __( 'Your access to this site is blocked.', 'tailwatch' );
 			} else {
 				$message = $this->get_block_message();
 			}
@@ -227,7 +247,16 @@ class IpProtectionController extends BaseController {
 			$result = $this->log_failed_attempt( $ip, $username );
 			if ( $result && ! $result['is_blocked'] ) {
 				$remaining = $result['remaining_attempts'];
-				$message   = sprintf( 'Login failed. You have %d attempt(s) left before your IP is temporarily blocked.', $remaining );
+				$message   = sprintf(
+					/* translators: %d: number of remaining login attempts */
+					_n(
+						'Login failed. You have %d attempt left before your IP is temporarily blocked.',
+						'Login failed. You have %d attempts left before your IP is temporarily blocked.',
+						$remaining,
+						'tailwatch'
+					),
+					$remaining
+				);
 				set_transient( 'tailwatch_login_defender_error_' . md5( $ip ), $message, 30 );
 			} elseif ( $result && $result['is_blocked'] ) {
 				// The block was created on THIS attempt (the threshold just crossed).
@@ -330,7 +359,7 @@ class IpProtectionController extends BaseController {
 	}
 
 	public function handle_successful_login( $user_login, $user ) {
-		if ( ! $this->settings['ip_protection_enabled'] ) {
+		if ( ! $this->get_settings()['ip_protection_enabled'] ) {
 			return;
 		}
 
@@ -361,7 +390,7 @@ class IpProtectionController extends BaseController {
 
 		if ( $is_blocked['allowed'] === false ) {
 			if ( $is_blocked['method'] === 'ip_management' ) {
-				$message = ! empty( $is_blocked['block_reason'] ) ? $is_blocked['block_reason'] : 'Your access to this site is blocked.';
+				$message = ! empty( $is_blocked['block_reason'] ) ? $is_blocked['block_reason'] : __( 'Your access to this site is blocked.', 'tailwatch' );
 			} else {
 				$message = $this->get_block_message();
 			}
@@ -389,7 +418,7 @@ class IpProtectionController extends BaseController {
 		$ip_blocked = $this->is_blocked( $ip );
 		if ( is_array( $ip_blocked ) && $ip_blocked['allowed'] === false ) {
 			$message = in_array( $ip_blocked['method'], array( 'ip_management', 'geo_restrictions' ), true )
-			? ( ! empty( $ip_blocked['block_reason'] ) ? $ip_blocked['block_reason'] : 'Your access to this site is blocked.' )
+			? ( ! empty( $ip_blocked['block_reason'] ) ? $ip_blocked['block_reason'] : __( 'Your access to this site is blocked.', 'tailwatch' ) )
 			: $this->get_block_message();
 
 			if ( is_user_logged_in() ) {
@@ -446,7 +475,7 @@ class IpProtectionController extends BaseController {
 
 			foreach ( $ips as $ip ) {
 				$ip = sanitize_text_field( $ip );
-				if ( $this->ip_access_service->ip_activity->unblock_ip( $ip ) ) {
+				if ( $this->get_ip_access_service()->ip_activity->unblock_ip( $ip ) ) {
 					$success[] = $ip;
 				} else {
 					$failed[] = $ip;
@@ -543,7 +572,7 @@ class IpProtectionController extends BaseController {
 				);
 			}
 
-			$result = $this->ip_access_service->ip_activity->delete_ip_activity( $ips, $delete_all );
+			$result = $this->get_ip_access_service()->ip_activity->delete_ip_activity( $ips, $delete_all );
 			if ( $result['success'] ) {
 				$message = $delete_all ? __( 'All IP activity deleted successfully', 'tailwatch' ) : sprintf(
 					/* translators: %s: list of IPs */
@@ -621,7 +650,7 @@ class IpProtectionController extends BaseController {
 
 			$limit      = isset( $data['limit'] ) ? absint( $data['limit'] ) : null;
 			$page       = isset( $data['page'] ) ? absint( $data['page'] ) : null;
-			$activities = $this->ip_access_service->ip_activity->get_all_ip_activities( $limit, $page );
+			$activities = $this->get_ip_access_service()->ip_activity->get_all_ip_activities( $limit, $page );
 
 			if ( $activities === false ) {
 				Log::error(
@@ -720,7 +749,7 @@ class IpProtectionController extends BaseController {
 				);
 			}
 
-			$history = $this->ip_access_service->ip_activity->get_ip_activity_history( $ip, $limit, $page );
+			$history = $this->get_ip_access_service()->ip_activity->get_ip_activity_history( $ip, $limit, $page );
 
 			if ( $history === false ) {
 				Log::error(
@@ -810,14 +839,14 @@ class IpProtectionController extends BaseController {
 			return false;
 		}
 		$this->mark_attempt_logged( $ip );
-		return $this->ip_access_service->log_failed_attempt( $ip, 'login', $username );
+		return $this->get_ip_access_service()->log_failed_attempt( $ip, 'login', $username );
 	}
 
 	public function reset_attempts( $ip, $username = '' ) {
 		if ( ! filter_var( $ip, FILTER_VALIDATE_IP ) ) {
 			return;
 		}
-		$this->ip_access_service->ip_activity->reset_attempts( $ip, false, $username );
+		$this->get_ip_access_service()->ip_activity->reset_attempts( $ip, false, $username );
 	}
 
 	public function is_blocked( $ip ) {
@@ -831,7 +860,7 @@ class IpProtectionController extends BaseController {
 				'block_reason' => '',
 			);
 		}
-		$result = $this->ip_access_service->check_access( $ip );
+		$result = $this->get_ip_access_service()->check_access( $ip );
 		return is_array( $result ) ? $result : array(
 			'allowed'      => true,
 			'method'       => 'none',
@@ -840,16 +869,16 @@ class IpProtectionController extends BaseController {
 	}
 
 	public function get_block_message() {
-		$settings = $this->settings;
+		$settings = $this->get_settings();
 
 		$ip      = GetIpServices::tailwatch_get_client_ip();
-		$country = $this->geoip->get_country( $ip );
+		$country = $this->get_geoip()->get_country( $ip );
 		$message = $settings['error_messages']['ip_blocked'];
 		if ( empty( $message ) ) {
-			$message = 'Your access is temporarily blocked due to repeated failed login attempts.';
+			$message = __( 'Your access is temporarily blocked due to repeated failed login attempts.', 'tailwatch' );
 		}
 
-		$activity = $this->ip_access_service->ip_activity->get_activity( $ip );
+		$activity = $this->get_ip_access_service()->ip_activity->get_activity( $ip );
 		if ( $activity ) {
 			$data = json_decode( $activity->value, true );
 			if ( is_array( $data ) && isset( $data['lock_type'] ) && $data['lock_type'] !== 'none' ) {
@@ -869,12 +898,12 @@ class IpProtectionController extends BaseController {
 						$retry_message = str_replace( '[time]', $human_time, $settings['error_messages']['retry_message'] );
 						$message      .= ' ' . $retry_message;
 					} else {
-						$this->ip_access_service->ip_activity->reset_attempts( $ip, false );
+						$this->get_ip_access_service()->ip_activity->reset_attempts( $ip, false );
 					}
 				} else {
 					$permanent = $settings['error_messages']['ip_blocked_permanent'];
 					if ( empty( $permanent ) ) {
-						$permanent = 'Your access has been permanently blocked due to repeated failed login attempts. Please contact the site administrator.';
+						$permanent = __( 'Your access has been permanently blocked due to repeated failed login attempts. Please contact the site administrator.', 'tailwatch' );
 					}
 					$message = str_replace( '[time]', 'permanently', $permanent );
 					$message = str_replace( '[minutes]', 'permanently', $message );
@@ -902,7 +931,7 @@ class IpProtectionController extends BaseController {
 		$ip_blocked = $this->is_blocked( $ip );
 		if ( $ip_blocked['allowed'] === false ) {
 			$message = in_array( $ip_blocked['method'], array( 'ip_management', 'geo_restrictions' ), true )
-				? ( ! empty( $ip_blocked['block_reason'] ) ? $ip_blocked['block_reason'] : 'Your access to this site is blocked.' )
+				? ( ! empty( $ip_blocked['block_reason'] ) ? $ip_blocked['block_reason'] : __( 'Your access to this site is blocked.', 'tailwatch' ) )
 				: $this->get_block_message();
 			return wp_kses_post( $message );
 		}
@@ -956,13 +985,13 @@ class IpProtectionController extends BaseController {
 			$updated = false;
 
 			if ( ( $data['lock_type'] ?? 'none' ) === 'temporary' && strtotime( $data['lock_time'] ?? 'now' ) + ( $data['lock_duration'] ?? 0 ) < $current_timestamp ) {
-				$this->ip_access_service->ip_activity->reset_attempts( $data['ip_address'], false );
+				$this->get_ip_access_service()->ip_activity->reset_attempts( $data['ip_address'], false );
 				++$count;
 				continue;
 			}
 
 			if ( isset( $data['escalation_window_start'] ) && $data['escalation_window_start'] && strtotime( $data['escalation_window_start'] ) + $data['escalation_window_duration'] < $current_timestamp ) {
-				$this->ip_access_service->ip_activity->log_history_event(
+				$this->get_ip_access_service()->ip_activity->log_history_event(
 					$data['ip_address'],
 					'reset_escalation',
 					array(
@@ -1009,7 +1038,10 @@ class IpProtectionController extends BaseController {
 		);
 		foreach ( $rules as $rule ) {
 			$data = json_decode( $rule->value, true );
-			if ( $data['block_type'] === 'temporary' && strtotime( $data['block_start_time'] ) + $data['block_duration'] < $current_timestamp ) {
+			if ( ! is_array( $data ) ) {
+				continue; // Skip malformed rows rather than fatal on null index.
+			}
+			if ( ( $data['block_type'] ?? '' ) === 'temporary' && strtotime( $data['block_start_time'] ?? 'now' ) + ( $data['block_duration'] ?? 0 ) < $current_timestamp ) {
 				$wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 					$table_name,
 					array(

@@ -52,7 +52,7 @@ class GetTablesOptimizerController {
 			$expired_transients_counts  = 0;
 			$all_logs_activity_count    = 0;
 			$all_email_logs_count       = 0;
-			$all_ajax_logs_count        = 0;
+			$all_network_logs_count        = 0;
 			$all_monitoring_logs_count  = 0;
 
 			if ( isset( $get_options['field_1']['sub_options']['field_3']['options']['option']['selected'] ) && $get_options['field_1']['sub_options']['field_3']['options']['option']['selected'] ) {
@@ -101,8 +101,8 @@ class GetTablesOptimizerController {
 			}
 
 			if ( isset( $get_options['field_1']['sub_options']['field_13']['options']['option']['selected'] ) && $get_options['field_1']['sub_options']['field_13']['options']['option']['selected'] ) {
-				$all_ajax_logs_data  = $database_rule->tailwatch_get_logs( 'default_ajax_logs', $number_interval );
-				$all_ajax_logs_count = count( $all_ajax_logs_data );
+				$all_network_logs_data  = $database_rule->tailwatch_get_logs( 'default_network_logs', $number_interval );
+				$all_network_logs_count = count( $all_network_logs_data );
 			}
 
 			if ( isset( $get_options['field_1']['sub_options']['field_14']['options']['option']['selected'] ) && $get_options['field_1']['sub_options']['field_14']['options']['option']['selected'] ) {
@@ -114,7 +114,7 @@ class GetTablesOptimizerController {
 				0 === $orphaned_post_counts && 0 === $auto_drafts_counts && 0 === $trashed_post_counts
 				&& 0 === $spam_comments_counts && 0 === $trashed_comments_counts && 0 === $trackback_pingbacks_counts
 				&& 0 === $expired_transients_counts && 0 === $all_logs_activity_count
-				&& 0 === $all_email_logs_count && 0 === $all_ajax_logs_count && 0 === $all_monitoring_logs_count
+				&& 0 === $all_email_logs_count && 0 === $all_network_logs_count && 0 === $all_monitoring_logs_count
 			) {
 
 				return array(
@@ -179,7 +179,7 @@ class GetTablesOptimizerController {
 
 			$email_logs = isset( $db_data['field_1']['sub_options']['field_12']['options']['option']['selected'] ) ? $db_data['field_1']['sub_options']['field_12']['options']['option']['selected'] : false;
 
-			$ajax_logs = isset( $db_data['field_1']['sub_options']['field_13']['options']['option']['selected'] ) ? $db_data['field_1']['sub_options']['field_13']['options']['option']['selected'] : false;
+			$network_logs = isset( $db_data['field_1']['sub_options']['field_13']['options']['option']['selected'] ) ? $db_data['field_1']['sub_options']['field_13']['options']['option']['selected'] : false;
 
 			$monitoring_logs = isset( $db_data['field_1']['sub_options']['field_14']['options']['option']['selected'] ) ? $db_data['field_1']['sub_options']['field_14']['options']['option']['selected'] : false;
 
@@ -215,7 +215,7 @@ class GetTablesOptimizerController {
 				'expiredTransient'     => $expired_transient,
 				'logsActivity'         => $logs_activity,
 				'emailLogs'            => $email_logs,
-				'ajaxLogs'             => $ajax_logs,
+				'networkLogs'             => $network_logs,
 				'monitoringLogs'       => $monitoring_logs,
 				'databaseInterval'     => $database_interval,
 				'keepRevision'         => $revisions_maintain,
@@ -257,7 +257,7 @@ class GetTablesOptimizerController {
 				'expired_transients'   => array( 'table' => $wpdb->options,                        'options_key' => 'expiredTransient' ),
 				'logs_activity'        => array( 'table' => $wpdb->prefix . TAILWATCH_DB_TABLE_NAME,    'options_key' => 'logsActivity' ),
 				'email_logs'           => array( 'table' => $wpdb->prefix . TAILWATCH_DB_TABLE_NAME,    'options_key' => 'emailLogs' ),
-				'ajax_logs'            => array( 'table' => $wpdb->prefix . TAILWATCH_DB_TABLE_NAME,    'options_key' => 'ajaxLogs' ),
+				'network_logs'            => array( 'table' => $wpdb->prefix . TAILWATCH_DB_TABLE_NAME,    'options_key' => 'networkLogs' ),
 				'monitoring_logs'      => array( 'table' => $wpdb->prefix . TAILWATCH_DB_TABLE_NAME,    'options_key' => 'monitoringLogs' ),
 			);
 
@@ -331,8 +331,8 @@ class GetTablesOptimizerController {
 				return count( $database_rule->tailwatch_get_logs( 'default_logs_activity', $number_interval ) );
 			case 'email_logs':
 				return count( $database_rule->tailwatch_get_logs( 'default_email_logs', $number_interval ) );
-			case 'ajax_logs':
-				return count( $database_rule->tailwatch_get_logs( 'default_ajax_logs', $number_interval ) );
+			case 'network_logs':
+				return count( $database_rule->tailwatch_get_logs( 'default_network_logs', $number_interval ) );
 			case 'monitoring_logs':
 				return count( $database_rule->tailwatch_get_logs( 'default_monitoring_logs', $number_interval ) );
 			default:

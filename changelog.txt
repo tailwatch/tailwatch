@@ -1,0 +1,47 @@
+== Changelog ==
+
+= 1.0.2 =
+* New: Media Library - browse, upload, and delete your WordPress media library from the Tailwatch dashboard and connected mobile app. Uploads use WordPress's standard handler, are limited to images, and respect your media capabilities.
+* New: Scheduled Automatic Updates for plugins, themes, and WordPress core, using WordPress's own built-in updater; core is limited to minor and security releases. Off by default, with per-type toggles.
+* New: Security Keys Rotation - optionally regenerate your wp-config.php security keys (salts) on a schedule (every 15 days or monthly). The rewrite is validated and automatically rolled back if anything fails, and each rotation signs out active sessions. Off by default.
+* New: Network Logs - optionally record lightweight metadata (endpoint, method, status, response time) for internal REST, AJAX, cron, and XML-RPC requests. Credentials and tokens are redacted and request or response bodies are never stored. Off by default.
+* New: File and Directory Access hardening - optional .htaccess rules to block direct access to sensitive files, disable directory browsing, block PHP execution in the uploads folder, and restrict wp-includes. Off by default, and automatically reverted if your site stops responding.
+* New: Disable Script Concatenation - optional toggle to turn off WordPress admin script and style concatenation, without modifying wp-config.php. Off by default.
+* Fix: Broken Link Checker now uses WordPress's safe HTTP client, so link checks cannot reach internal or private network addresses.
+* Fix: Remove HTML Comments and Minify no longer alters inline text spacing, preformatted text, text areas, or inline scripts and styles, and falls back to the original page if it cannot complete.
+* Fix: Broader database compatibility for the Login Defender IP activity view (removed a query that required newer MySQL or MariaDB versions).
+* Improvement: On multisite, plugin, theme, core, and user-management actions now require the matching per-action capability, so a site administrator cannot act beyond their network permissions. No change on single-site installations.
+* Improvement: File integrity monitoring now also covers sites whose wp-content, plugins, or uploads directories are symbolic links.
+* Fix: Resolved PHP notices in Login Defender under WP_DEBUG when a stored rule was malformed.
+* Performance: Connection-token records are no longer loaded on every page request.
+* Fix: Grouped caches always use a valid cache lifetime.
+* More interface strings are now translatable.
+* Internal cleanup: removed unused code and duplicate notification entries.
+* Note: the security score weighting was rebalanced to include the new Security Keys Rotation and Auto-Update features, so your displayed score may change after updating even if your settings are unchanged.
+* Tested up to WordPress 7.1.
+
+= 1.0.1 =
+* Connect a free Tailwatch (wptailwatch.com) account for web-dashboard and mobile app access with real-time push notifications, over a hardened REST connection with dedicated-key encryption.
+* One-click administrator login links (single-use, hashed, expire within one hour) initiated from a connected Tailwatch session.
+* Recovery Mode provisioning so you can regain access if your site becomes unreachable.
+* SMTP test tool for verifying your outgoing email configuration.
+* MaxMind GeoLite2 database integration (admin-initiated download) for country detection in logs and geo features.
+* Plugin and theme update management with one-click rollback.
+* Performance Optimizer that raises PHP limits during heavy operations, with optional .htaccess tuning.
+* Setup now runs only after you choose to begin, and remembers your choice.
+* Login Defender: trusted allow-list IPs and countries are consistently excluded from brute-force tracking while the allow-list is enabled.
+* Feature backfill on update so newly added features appear on existing sites; incompatibility notices are limited to administrators.
+* Tested up to WordPress 7.1.
+
+= 1.0.0 =
+* Initial release
+* Activity monitoring system
+* Error (HTTP 4xx / 5xx) logging
+* File integrity monitoring
+* SSL monitoring
+* Backup system (files and database)
+* Database optimization tools
+* Cron job manager
+* Login Defender (IP-based brute-force protection + lockouts)
+* Geo-blocking (IP and IP-range allow/block lists)
+* Event-based push notifications

@@ -63,6 +63,8 @@ class SecurityFeaturesVerifyController {
 		'default_database_optimizer',
 		'default_hardening_audit',
 		'default_login_defender_management',
+		'default_config_generate_key',
+		'default_updates_rollback',
 	);
 
 	/**
@@ -567,10 +569,11 @@ class SecurityFeaturesVerifyController {
 		// extension-only rows that contribute zero until an add-on hooks
 		// `tailwatch_calculate_security_feature_score`).
 		//
-		// Free weights: files_and_permission 9, file_integrity_check 12,
+		// Free weights: files_and_permission 9, file_integrity_check 10,
 		// log_activity 8, monitoring_logs 8, verify_ssl 8,
-		// backup_enable 8, database_optimizer 8, hardening_audit 8,
-		// login_defender_management 8 — sum 77.
+		// backup_enable 8, database_optimizer 5, hardening_audit 6,
+		// login_defender_management 8, config_generate_key 3,
+		// updates_rollback 4 — sum 77.
 		// Extension weights (Pro, via the dispatcher filter below):
 		// malware_scan 14, two_step_authenticate 9 — sum 23. Grand total 100.
 		// Extension weights (handled by the dispatcher branch below):
@@ -580,6 +583,11 @@ class SecurityFeaturesVerifyController {
 		// (14->12), log_activity (8->6), and hardening_audit (8->6) so the free
 		// total stays 77 and the overall total stays 100. Prior rebalance had
 		// dropped security_headers (7) and google_recaptcha (12).
+		// config_generate_key (3, Security Keys Rotation) and updates_rollback
+		// (4, scored on the auto-update toggles) were then added; their 7 points
+		// were rebalanced out of file_integrity_check (12->10),
+		// database_optimizer (8->5), and hardening_audit (8->6), keeping the
+		// free total at 77 and the overall total at 100.
 		if ( $calculate_status === 'default_files_and_permission' ) {
 			$feature_name = 'File Permissions';
 			if ( $feature_active ) {
@@ -600,7 +608,7 @@ class SecurityFeaturesVerifyController {
 		} elseif ( $calculate_status === 'default_file_integrity_check' ) {
 			$feature_name = 'File Integrity Watch';
 			if ( $feature_active ) {
-				$file_integrity = $this->tailwatch_calculate_file_integrity( $decode_options['options'], 12, $feature_name, $calculate_status );
+				$file_integrity = $this->tailwatch_calculate_file_integrity( $decode_options['options'], 10, $feature_name, $calculate_status );
 			} else {
 				$file_integrity = $this->tailwatch_return_if_feature_disable( $feature_name, $calculate_status );
 			}
@@ -640,7 +648,7 @@ class SecurityFeaturesVerifyController {
 		} elseif ( $calculate_status === 'default_database_optimizer' ) {
 			$feature_name = 'Database Optimizer';
 			if ( $feature_active ) {
-				$db_optimizer = $this->tailwatch_calculate_database_optimizer( $decode_options['options'], 8, $feature_name, $calculate_status );
+				$db_optimizer = $this->tailwatch_calculate_database_optimizer( $decode_options['options'], 5, $feature_name, $calculate_status );
 			} else {
 				$db_optimizer = $this->tailwatch_return_if_feature_disable( $feature_name, $calculate_status );
 			}
@@ -648,7 +656,7 @@ class SecurityFeaturesVerifyController {
 		} elseif ( $calculate_status === 'default_hardening_audit' ) {
 			$feature_name = 'Hardening Audit';
 			if ( $feature_active ) {
-				$hardening_audit = $this->tailwatch_calculate_hardening_audit( $decode_options['options'], 8, $feature_name, $calculate_status );
+				$hardening_audit = $this->tailwatch_calculate_hardening_audit( $decode_options['options'], 6, $feature_name, $calculate_status );
 			} else {
 				$hardening_audit = $this->tailwatch_return_if_feature_disable( $feature_name, $calculate_status );
 			}
@@ -661,6 +669,22 @@ class SecurityFeaturesVerifyController {
 				$login_defender = $this->tailwatch_return_if_feature_disable( $feature_name, $calculate_status );
 			}
 			$existing_data['all_features']['default_login_defender_management'] = $login_defender;
+		} elseif ( $calculate_status === 'default_config_generate_key' ) {
+			$feature_name = 'Security Keys Rotation';
+			if ( $feature_active ) {
+				$config_generate_key = $this->tailwatch_calculate_config_generate_key( $decode_options['options'], 3, $feature_name, $calculate_status );
+			} else {
+				$config_generate_key = $this->tailwatch_return_if_feature_disable( $feature_name, $calculate_status );
+			}
+			$existing_data['all_features']['default_config_generate_key'] = $config_generate_key;
+		} elseif ( $calculate_status === 'default_updates_rollback' ) {
+			$feature_name = 'Updates & Rollback';
+			if ( $feature_active ) {
+				$updates_rollback = $this->tailwatch_calculate_updates_rollback( $decode_options['options'], 4, $feature_name, $calculate_status );
+			} else {
+				$updates_rollback = $this->tailwatch_return_if_feature_disable( $feature_name, $calculate_status );
+			}
+			$existing_data['all_features']['default_updates_rollback'] = $updates_rollback;
 		}
 
 		$total_score = 0;
@@ -922,6 +946,93 @@ class SecurityFeaturesVerifyController {
 		}
 
 		$total_score   = ( $active_features / $total_features ) * $percentage;
+
+		return array(
+			'feature_name'      => $feature_name,
+			'total_score'       => $total_score,
+			'message'           => ! empty( $disabled_features ) ? __( 'Please enable these settings to improve your security score.', 'tailwatch' ) : '',
+			'disabled_features' => $disabled_features,
+		);
+	}
+
+	/**
+	 * Score the Security Keys Rotation feature.
+	 *
+	 * Full weight when automatic key rotation is enabled; zero otherwise.
+	 *
+	 * @param array  $feature_options  Raw feature options.
+	 * @param int    $percentage       Weight for this feature.
+	 * @param string $feature_name     Human-readable feature name.
+	 * @param string $calculate_status Feature option key.
+	 *
+	 * @return array Score row.
+	 */
+	public function tailwatch_calculate_config_generate_key( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
+		$expected_features = array(
+			'generate_security_keys',
+		);
+
+		$total_features    = count( $expected_features );
+		$active_features   = 0;
+		$disabled_features = array();
+
+		$verify_feature = new VerifyingFeaturesController();
+		$all_options    = $verify_feature->tailwatch_verify_options_status( $feature_options );
+		$label_map      = $verify_feature->tailwatch_get_option_labels( $feature_options );
+
+		foreach ( $expected_features as $feature ) {
+			if ( in_array( $feature, $all_options ) ) {
+				++$active_features;
+			} else {
+				$disabled_features[] = $label_map[ $feature ] ?? $feature;
+			}
+		}
+
+		$total_score = ( $active_features / $total_features ) * $percentage;
+
+		return array(
+			'feature_name'      => $feature_name,
+			'total_score'       => $total_score,
+			'message'           => ! empty( $disabled_features ) ? __( 'Please enable these settings to improve your security score.', 'tailwatch' ) : '',
+			'disabled_features' => $disabled_features,
+		);
+	}
+
+	/**
+	 * Score the Updates & Rollback feature on its automatic-update toggles.
+	 *
+	 * Full weight requires all three automatic-update toggles (theme, plugin,
+	 * core) to be on; partial selections earn a proportional score. These
+	 * toggles are nested under the per-type management fields, so they are read
+	 * directly rather than through the top-level option scanner.
+	 *
+	 * @param array  $feature_options  Raw feature options.
+	 * @param int    $percentage       Weight for this feature.
+	 * @param string $feature_name     Human-readable feature name.
+	 * @param string $calculate_status Feature option key.
+	 *
+	 * @return array Score row.
+	 */
+	public function tailwatch_calculate_updates_rollback( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {
+		$auto_update_toggles = array(
+			'Automatic Theme Updates'  => $feature_options['field_1']['sub_options']['field_2']['values']['option']['selected'] ?? false,
+			'Automatic Plugin Updates' => $feature_options['field_4']['sub_options']['field_5']['values']['option']['selected'] ?? false,
+			'Automatic Core Updates'   => $feature_options['field_7']['sub_options']['field_8']['values']['option']['selected'] ?? false,
+		);
+
+		$total_features    = count( $auto_update_toggles );
+		$active_features   = 0;
+		$disabled_features = array();
+
+		foreach ( $auto_update_toggles as $label => $selected ) {
+			if ( true === $selected ) {
+				++$active_features;
+			} else {
+				$disabled_features[] = $label;
+			}
+		}
+
+		$total_score = ( $active_features / $total_features ) * $percentage;
 
 		return array(
 			'feature_name'      => $feature_name,

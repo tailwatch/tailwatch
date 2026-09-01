@@ -56,7 +56,7 @@ export const MappingData = {
     description: "Clean all Email Logs",
     icon: DatabaseIcon(Mails),
   },
-  ajax_logs: {
+  network_logs: {
     label: "Network Logs",
     description: "Clean all Network Logs",
     icon: DatabaseIcon(ScrollText),

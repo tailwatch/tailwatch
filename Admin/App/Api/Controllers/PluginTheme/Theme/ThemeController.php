@@ -93,7 +93,33 @@ class ThemeController extends BaseController {
 	 *     @type int    $code            HTTP response code.
 	 * }
 	 */
+	/**
+	 * Return a 403 response array when the current user lacks $capability, else null.
+	 *
+	 * The front-door gates manage_options, but on multisite the theme capabilities are
+	 * super-admin-only; gating each action lets map_meta_cap enforce that. No-op on single site.
+	 *
+	 * @param string $capability
+	 * @return array|null
+	 */
+	private function tailwatch_require_capability( $capability ) {
+		if ( current_user_can( $capability ) ) {
+			return null;
+		}
+
+		return array(
+			'success' => false,
+			'code'    => 403,
+			'message' => __( 'You are not allowed to perform this action.', 'tailwatch' ),
+		);
+	}
+
 	public function tailwatch_update_theme( $post_data ) {
+		$denied = $this->tailwatch_require_capability( 'update_themes' );
+		if ( null !== $denied ) {
+			return $denied;
+		}
+
 		$theme_slug     = null;
 		$theme_name     = null;
 		$last_version   = null;
@@ -151,7 +177,8 @@ class ThemeController extends BaseController {
 					)
 				);
 				return array(
-					'message' => "Theme '$theme' is not installed or does not exist.",
+					/* translators: %s: the theme slug */
+					'message' => sprintf( __( 'Theme %s is not installed or does not exist.', 'tailwatch' ), $theme ),
 					'code'    => 404,
 				);
 			}
@@ -391,6 +418,11 @@ class ThemeController extends BaseController {
 	 * }
 	 */
 	public function tailwatch_activate_theme( $post_data ) {
+		$denied = $this->tailwatch_require_capability( 'switch_themes' );
+		if ( null !== $denied ) {
+			return $denied;
+		}
+
 		$theme_slug = null;
 		$theme_name = null;
 
@@ -571,6 +603,11 @@ class ThemeController extends BaseController {
 	 * }
 	 */
 	public function tailwatch_delete_theme( $post_data ) {
+		$denied = $this->tailwatch_require_capability( 'delete_themes' );
+		if ( null !== $denied ) {
+			return $denied;
+		}
+
 		$theme_slug = null;
 		$theme_name = null;
 
@@ -887,6 +924,11 @@ class ThemeController extends BaseController {
 	 * }
 	 */
 	public function tailwatch_theme_rollback( $post_data ) {
+		$denied = $this->tailwatch_require_capability( 'update_themes' );
+		if ( null !== $denied ) {
+			return $denied;
+		}
+
 		$theme_slug       = null;
 		$theme_name       = null;
 		$current_version  = null;
@@ -946,7 +988,8 @@ class ThemeController extends BaseController {
 					)
 				);
 				return array(
-					'message' => "Theme '$slug' is not installed. Only installed themes can be rolled back.",
+					/* translators: %s: the theme slug */
+					'message' => sprintf( __( 'Theme %s is not installed. Only installed themes can be rolled back.', 'tailwatch' ), $slug ),
 					'code'    => 404,
 				);
 			}
@@ -987,7 +1030,8 @@ class ThemeController extends BaseController {
 			if ( $current_version === $version ) {
 				// Not an error, just informational.
 				return array(
-					'message' => "Theme is already at version {$version}.",
+					/* translators: %s: the theme version */
+					'message' => sprintf( __( 'Theme is already at version %s.', 'tailwatch' ), $version ),
 					'code'    => 400,
 				);
 			}
@@ -1049,7 +1093,8 @@ class ThemeController extends BaseController {
 						)
 					);
 					return array(
-						'message' => "Version {$version} of this theme does not appear to be available in the WordPress.org repository.",
+						/* translators: %s: the theme version */
+						'message' => sprintf( __( 'Version %s of this theme does not appear to be available in the WordPress.org repository.', 'tailwatch' ), $version ),
 						'code'    => 404,
 					);
 				}

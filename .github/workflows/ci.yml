@@ -1,0 +1,45 @@
+name: CI
+
+# Builds the React admin bundle on every push/PR to main so a broken build is
+# caught before it can be released. Runs alongside the existing Psalm scan.
+# No secrets, no deploy.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Least-privilege GITHUB_TOKEN: this workflow only reads the repo (build + check).
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: admin-app/package-lock.json
+
+      - name: Build the React bundle
+        # Create React App turns ESLint warnings into errors when CI=true (which GitHub
+        # sets automatically). CI=false keeps the same behavior as a local build so
+        # pre-existing lint warnings don't fail the build.
+        env:
+          CI: "false"
+        run: npm run build
+
+      - name: Verify the bundle was produced
+        run: |
+          ls Admin/View/Static/js/*.js >/dev/null 2>&1 || { echo "::error::No JS bundle found in Admin/View/Static/js"; exit 1; }
+          ls Admin/View/Static/css/*.css >/dev/null 2>&1 || { echo "::error::No CSS bundle found in Admin/View/Static/css"; exit 1; }
+
+      - name: Assemble + verify the clean release folder
+        run: node scripts/build-plugin.js

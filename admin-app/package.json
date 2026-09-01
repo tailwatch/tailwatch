@@ -44,6 +44,7 @@
     "redux": "^5.0.1",
     "slick-carousel": "^1.8.1",
     "sweetalert2": "^11.15.10",
+    "tailwatch": "file:..",
     "tailwindcss": "^3.4.3"
   },
   "resolutions": {

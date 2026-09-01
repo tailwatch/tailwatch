@@ -1,0 +1,31 @@
+name: Update WordPress.org assets
+
+# Pushes the plugin's listing assets (banner, icon, screenshots) from the
+# .github/wordpress-org/ folder to the WordPress.org SVN /assets directory,
+# without cutting a code release. Run it by hand after changing anything in
+# .github/wordpress-org/. Note: this action also syncs readme.txt to trunk.
+
+on:
+  workflow_dispatch:
+
+# Least-privilege GITHUB_TOKEN: the wp.org push uses SVN secrets, not the token,
+# so the token only needs read access to check out the repo.
+permissions:
+  contents: read
+
+jobs:
+  assets:
+    if: github.repository == 'tailwatch/tailwatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Push assets to WordPress.org
+        # Pinned to the exact 2.2.0 commit SHA (not the moving @stable tag).
+        uses: 10up/action-wordpress-plugin-asset-update@2480306f6f693672726d08b5917ea114cb2825f7 # 2.2.0
+        env:
+          SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
+          SLUG: tailwatch
+          ASSETS_DIR: .github/wordpress-org

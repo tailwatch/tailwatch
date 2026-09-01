@@ -1,0 +1,118 @@
+name: Release
+
+# Ships a version to WordPress.org (SVN trunk + tag) and creates the matching
+# GitHub release. Run it by hand from the Actions tab.
+#
+#   dry_run = true  -> build + validate + rehearse the SVN deploy, commit NOTHING
+#   dry_run = false -> actually publish to WordPress.org and create the GitHub release
+#
+# The version input must already be set in all four version files on the branch
+# you run this from (the "Verify" step fails otherwise).
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (must already be on main, e.g. 1.0.2)"
+        required: true
+        type: string
+      dry_run:
+        description: "Dry run: build + validate, do NOT push to WordPress.org"
+        required: false
+        type: boolean
+        default: true
+      message:
+        description: "Optional note shown at the TOP of the GitHub release, above the changelog. Leave empty to use just the changelog."
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: admin-app/package-lock.json
+
+      - name: Build the React bundle into Admin/View/Static
+        # CRA turns ESLint warnings into errors when CI=true; CI=false matches the local
+        # build so pre-existing lint warnings don't fail the release build.
+        env:
+          CI: "false"
+        run: npm run build
+
+      - name: Verify version files and changelog match ${{ inputs.version }}
+        run: |
+          V="${{ inputs.version }}"
+          fail=0
+          grep -qE "Version:[[:space:]]+${V}([[:space:]]|$)"       tailwatch.php              || { echo "::error::tailwatch.php header Version != ${V}"; fail=1; }
+          grep -qE "^Stable tag:[[:space:]]+${V}[[:space:]]*$"      readme.txt                 || { echo "::error::readme.txt Stable tag != ${V}"; fail=1; }
+          grep -qE "TAILWATCH_VERSION',[[:space:]]*'${V}'"          Admin/Config/Constants.php || { echo "::error::Constants.php TAILWATCH_VERSION != ${V}"; fail=1; }
+          node -e "process.exit(require('./package.json').version === '${V}' ? 0 : 1)"          || { echo "::error::package.json version != ${V}"; fail=1; }
+          grep -qE "^= ${V} =" readme.txt                                                        || { echo "::error::No '= ${V} =' entry in the readme.txt Changelog"; fail=1; }
+          exit $fail
+
+      - name: Assemble the clean release folder (dist/tailwatch)
+        run: node scripts/build-plugin.js
+
+      - name: Package the release zip (tailwatch-<version>.zip)
+        env:
+          V: ${{ inputs.version }}
+        run: |
+          ( cd dist && zip -rq "tailwatch-${V}.zip" tailwatch )
+          echo "ZIP_PATH=dist/tailwatch-${V}.zip" >> "$GITHUB_ENV"
+
+      - name: Deploy to WordPress.org
+        id: deploy
+        # A dry-run rehearsal (commits nothing) may run in any repo, so the dev mirror
+        # can fully test the pipeline. A REAL deploy is allowed ONLY from the production
+        # repo, so the dev mirror can never push to wp.org even by accident.
+        if: ${{ inputs.dry_run || github.repository == 'tailwatch/tailwatch' }}
+        # Pinned to the exact 2.3.0 commit SHA (not the moving @stable tag) so the
+        # action code can never change under us. Bump deliberately when 10up releases.
+        uses: 10up/action-wordpress-plugin-deploy@54bd289b8525fd23a5c365ec369185f2966529c2 # 2.3.0
+        with:
+          dry-run: ${{ inputs.dry_run }}
+        env:
+          SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
+          SLUG: tailwatch
+          VERSION: ${{ inputs.version }}
+          BUILD_DIR: dist/tailwatch
+
+      - name: Build the release notes (optional message + changelog)
+        if: ${{ !inputs.dry_run && github.repository == 'tailwatch/tailwatch' }}
+        env:
+          V: ${{ inputs.version }}
+          MSG: ${{ inputs.message }}
+        run: |
+          : > RELEASE_NOTES.md
+          if [ -n "${MSG}" ]; then printf '%s\n\n' "${MSG}" >> RELEASE_NOTES.md; fi
+          awk -v hdr="= ${V} =" '
+            $0 == hdr { grab=1; next }
+            grab && (/^See changelog\.txt/ || /^== /) { exit }
+            grab { print }
+          ' readme.txt >> RELEASE_NOTES.md
+          if ! grep -q "[^[:space:]]" RELEASE_NOTES.md; then echo "Release ${V}" > RELEASE_NOTES.md; fi
+          echo "----- release notes -----"; cat RELEASE_NOTES.md
+
+      - name: Create the GitHub release
+        # Real releases only from the production repo. Dry-run rehearsals commit nothing,
+        # and the wp.org deploy above is production-gated the same way.
+        if: ${{ !inputs.dry_run && github.repository == 'tailwatch/tailwatch' }}
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          tag_name: ${{ inputs.version }}
+          name: ${{ inputs.version }}
+          body_path: RELEASE_NOTES.md
+          files: ${{ env.ZIP_PATH }}

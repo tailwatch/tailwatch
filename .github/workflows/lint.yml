@@ -1,0 +1,44 @@
+name: Lint
+
+# Runs PHP_CodeSniffer with the WordPress Coding Standards, limited to the
+# security/compliance sniffs in phpcs.xml.dist (the top WordPress.org rejection
+# reasons). Complements psalm.yml, which does type/bug analysis but not these.
+#
+# It starts as `continue-on-error: true` so it never blocks a merge while you
+# confirm it runs clean. Once it's green, flip that to false to enforce it.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Least-privilege GITHUB_TOKEN: this workflow only reads the repo to lint it.
+permissions:
+  contents: read
+
+jobs:
+  phpcs:
+    name: PHPCS (WordPress security & compliance)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: "8.2"
+
+      - name: Install PHPCS + WordPress Coding Standards
+        run: |
+          composer global config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
+          composer global config --no-plugins allow-plugins.phpcsstandards/composer-installer true
+          composer global require --no-interaction squizlabs/php_codesniffer wp-coding-standards/wpcs
+
+      - name: Run PHPCS
+        run: |
+          export PATH="$(composer global config bin-dir --absolute):$PATH"
+          phpcs -i
+          phpcs --report=full

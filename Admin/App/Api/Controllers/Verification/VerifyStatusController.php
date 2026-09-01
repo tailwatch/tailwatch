@@ -125,7 +125,8 @@ class VerifyStatusController {
 
 					return array(
 						'data'    => array(),
-						'message' => "Missing required field: {$field}",
+						/* translators: %s: the required field name */
+						'message' => sprintf( __( 'Missing required field: %s', 'tailwatch' ), $field ),
 						'code'    => 400,
 					);
 				}

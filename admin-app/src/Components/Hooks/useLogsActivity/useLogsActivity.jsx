@@ -23,7 +23,8 @@ export const useLogsActivity = (activeTab, key, option) => {
   const [featuresInfo, setFeaturesInfo] = useState({
     user: { featureId: null, isActive: null },
     error: { featureId: null, isActive: null },
-    email: { featureId: null, isActive: null }
+    email: { featureId: null, isActive: null },
+    network: { featureId: null, isActive: null }
   });
   // Filter data based on search term
   const filteredTabData = useMemo(() => {
@@ -81,6 +82,10 @@ export const useLogsActivity = (activeTab, key, option) => {
           email: {
             featureId: data.emailLogsFeatureId,
             isActive: data.emailLogsIsActive
+          },
+          network: {
+            featureId: data.networkLogsFeatureId,
+            isActive: data.networkLogsIsActive
           }
         });
       });
@@ -145,6 +150,10 @@ export const useLogsActivity = (activeTab, key, option) => {
         email: {
           featureId: data.emailLogsFeatureId,
           isActive: data.emailLogsIsActive
+        },
+        network: {
+          featureId: data.networkLogsFeatureId,
+          isActive: data.networkLogsIsActive
         }
       });
     });

@@ -79,6 +79,11 @@ class UserModificationController {
 				return $this->unauthorized_response();
 			}
 
+			// create_users maps to manage_network_users on multisite; no-op on single site.
+			if ( ! current_user_can( 'create_users' ) ) {
+				return $this->unauthorized_response();
+			}
+
 			// Parse and sanitize input
 			$json_data = isset( $post_data ) ? wp_unslash( $post_data ) : '';
 			$data      = json_decode( $json_data, true );
@@ -387,6 +392,16 @@ class UserModificationController {
 					'success' => false,
 					'code'    => 404,
 					'message' => __( 'User not found.', 'tailwatch' ),
+				);
+			}
+
+			// Gate on 'edit_user' so map_meta_cap blocks a subsite admin from editing a
+			// higher-privileged account (e.g. a super admin) on multisite. No-op on single site.
+			if ( ! current_user_can( 'edit_user', $user_id ) ) {
+				return array(
+					'success' => false,
+					'code'    => 403,
+					'message' => __( 'You are not allowed to edit this user.', 'tailwatch' ),
 				);
 			}
 

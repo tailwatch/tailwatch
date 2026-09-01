@@ -639,16 +639,23 @@ class IpActivityModel {
 		$table_name        = $wpdb->prefix . TAILWATCH_DB_LOGS_TABLE_NAME;
 		$current_timestamp = strtotime( current_time( 'mysql' ) );
 
-		// Query using ROW_NUMBER to get the latest record per IP
+		// Latest record per IP. A correlated NOT EXISTS is used instead of a ROW_NUMBER()
+		// window function so the query runs on every database WordPress supports (window
+		// functions require MySQL 8.0+ / MariaDB 10.2+, above WordPress's minimum).
 		$sql = $wpdb->prepare(
-			'SELECT * FROM (
-                SELECT t.*,
-                        ROW_NUMBER() OVER (PARTITION BY t.`option` ORDER BY t.date_modified DESC, t.id DESC) as rn
-                FROM %i t
-                WHERE t.`key` = %s AND t.is_active = %d
-            ) ranked
-            WHERE ranked.rn = 1
-            ORDER BY ranked.date_modified DESC',
+			'SELECT t.* FROM %i t
+				WHERE t.`key` = %s AND t.is_active = %d
+				AND NOT EXISTS (
+					SELECT 1 FROM %i t2
+					WHERE t2.`key` = %s AND t2.is_active = %d
+						AND t2.`option` = t.`option`
+						AND ( t2.date_modified > t.date_modified
+							OR ( t2.date_modified = t.date_modified AND t2.id > t.id ) )
+				)
+				ORDER BY t.date_modified DESC',
+			$table_name,
+			'ip_activity',
+			1,
 			$table_name,
 			'ip_activity',
 			1
@@ -740,7 +747,7 @@ class IpActivityModel {
 	 * Count distinct tracked IPs in ip_activity without materializing every row.
 	 *
 	 * Returns the same total as count( get_all_ip_activities()['activities'] ) — the
-	 * ROW_NUMBER rn=1 partition yields exactly one row per distinct `option`, which
+	 * latest-record-per-`option` query yields exactly one row per distinct `option`, which
 	 * equals COUNT(DISTINCT `option`) — but runs a single aggregate query instead of
 	 * fetching + json_decode + GeoIP-resolving every row. Use this when only the total
 	 * is needed (e.g. the dashboard log-count widget) so large ip_activity tables on

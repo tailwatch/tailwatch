@@ -6,6 +6,7 @@ import { tabs } from './TabData/TabData.jsx';
 import UserLogs from './UserLogs/UserLogs.jsx';
 import ErrorLogs from './ErrorLogs/ErrorLogs.jsx';
 import EmailLogs from './EmailLogs/EmailLogs.jsx';
+import NetworkLogs from './NetworkLogs/NetworkLogs.jsx';
 
 const Logs = () => {
   const [activeTab, setActiveTab] = useState('user');
@@ -24,7 +25,9 @@ const Logs = () => {
       setActiveTab('error');
     } else if (currentPath === 'email' && activeTab !== 'email') {
       setActiveTab('email');
-    } else if (currentPath !== 'user' && currentPath !== 'error' && currentPath !== 'email') {
+    } else if (currentPath === 'network' && activeTab !== 'network') {
+      setActiveTab('network');
+    } else if (currentPath !== 'user' && currentPath !== 'error' && currentPath !== 'email' && currentPath !== 'network') {
       setActiveTab('user');
       navigate('/dashboard/logs/user', { replace: true });
     }
@@ -44,6 +47,8 @@ const Logs = () => {
         return <ErrorLogs key="error" />;
       case 'email':
         return <EmailLogs key="email" />;
+      case 'network':
+        return <NetworkLogs key="network" />;
       default:
         return <UserLogs key="user" />;
     }

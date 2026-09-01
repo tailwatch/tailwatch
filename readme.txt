@@ -4,11 +4,11 @@ Tags: security, backup, monitoring, ssl, audit-log
 Requires at least: 6.3
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.1
+Stable tag: 1.0.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-WordPress security with backups, monitoring, SSL tracking, file integrity checks, and event-based push notifications.
+WordPress security with backups, monitoring, SSL tracking, and file integrity checks, managed from a mobile app with real-time push alerts.
 
 == Description ==
 
@@ -105,10 +105,13 @@ Yes. Every module in Tailwatch can be individually enabled or disabled.
 When you request a login link from an already-authenticated Tailwatch session (the mobile app or the connected dashboard), the plugin issues a single-use link that expires within one hour and signs in only the administrator who requested it. The link is stored hashed, so a copy of your database reveals no usable link, and it is invalidated the moment it is opened. Because it is a passwordless login you start yourself, opening the link signs you straight in — like a password-reset link, it is an alternative to typing your password rather than a second prompt.
 
 = Does Tailwatch modify my site's .htaccess file? =
-The optional Performance Optimizer feature can add a "Tailwatch Performance Settings" block to your site's root .htaccess — but only if you apply PHP configuration settings from that feature and your server runs Apache with mod_php (the plugin probes for support first). It uses WordPress core's insert_with_markers() function, which scopes the change to a single BEGIN/END marker block and preserves every other line in the file; the plugin never rewrites the whole file. After writing, it verifies your site still responds and automatically removes the block if anything fails. You can clear these settings at any time from the feature. Separately, Tailwatch writes deny files (.htaccess, index.php, web.config) inside its own storage folders under uploads/tailwatch/ and wp-content/tailwatch/ to keep their contents unreachable over the web; it does not modify .htaccess anywhere else.
+The optional Performance Optimizer feature can add a "Tailwatch Performance Settings" block to your site's root .htaccess — but only if you apply PHP configuration settings from that feature and your server runs Apache with mod_php (the plugin probes for support first). It uses WordPress core's insert_with_markers() function, which scopes the change to a single BEGIN/END marker block and preserves every other line in the file; the plugin never rewrites the whole file. After writing, it verifies your site still responds and automatically removes the block if anything fails. You can clear these settings at any time from the feature. The optional File & Directory Access hardening options (under Files & Permissions) can add a separate "Tailwatch File Access" block to your root .htaccess when you turn them on — for example to block direct web access to sensitive files such as wp-config.php, disable directory browsing, or stop PHP execution inside the uploads folder. That block uses the same WordPress core insert_with_markers() function (scoped to its own BEGIN/END markers, every other line preserved), is only written when the .htaccess file is writable, is verified with a loopback request, and is automatically removed if your site stops responding; turning the options off removes it. Separately, Tailwatch writes deny files (.htaccess, index.php, web.config) inside its own storage folders under uploads/tailwatch/ and wp-content/tailwatch/ to keep their contents unreachable over the web; it makes no other changes to your .htaccess.
 
 = Does Tailwatch change PHP settings during scans? =
 During a heavy operation you start — a malware scan, file-integrity check, hardening audit, or backup — Tailwatch may temporarily raise PHP limits (memory_limit, max_execution_time) for the duration of that request so the operation does not fail on constrained hosts. This is a runtime-only adjustment: nothing is written to any file, it never lowers a limit your host already sets higher, and it has no effect outside the running scan.
+
+= What does the optional Network Logs feature record? =
+The optional Network Logs feature (off by default) records lightweight metadata about internal WordPress traffic — REST API, admin-ajax, cron, and XML-RPC requests — so you can review recent activity, status codes, and slow responses. For REST requests it reads the already-parsed request through WordPress's own rest_post_dispatch hook; for the others it reads only the sanitized action and request parameters. It stores the endpoint/route, HTTP method, status code, response time, and the requesting user and IP. Before anything is saved, credential, token, and nonce values are redacted, cookies are never captured or stored, and every value is length-capped. Raw request bodies and response bodies are never stored, and none of this data is sent anywhere — it is kept in your own database and can be cleared at any time from the feature. The feature only records while you have it switched on.
 
 == External Services ==
 
@@ -161,7 +164,7 @@ Privacy policy: https://www.maxmind.com/en/privacy-policy
 GeoLite2 EULA: https://www.maxmind.com/en/geolite2/eula
 
 = WordPress.org — plugin, theme, and core updates & rollback =
-The optional Updates & Rollback feature contacts WordPress.org to manage updates for your plugins, themes, and WordPress core. When you open the Updates screen it queries api.wordpress.org for available-update information and version lists (the same API WordPress core itself uses); when you update or roll back an item it downloads the official package from downloads.wordpress.org and installs it through WordPress's own upgrade routines (WP_Upgrader / Core_Upgrader). Only official WordPress.org packages are ever downloaded — no third-party source is contacted. These requests are made only when you open the Updates screen or explicitly click Update or Rollback. Disable the Updates & Rollback feature in plugin settings if you do not want these requests issued.
+The optional Updates & Rollback feature contacts WordPress.org to manage updates for your plugins, themes, and WordPress core. When you open the Updates screen it queries api.wordpress.org for available-update information and version lists (the same API WordPress core itself uses); when you update or roll back an item it downloads the official package from downloads.wordpress.org and installs it through WordPress's own upgrade routines (WP_Upgrader / Core_Upgrader). Only official WordPress.org packages are ever downloaded — no third-party source is contacted. By default these requests are made only when you open the Updates screen or explicitly click Update or Rollback. If you turn on automatic updates for plugins, themes, or WordPress core (minor and security core releases only), WordPress's own built-in auto-updater additionally downloads and installs those updates on its regular schedule from the same WordPress.org sources — only for the update types you switch on, and only while the feature is enabled. Disable the Updates & Rollback feature (or the individual automatic-update toggles) in plugin settings if you do not want these requests issued.
 
 Service provider: WordPress.org (The WordPress Foundation)
 Privacy policy: https://wordpress.org/about/privacy/
@@ -242,31 +245,27 @@ No user data, logs, or PII is transmitted to external servers unless an optional
 
 == Changelog ==
 
-= 1.0.1 =
-* Connect a free Tailwatch (wptailwatch.com) account for web-dashboard and mobile app access with real-time push notifications, over a hardened REST connection with dedicated-key encryption.
-* One-click administrator login links (single-use, hashed, expire within one hour) initiated from a connected Tailwatch session.
-* Recovery Mode provisioning so you can regain access if your site becomes unreachable.
-* SMTP test tool for verifying your outgoing email configuration.
-* MaxMind GeoLite2 database integration (admin-initiated download) for country detection in logs and geo features.
-* Plugin and theme update management with one-click rollback.
-* Performance Optimizer that raises PHP limits during heavy operations, with optional .htaccess tuning.
-* Setup now runs only after you choose to begin, and remembers your choice.
-* Login Defender: trusted allow-list IPs and countries are consistently excluded from brute-force tracking while the allow-list is enabled.
-* Feature backfill on update so newly added features appear on existing sites; incompatibility notices are limited to administrators.
+= 1.0.2 =
+* New: Media Library - browse, upload, and delete your WordPress media library from the Tailwatch dashboard and connected mobile app. Uploads use WordPress's standard handler, are limited to images, and respect your media capabilities.
+* New: Scheduled Automatic Updates for plugins, themes, and WordPress core, using WordPress's own built-in updater; core is limited to minor and security releases. Off by default, with per-type toggles.
+* New: Security Keys Rotation - optionally regenerate your wp-config.php security keys (salts) on a schedule (every 15 days or monthly). The rewrite is validated and automatically rolled back if anything fails, and each rotation signs out active sessions. Off by default.
+* New: Network Logs - optionally record lightweight metadata (endpoint, method, status, response time) for internal REST, AJAX, cron, and XML-RPC requests. Credentials and tokens are redacted and request or response bodies are never stored. Off by default.
+* New: File and Directory Access hardening - optional .htaccess rules to block direct access to sensitive files, disable directory browsing, block PHP execution in the uploads folder, and restrict wp-includes. Off by default, and automatically reverted if your site stops responding.
+* New: Disable Script Concatenation - optional toggle to turn off WordPress admin script and style concatenation, without modifying wp-config.php. Off by default.
+* Fix: Broken Link Checker now uses WordPress's safe HTTP client, so link checks cannot reach internal or private network addresses.
+* Fix: Remove HTML Comments and Minify no longer alters inline text spacing, preformatted text, text areas, or inline scripts and styles, and falls back to the original page if it cannot complete.
+* Fix: Broader database compatibility for the Login Defender IP activity view (removed a query that required newer MySQL or MariaDB versions).
+* Improvement: On multisite, plugin, theme, core, and user-management actions now require the matching per-action capability, so a site administrator cannot act beyond their network permissions. No change on single-site installations.
+* Improvement: File integrity monitoring now also covers sites whose wp-content, plugins, or uploads directories are symbolic links.
+* Fix: Resolved PHP notices in Login Defender under WP_DEBUG when a stored rule was malformed.
+* Performance: Connection-token records are no longer loaded on every page request.
+* Fix: Grouped caches always use a valid cache lifetime.
+* More interface strings are now translatable.
+* Internal cleanup: removed unused code and duplicate notification entries.
+* Note: the security score weighting was rebalanced to include the new Security Keys Rotation and Auto-Update features, so your displayed score may change after updating even if your settings are unchanged.
 * Tested up to WordPress 7.1.
 
-= 1.0.0 =
-* Initial release
-* Activity monitoring system
-* Error (HTTP 4xx / 5xx) logging
-* File integrity monitoring
-* SSL monitoring
-* Backup system (files and database)
-* Database optimization tools
-* Cron job manager
-* Login Defender (IP-based brute-force protection + lockouts)
-* Geo-blocking (IP and IP-range allow/block lists)
-* Event-based push notifications
+See changelog.txt (included with the plugin) for the full changelog.
 
 == Source Code ==
 
@@ -294,8 +293,6 @@ https://github.com/tailwatch/tailwatch/issues
 
 == Upgrade Notice ==
 
-= 1.0.1 =
-Update adding new features like to connect with web-dashboard and mobile app, one-click login, recovery mode, SMTP testing, GeoLite2 integration, and plugin/theme rollback, plus Login Defender fixes and WordPress 7.1 support.
+= 1.0.2 =
+Adds optional Media Library, scheduled auto-updates, security-key rotation, network logs, and file-access hardening, plus safer broken-link checks, a minification fix, broader database compatibility, and multisite capability hardening.
 
-= 1.0.0 =
-Initial public release of Tailwatch.

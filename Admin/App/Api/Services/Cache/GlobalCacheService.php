@@ -22,6 +22,7 @@ class GlobalCacheService {
 
 	private static $group_config = array(
 		'features' => 3600,
+		'default'  => 3600,
 	);
 
 	/**

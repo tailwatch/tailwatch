@@ -86,7 +86,8 @@ class WebsiteStatsController {
 						return array(
 							'status'  => 'error',
 							'data'    => array(),
-							'message' => "Invalid section '$section'. Available sections: " . implode( ', ', array_keys( $available_sections ) ),
+							/* translators: 1: invalid section name, 2: comma-separated list of available sections */
+							'message' => sprintf( __( 'Invalid section "%1$s". Available sections: %2$s', 'tailwatch' ), $section, implode( ', ', array_keys( $available_sections ) ) ),
 						);
 					}
 				}

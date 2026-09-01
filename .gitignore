@@ -23,3 +23,5 @@ docs/
 
 # Local dev-server config (npm start)
 .env
+# Clean release staging folder (built by scripts/build-plugin.js)
+/dist/

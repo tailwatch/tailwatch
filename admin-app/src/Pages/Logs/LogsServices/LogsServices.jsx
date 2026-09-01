@@ -136,7 +136,8 @@ export const checkLocalStorage = async (setShowTabs) => {
       const logs = localStorageData.find(item => item.option === "default_log_activity");
       const emailLogs = localStorageData.find(item => item.option === "default_email_configure");
       const errorLogs = localStorageData.find(item => item.option === "default_monitoring_logs");
-      
+      const networkLogs = localStorageData.find(item => item.option === "default_network_logs");
+
       setShowTabs({
         showLogs: logs && logs.is_active === "0",
         featureId: logs ? logs.id : null,
@@ -149,6 +150,10 @@ export const checkLocalStorage = async (setShowTabs) => {
         showErorLogs: errorLogs && errorLogs.is_active === "0",
         errorLogsFeatureId: errorLogs ? errorLogs.id : null,
         errorLogsIsActive: errorLogs ? errorLogs.is_active : null,
+
+        showNetworkLogs: networkLogs && networkLogs.is_active === "0",
+        networkLogsFeatureId: networkLogs ? networkLogs.id : null,
+        networkLogsIsActive: networkLogs ? networkLogs.is_active : null,
       });
     }
   } catch (error) {

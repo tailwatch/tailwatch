@@ -1,7 +1,41 @@
 import React from 'react';
 import ActionButton from '../../../Components/Buttons/ActionButton';
 import { CheckboxField } from '../../../Components/Fields/CheckboxField';
-import { MdCheckCircle, MdError, MdBlock, MdSyncAlt } from 'react-icons/md';
+import { MdCheckCircle, MdError, MdBlock, MdSyncAlt, MdWarning, MdOutlineAccessTime } from 'react-icons/md';
+import { BsFillLightningFill } from 'react-icons/bs';
+
+const getMethodBadgeColor = (method) => {
+  switch (method) {
+    case 'GET':
+      return 'bg-green-100 text-green-800';
+    case 'POST':
+      return 'bg-blue-100 text-blue-800';
+    case 'PUT':
+      return 'bg-yellow-100 text-yellow-800';
+    case 'DELETE':
+      return 'bg-red-100 text-red-800';
+    case 'PATCH':
+      return 'bg-purple-100 text-purple-800';
+    default:
+      return 'bg-gray-100 text-gray-800';
+  }
+};
+
+const getDurationBadge = (ms) => {
+  if (ms === null || ms === undefined || isNaN(ms)) {
+    return { label: 'N/A', icon: null, classes: 'bg-gray-100 text-gray-600' };
+  }
+  if (ms >= 5000) {
+    return { label: `${ms}ms`, icon: <MdError className="inline-block ml-1" />, classes: 'bg-red-100 text-red-800' };
+  }
+  if (ms >= 3000) {
+    return { label: `${ms}ms`, icon: <MdWarning className="inline-block ml-1" />, classes: 'bg-orange-100 text-orange-800' };
+  }
+  if (ms >= 1000) {
+    return { label: `${ms}ms`, icon: <MdOutlineAccessTime className="inline-block ml-1" />, classes: 'bg-yellow-100 text-yellow-800' };
+  }
+  return { label: `${ms}ms`, icon: <BsFillLightningFill className="inline-block ml-1" />, classes: 'bg-green-100 text-green-800' };
+};
 
 
 const parseUserData = (userData) => {
@@ -124,6 +158,44 @@ const TableRows = ({ activeTab, rowData, handleErrorModalOpen, handleDetailModal
           </td>
         </>
       );
+    case "network": {
+      const rawDuration = logData?.meta?.duration_ms;
+      const durationMs = parseFloat(String(rawDuration).replace(/[^0-9.]/g, ''));
+      const durationBadge = getDurationBadge(isNaN(durationMs) ? null : Math.round(durationMs));
+      const networkStatusFlag = getStatusFlag(logData?.response?.status_code);
+
+      return (
+        <>
+          {commonColumns}
+          <td className="p-3 text-sm text-black">
+            {logData?.request?.post_data?.action_type || logData?.endpoint?.action || 'N/A'}
+          </td>
+          <td className="p-3 text-sm text-black">
+            <span
+              className={`px-2 py-1 text-xs font-medium rounded-xl ${getMethodBadgeColor(logData?.endpoint?.method)} whitespace-nowrap`}
+              title={logData?.endpoint?.method || 'N/A'}
+            >
+              {logData?.endpoint?.method || 'N/A'}
+            </span>
+          </td>
+          <td className="p-3 text-sm text-black">
+            <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xl whitespace-nowrap ${networkStatusFlag.classes}`}>
+              {networkStatusFlag.icon}
+              {networkStatusFlag.label}
+            </span>
+          </td>
+          <td className="p-3 text-sm text-black">
+            {logData?.meta?.ip_address || 'N/A'}
+          </td>
+          <td className="p-3 text-sm text-black">
+            <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xl whitespace-nowrap ${durationBadge.classes}`}>
+              {durationBadge.icon}
+              {durationBadge.label}
+            </span>
+          </td>
+        </>
+      );
+    }
     default:
       return <td className="p-3 text-sm text-black">No data available</td>;
   }

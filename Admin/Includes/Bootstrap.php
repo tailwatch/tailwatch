@@ -11,6 +11,7 @@ use Tailwatch\Admin\App\Api\Controllers\RecoveryMode\RecoveryModeController;
 use Tailwatch\Admin\View\Controller\InterfaceController;
 use Tailwatch\Admin\App\Api\Controllers\Logs\LogActivityController;
 use Tailwatch\Admin\App\Api\Controllers\Logs\MonitoringLogController;
+use Tailwatch\Admin\App\Api\Controllers\Logs\NetworkLogsController;
 use Tailwatch\Admin\App\Api\Controllers\Features\OptionsController;
 use Tailwatch\Admin\App\Api\Controllers\Features\SecurityFeaturesVerifyController;
 use Tailwatch\Admin\App\Api\Controllers\Visit\RecommendedFeaturesController;
@@ -36,6 +37,7 @@ use Tailwatch\Admin\App\Api\Controllers\IpManagement\IpManagementController;
 use Tailwatch\Admin\App\Api\Controllers\LoginDefender\AuthenticationController;
 use Tailwatch\Admin\App\Api\Controllers\LoginDefender\LoginProtection\LoginProtectionController;
 use Tailwatch\Admin\App\Api\Controllers\History\HistoryHookController;
+use Tailwatch\Admin\App\Api\Controllers\AutoUpdate\AutoUpdateController;
 use Tailwatch\Admin\App\Api\Controllers\LimitIncrease\PerformanceOptimizerController;
 
 /**
@@ -55,6 +57,7 @@ class Bootstrap {
 		add_action( 'admin_init', array( $this, 'ensure_private_storage' ) );
 		add_action( 'admin_init', array( $this, 'tailwatch_maybe_backfill_features' ) );
 		add_action( 'admin_init', array( $this, 'tailwatch_maybe_activation_redirect' ) );
+		add_action( 'admin_init', array( $this, 'tailwatch_register_privacy_policy' ) );
 
 		require_once TAILWATCH_ADMIN_API_DIR . 'Models/OptionsModel.php';
 	}
@@ -88,7 +91,9 @@ class Bootstrap {
 		new InterfaceController();
 		new LogActivityController();
 		new MonitoringLogController();
+		new NetworkLogsController();
 		new HistoryHookController();
+		new AutoUpdateController();
 		new PerformanceOptimizerController();
 		new OptionsController();
 		new SecurityFeaturesVerifyController();
@@ -283,8 +288,13 @@ class Bootstrap {
 			return;
 		}
 
-		$result = ( new OptionsModel() )->tailwatch_sync_missing_features();
-		if ( $result >= 0 ) {
+		$options_model = new OptionsModel();
+		$inserted      = $options_model->tailwatch_sync_missing_features();
+		$reconciled    = $options_model->tailwatch_reconcile_missing_subfields();
+		$refreshed     = $options_model->tailwatch_refresh_field_metadata();
+		// Advance the marker only when all three passes ran against a fully seeded
+		// site, so a not-yet-configured install keeps retrying on later admin loads.
+		if ( $inserted >= 0 && $reconciled >= 0 && $refreshed >= 0 ) {
 			update_option( 'tailwatch_features_synced_version', TAILWATCH_VERSION, false );
 		}
 	}
@@ -321,6 +331,28 @@ class Bootstrap {
 
 		wp_safe_redirect( admin_url( 'admin.php?page=tailwatch' ) );
 		exit;
+	}
+
+	/**
+	 * Register a suggested privacy-policy passage describing the personal data the plugin
+	 * logging features record (IP address, user, request metadata). Hooked to admin_init per
+	 * WordPress guidance; the copy is only a suggestion an admin may add to the site privacy
+	 * policy, and nothing is transmitted by registering it.
+	 *
+	 * @return void
+	 */
+	public function tailwatch_register_privacy_policy() {
+		if ( ! function_exists( 'wp_add_privacy_policy_content' ) ) {
+			return;
+		}
+
+		$suggested = '<strong class="privacy-policy-tutorial">' . esc_html__( 'Suggested text:', 'tailwatch' ) . '</strong> ';
+		$content   = '<p>' . $suggested . esc_html__(
+			'This site uses Tailwatch to monitor security. When its logging features are enabled, Tailwatch records the IP address of requests and, for logged-in users, the user ID and username, together with request metadata such as the endpoint or action, HTTP method, status code, and response time, for events including logins, failed logins, and administrative actions. Passwords, authentication tokens, and nonces are never stored, and captured values are length-capped. This information is kept only in the database on your own site, is used solely to detect and investigate suspicious activity, is never sent to any third party, and can be cleared at any time from the plugin.',
+			'tailwatch'
+		) . '</p>';
+
+		wp_add_privacy_policy_content( 'Tailwatch', wp_kses_post( $content ) );
 	}
 
 	public function upon_deactivation() {

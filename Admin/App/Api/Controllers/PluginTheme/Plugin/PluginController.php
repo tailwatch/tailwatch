@@ -70,7 +70,33 @@ class PluginController extends BaseController {
 	 *     @type bool   $site_health     Optional site health indicator on error.
 	 * }
 	 */
+	/**
+	 * Return a 403 response array when the current user lacks $capability, else null.
+	 *
+	 * The front-door gates manage_options, but on multisite the plugin capabilities are
+	 * super-admin-only; gating each action lets map_meta_cap enforce that. No-op on single site.
+	 *
+	 * @param string $capability
+	 * @return array|null
+	 */
+	private function tailwatch_require_capability( $capability ) {
+		if ( current_user_can( $capability ) ) {
+			return null;
+		}
+
+		return array(
+			'success' => false,
+			'code'    => 403,
+			'message' => __( 'You are not allowed to perform this action.', 'tailwatch' ),
+		);
+	}
+
 	public function tailwatch_update_plugin( $post_data ) {
+		$denied = $this->tailwatch_require_capability( 'update_plugins' );
+		if ( null !== $denied ) {
+			return $denied;
+		}
+
 		$plugin_slug    = null;
 		$plugin_name    = null;
 		$last_version   = null;
@@ -154,7 +180,8 @@ class PluginController extends BaseController {
 					)
 				);
 				return array(
-					'message' => "Plugin '$plugin' is not installed or does not exist.",
+					/* translators: %s: the plugin slug */
+					'message' => sprintf( __( 'Plugin %s is not installed or does not exist.', 'tailwatch' ), $plugin ),
 					'plugin'  => array(),
 					'code'    => 404,
 				);
@@ -461,6 +488,11 @@ class PluginController extends BaseController {
 	 * }
 	 */
 	public function tailwatch_activate_plugin( $post_data ) {
+		$denied = $this->tailwatch_require_capability( 'activate_plugins' );
+		if ( null !== $denied ) {
+			return $denied;
+		}
+
 		$plugin_slug = null;
 		$plugin_name = null;
 
@@ -677,6 +709,11 @@ class PluginController extends BaseController {
 	 * }
 	 */
 	public function tailwatch_deactivate_plugin( $post_data ) {
+		$denied = $this->tailwatch_require_capability( 'activate_plugins' );
+		if ( null !== $denied ) {
+			return $denied;
+		}
+
 		$plugin_slug = null;
 		$plugin_name = null;
 
@@ -912,6 +949,11 @@ class PluginController extends BaseController {
 	 * }
 	 */
 	public function tailwatch_delete_plugin( $post_data ) {
+		$denied = $this->tailwatch_require_capability( 'delete_plugins' );
+		if ( null !== $denied ) {
+			return $denied;
+		}
+
 		$plugin_slug = null;
 		$plugin_name = null;
 
@@ -1192,6 +1234,17 @@ class PluginController extends BaseController {
 					'message' => __( 'Invalid action. Allowed: ', 'tailwatch' ) . implode( ', ', $allowed_actions ),
 					'plugins' => array(),
 					'code'    => 400,
+				);
+			}
+
+			// On multisite the plugin capabilities are super-admin-only; require the one that
+			// matches the requested bulk action (delete_plugins for delete, else activate_plugins).
+			$required_capability = ( 'delete' === $action ) ? 'delete_plugins' : 'activate_plugins';
+			if ( null !== $this->tailwatch_require_capability( $required_capability ) ) {
+				return array(
+					'message' => __( 'You are not allowed to perform this action.', 'tailwatch' ),
+					'plugins' => array(),
+					'code'    => 403,
 				);
 			}
 
@@ -1532,6 +1585,11 @@ class PluginController extends BaseController {
 	 * }
 	 */
 	public function tailwatch_plugin_rollback( $post_data ) {
+		$denied = $this->tailwatch_require_capability( 'update_plugins' );
+		if ( null !== $denied ) {
+			return $denied;
+		}
+
 		$plugin_slug      = null;
 		$plugin_name      = null;
 		$current_version  = null;
@@ -1617,7 +1675,8 @@ class PluginController extends BaseController {
 					)
 				);
 				return array(
-					'message' => "Plugin slug '$slug' does not match required format: 'folder/file.php' or 'file.php'",
+					/* translators: %s: the plugin slug */
+					'message' => sprintf( __( 'Plugin slug %s does not match required format: folder/file.php or file.php', 'tailwatch' ), $slug ),
 					'plugin'  => array(),
 					'code'    => 400,
 				);
@@ -1647,7 +1706,8 @@ class PluginController extends BaseController {
 					)
 				);
 				return array(
-					'message' => "Plugin '$slug' is not installed. Only installed plugins can be rolled back.",
+					/* translators: %s: the plugin slug */
+					'message' => sprintf( __( 'Plugin %s is not installed. Only installed plugins can be rolled back.', 'tailwatch' ), $slug ),
 					'plugin'  => array(),
 					'code'    => 404,
 				);
@@ -1674,7 +1734,8 @@ class PluginController extends BaseController {
 					)
 				);
 				return array(
-					'message' => "Plugin file '$slug' not found. Please check the plugin slug format (e.g., 'plugin-folder/plugin-file.php').",
+					/* translators: %s: the plugin slug */
+					'message' => sprintf( __( 'Plugin file %s not found. Please check the plugin slug format (e.g. plugin-folder/plugin-file.php).', 'tailwatch' ), $slug ),
 					'plugin'  => array(),
 					'code'    => 404,
 				);
@@ -1720,7 +1781,8 @@ class PluginController extends BaseController {
 			if ( version_compare( $current_version, $version, '==' ) ) {
 				// Not an error, just informational.
 				return array(
-					'message' => "Plugin is already at version {$version}.",
+					/* translators: %s: the plugin version */
+					'message' => sprintf( __( 'Plugin is already at version %s.', 'tailwatch' ), $version ),
 					'plugin'  => array(
 						'slug'            => $slug,
 						'current_version' => $current_version,
@@ -1793,7 +1855,8 @@ class PluginController extends BaseController {
 						)
 					);
 					return array(
-						'message' => "Version {$version} of this plugin does not appear to be available in the WordPress.org repository.",
+						/* translators: %s: the plugin version */
+						'message' => sprintf( __( 'Version %s of this plugin does not appear to be available in the WordPress.org repository.', 'tailwatch' ), $version ),
 						'plugin'  => array(),
 						'code'    => 404,
 					);

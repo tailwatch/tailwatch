@@ -20,7 +20,8 @@ class FieldsValidationController {
 			if ( ! isset( $data[ $field ] ) ) {
 				return array(
 					'success' => false,
-					'message' => "Missing required field: $field",
+					/* translators: %s: the required field name */
+					'message' => sprintf( __( 'Missing required field: %s', 'tailwatch' ), $field ),
 					'code'    => 400,
 				);
 			}
