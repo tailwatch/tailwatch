@@ -376,7 +376,33 @@ class CoreController extends BaseController {
 	 *
 	 * @return array Response data with message and code.
 	 */
+	/**
+	 * Return a 403 response array when the current user lacks $capability, else null.
+	 *
+	 * The front-door gates manage_options, but on multisite update_core is super-admin-only;
+	 * gating the update/rollback actions lets map_meta_cap enforce that. No-op on single site.
+	 *
+	 * @param string $capability
+	 * @return array|null
+	 */
+	private function tailwatch_require_capability( $capability ) {
+		if ( current_user_can( $capability ) ) {
+			return null;
+		}
+
+		return array(
+			'success' => false,
+			'code'    => 403,
+			'message' => __( 'You are not allowed to perform this action.', 'tailwatch' ),
+		);
+	}
+
 	public function tailwatch_update_core( $post_data = null ) {
+		$denied = $this->tailwatch_require_capability( 'update_core' );
+		if ( null !== $denied ) {
+			return $denied;
+		}
+
 		global $wp_version;
 
 		try {
@@ -448,7 +474,7 @@ class CoreController extends BaseController {
 						'action'          => 'core_update_completed',
 						'current_version' => $current_version,
 						'latest_version'  => $latest_version,
-						'message'         => 'WordPress core is already at the latest version',
+						'message'         => __( 'WordPress core is already at the latest version', 'tailwatch' ),
 						'meta_data'       => array(
 							'feature' => 'WordPress Core',
 							'event'   => 'Updated',
@@ -605,6 +631,11 @@ class CoreController extends BaseController {
 	 * @return array Response data with message and code.
 	 */
 	public function tailwatch_rollback_update_core( $post_data ) {
+		$denied = $this->tailwatch_require_capability( 'update_core' );
+		if ( null !== $denied ) {
+			return $denied;
+		}
+
 		global $wp_version;
 
 		try {

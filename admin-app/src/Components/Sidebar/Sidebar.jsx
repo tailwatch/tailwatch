@@ -164,7 +164,7 @@ const Sidebar = () => {
         {/* ── User Card ── */}
         <UserCard loading={loading} userData={userData} />
         <div className="text-center text-xs text-white pb-2">
-          🚀 Beta v1.0.0
+          🚀 Beta v{(typeof window !== "undefined" && window.tailwatch_ajax && window.tailwatch_ajax.version) || "1.0.2"}
         </div>
       </div>
 

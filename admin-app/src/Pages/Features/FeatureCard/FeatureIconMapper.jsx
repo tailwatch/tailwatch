@@ -4,7 +4,7 @@ import {
   LockKeyhole, Construction, Bug, Timer, Fingerprint, Bot,
   FileSearch, DatabaseBackup, FileLock2, Ban, Webhook, LifeBuoy, ShieldAlert,
   Database, Replace, FolderSync, BrickWall, Users, Forward, Unlink, Globe,
-  Cctv, LineChart, Eye, UserCheck, FolderLock, ListChecks
+  Cctv, LineChart, Eye, UserCheck, FolderLock, ListChecks, KeyRound, RefreshCw
 } from 'lucide-react';
 
 // Maps each feature to a Lucide icon (ISC-licensed, GPL-compatible). These replace
@@ -42,7 +42,9 @@ const FEATURE_ICON_MAP = {
   'Password Leak Protection': Eye,
   'User Hardening': UserCheck,
   'Hide WP': FolderLock,
-  'Hardening Audit': ListChecks
+  'Hardening Audit': ListChecks,
+  'Security Keys Rotation': KeyRound,
+  'Updates & Rollback': RefreshCw
 };
 
 const FeatureIconMapper = forwardRef(({ title, isActive, isPro, isLocked, size = 24, colorClass = 'text-[#007980]', onReady }, ref) => {

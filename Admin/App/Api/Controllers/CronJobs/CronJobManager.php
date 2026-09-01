@@ -31,6 +31,7 @@ use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\LoginDefenderExpiredBlocks
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\LoginDefenderLogsCleanupCronJob;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\JwtCleanupCronJob;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\AutoLoginTokenCleanupCronJob;
+use Tailwatch\Admin\App\Api\Controllers\CronJobs\Jobs\ConfigSaltKeysCronJob;
 
 /**
  * Class CronJobManager
@@ -130,6 +131,9 @@ class CronJobManager {
 
 		// Auto-login — prune expired one-time login token records (daily maintenance).
 		$this->cron_jobs['auto_login_cleanup'] = new AutoLoginTokenCleanupCronJob();
+
+		// Security Keys Rotation — regenerate wp-config.php auth/salt keys on a schedule (opt-in).
+		$this->cron_jobs['config_salt_keys'] = new ConfigSaltKeysCronJob();
 
 		/**
 		 * Filter to add custom cron jobs.
@@ -373,6 +377,9 @@ class CronJobManager {
 
 			// Auto-login token cleanup (daily maintenance).
 			'tailwatch_auto_login_cleanup',
+
+			// Security Keys Rotation (recurring schedule).
+			'tailwatch_generate_keys_in_config',
 
 			// Legacy unprefixed names — keep in the uninstall sweep for one release cycle.
 			'login_defender_cleanup_expired',

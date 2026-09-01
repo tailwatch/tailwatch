@@ -251,7 +251,8 @@ class RedirectionsManager extends BaseController {
 
 					return array(
 						'code'    => 400,
-						'message' => "Missing or empty required field: $field",
+						/* translators: %s: the required field name */
+						'message' => sprintf( __( 'Missing or empty required field: %s', 'tailwatch' ), $field ),
 					);
 				}
 			}
@@ -279,7 +280,8 @@ class RedirectionsManager extends BaseController {
 
 					return array(
 						'data'    => array(),
-						'message' => "Invalid source URL domain. Only URLs from $site_host are allowed.",
+						/* translators: %s: the allowed site host */
+						'message' => sprintf( __( 'Invalid source URL domain. Only URLs from %s are allowed.', 'tailwatch' ), $site_host ),
 						'code'    => 400,
 					);
 				}
@@ -549,7 +551,8 @@ class RedirectionsManager extends BaseController {
 
 									return array(
 										'code'    => 400,
-										'message' => "Invalid user role: $role",
+										/* translators: %s: the user role */
+										'message' => sprintf( __( 'Invalid user role: %s', 'tailwatch' ), $role ),
 									);
 								}
 							}
@@ -635,7 +638,8 @@ class RedirectionsManager extends BaseController {
 
 									return array(
 										'code'    => 400,
-										'message' => "Invalid IP address or range: $ip",
+										/* translators: %s: the IP address or range */
+										'message' => sprintf( __( 'Invalid IP address or range: %s', 'tailwatch' ), $ip ),
 									);
 								}
 							}
@@ -1067,7 +1071,8 @@ class RedirectionsManager extends BaseController {
 					);
 					return array(
 						'code'    => 400,
-						'message' => "Missing or empty required field: $field",
+						/* translators: %s: the required field name */
+						'message' => sprintf( __( 'Missing or empty required field: %s', 'tailwatch' ), $field ),
 					);
 				}
 			}
@@ -1158,7 +1163,8 @@ class RedirectionsManager extends BaseController {
 					);
 					return array(
 						'code'    => 400,
-						'message' => "Empty required field: $field",
+						/* translators: %s: the required field name */
+						'message' => sprintf( __( 'Empty required field: %s', 'tailwatch' ), $field ),
 					);
 				}
 			}
@@ -1177,7 +1183,8 @@ class RedirectionsManager extends BaseController {
 					);
 					return array(
 						'code'    => 400,
-						'message' => "Required field $field cannot be empty in the rule.",
+						/* translators: %s: the required field name */
+						'message' => sprintf( __( 'Required field %s cannot be empty in the rule.', 'tailwatch' ), $field ),
 					);
 				}
 			}
@@ -1203,7 +1210,8 @@ class RedirectionsManager extends BaseController {
 					);
 					return array(
 						'data'    => array(),
-						'message' => "Invalid source URL domain. Only URLs from $site_host are allowed.",
+						/* translators: %s: the allowed site host */
+						'message' => sprintf( __( 'Invalid source URL domain. Only URLs from %s are allowed.', 'tailwatch' ), $site_host ),
 						'code'    => 400,
 					);
 				}
@@ -1468,7 +1476,8 @@ class RedirectionsManager extends BaseController {
 									);
 									return array(
 										'code'    => 400,
-										'message' => "Invalid user role: $role",
+										/* translators: %s: the user role */
+										'message' => sprintf( __( 'Invalid user role: %s', 'tailwatch' ), $role ),
 									);
 								}
 							}
@@ -1549,7 +1558,8 @@ class RedirectionsManager extends BaseController {
 									);
 									return array(
 										'code'    => 400,
-										'message' => "Invalid IP address or range: $ip",
+										/* translators: %s: the IP address or range */
+										'message' => sprintf( __( 'Invalid IP address or range: %s', 'tailwatch' ), $ip ),
 									);
 								}
 							}

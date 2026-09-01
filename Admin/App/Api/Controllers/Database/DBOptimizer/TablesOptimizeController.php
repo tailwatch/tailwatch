@@ -278,12 +278,12 @@ class TablesOptimizeController {
 		}
 	}
 
-	public function tailwatch_clean_ajax_logs( array &$json_data, $number_interval = null ): void {
-		$ajax_logs        = $this->tailwatch_get_logs( 'default_ajax_logs', $number_interval );
-		$total_ajax_logs  = $this->tailwatch_get_logs( 'default_ajax_logs', null );
-		$count_total_logs = count( $total_ajax_logs );
-		$total_count      = count( $ajax_logs );
-		$rows_processed   = $json_data['ajax_logs']['rows_processed'] ?? 0;
+	public function tailwatch_clean_network_logs( array &$json_data, $number_interval = null ): void {
+		$network_logs        = $this->tailwatch_get_logs( 'default_network_logs', $number_interval );
+		$total_network_logs  = $this->tailwatch_get_logs( 'default_network_logs', null );
+		$count_total_logs = count( $total_network_logs );
+		$total_count      = count( $network_logs );
+		$rows_processed   = $json_data['network_logs']['rows_processed'] ?? 0;
 		$sum_rows         = $rows_processed + $total_count;
 
 		$this->optimizer_controller->tailwatch_optimize_logs_records(
@@ -292,22 +292,22 @@ class TablesOptimizeController {
 				: "Processing Network Logs (rows {$rows_processed}-{$sum_rows})"
 		);
 
-		if ( ! isset( $json_data['ajax_logs']['total_counts'] ) ) {
-			$json_data['ajax_logs']['total_counts'] = $count_total_logs;
+		if ( ! isset( $json_data['network_logs']['total_counts'] ) ) {
+			$json_data['network_logs']['total_counts'] = $count_total_logs;
 		}
 
-		$json_data['ajax_logs']['rows_processed'] = $sum_rows;
+		$json_data['network_logs']['rows_processed'] = $sum_rows;
 		$this->optimizer_controller->update_db_optimization_data( $json_data );
 
-		foreach ( $ajax_logs as $log_id ) {
+		foreach ( $network_logs as $log_id ) {
 			$this->optimizer_model->delete_data_by_id( (int) $log_id );
 		}
 
-		$verify_total_counts = $json_data['ajax_logs']['total_counts'];
-		$total_rows_counts   = $json_data['ajax_logs']['rows_processed'];
+		$verify_total_counts = $json_data['network_logs']['total_counts'];
+		$total_rows_counts   = $json_data['network_logs']['rows_processed'];
 
-		if ( $verify_total_counts === $total_rows_counts || empty( $ajax_logs ) ) {
-			$json_data['ajax_logs']['is_completed'] = true;
+		if ( $verify_total_counts === $total_rows_counts || empty( $network_logs ) ) {
+			$json_data['network_logs']['is_completed'] = true;
 			$this->optimizer_controller->update_db_optimization_data( $json_data );
 			$this->optimizer_controller->tailwatch_optimize_logs_records( 'Network Logs cleanup completed', 'OK' );
 		}

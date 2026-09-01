@@ -13,7 +13,8 @@ const MobileConnectCTA = ({ devices, planName, mobileFeatures, loading }) => {
     return (
       <div className="px-4 mb-3">
         <div
-          className="flex items-center gap-2 px-3 py-2 rounded-xl"
+          onClick={() => navigate("/dashboard/settings/license")}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl cursor-pointer"
           style={{
             background: "rgba(20,184,166,0.08)",
             border: "1px solid rgba(20,184,166,0.2)",
@@ -32,6 +33,7 @@ const MobileConnectCTA = ({ devices, planName, mobileFeatures, loading }) => {
       <div
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
+        onClick={() => navigate("/dashboard/settings/license")}
         className="rounded-xl cursor-pointer overflow-hidden transition-all duration-300"
         style={{
           background: hovered ? "rgba(251,146,60,0.08)" : "rgba(251,146,60,0.05)",
@@ -63,7 +65,7 @@ const MobileConnectCTA = ({ devices, planName, mobileFeatures, loading }) => {
           <div className="px-3 pb-3 space-y-2">
             {/* Info message */}
             <p className="text-orange-200/60 text-[10px] leading-relaxed">
-              Get real-time push notifications and manage this plugin directly from your mobile app.
+              Get real-time push notifications and manage site security directly from your mobile app.
             </p>
 
             {/* Feature list */}

@@ -111,13 +111,15 @@ class JwtService {
 		$access_token  = JWT::encode( $access_payload, $signing_key, self::ALGORITHM );
 		$refresh_token = JWT::encode( $refresh_payload, $signing_key, self::ALGORITHM );
 
+		// Non-autoloaded: read on demand by exact key, never needed on every request.
 		update_option(
 			'tailwatch_token_jti_' . $jti,
 			array(
 				'client_id' => $client_id,
 				'expires'   => $refresh_expiration,
 				'device'    => $device_fingerprint,
-			)
+			),
+			false
 		);
 
 		return array(
@@ -283,13 +285,15 @@ class JwtService {
 				self::ALGORITHM
 			);
 
+			// Non-autoloaded: read on demand by exact key, never needed on every request.
 			update_option(
 				'tailwatch_token_jti_' . $new_jti,
 				array(
 					'client_id' => $decoded->client_id,
 					'expires'   => $new_refresh_expiration,
 					'device'    => $device_fingerprint,
-				)
+				),
+				false
 			);
 
 			return array(
@@ -322,7 +326,8 @@ class JwtService {
 		if ( ! self::is_valid_jti_format( $jti ) ) {
 			return;
 		}
-		update_option( 'tailwatch_token_revoked_' . $jti, true );
+		// Non-autoloaded: revocation flag is checked on demand by exact key.
+		update_option( 'tailwatch_token_revoked_' . $jti, true, false );
 	}
 
 	/**

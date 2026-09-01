@@ -5,6 +5,27 @@ import { Star } from "lucide-react";
 import IconButton from "../../../../Components/Buttons/IconButton";
 import { Eye, EyeOff, Copy } from "lucide-react";
 
+const MobileAppSetupSteps = ({ variant = "full", wrapperClassName = "bg-white rounded-lg shadow-sm border border-gray-300 p-4 sm:p-6" }) => {
+  const isAppOnly = variant === "app-only";
+
+  const content = (
+    <>
+      <div className="flex items-center mb-2 sm:mb-3">
+        <div className="bg-[#07C07E1A] p-1.5 sm:p-2 rounded-full mr-2 sm:mr-3">
+          <Smartphone className="h-4 w-4 sm:h-5 sm:w-5 text-[#007980]" />
+        </div>
+        <h3 className="text-base sm:text-lg font-semibold text-gray-800">Manage Your Site from the Tailwatch Mobile App</h3>
+      </div>
+
+      <p className="text-gray-600 text-xs sm:text-sm leading-relaxed">{isAppOnly ? (<>Download the </>) : (<>First, connect your website to your <span className="font-semibold text-gray-800">WP Tailwatch Cloud account</span>. Then download the </>)}<span className="font-semibold text-gray-800">Tailwatch app</span> from the Apple App Store or Google Play Store and sign in with the same account.</p>
+
+      <p className="text-gray-600 text-xs sm:text-sm leading-relaxed mt-2 sm:mt-3">Once connected, receive <span className="font-semibold text-gray-800">real-time security alerts</span> and manage your site remotely from the mobile app — <span className="font-semibold text-[#007980]">FREE</span>.</p>
+    </>
+  );
+
+  return <div className={wrapperClassName}>{content}</div>;
+};
+
 export const ConnectedLicenseView = ({ email, startData, endData, isExpiry, licenseKey, connectionDateTime, planName, devices, role, onDisconnect }) => {
   const isSuspended = role === 'suspended';
 
@@ -237,12 +258,8 @@ const ConnectedDevices = ({ devices = [] }) => {
       </div>
 
       {devices.length === 0 ? (
-        <div className="py-8 sm:py-12 px-4 sm:px-6 text-center bg-gray-50">
-          <div className="inline-flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-full mb-3 sm:mb-4">
-            <Smartphone className="h-5 w-5 sm:h-6 sm:w-6 text-gray-400" />
-          </div>
-          <p className="text-sm sm:text-base text-gray-700 font-medium">No mobile devices currently connected</p>
-          <p className="text-gray-500 text-xs sm:text-sm mt-1">Use the mobile app to connect your devices</p>
+        <div className="bg-gray-50">
+          <MobileAppSetupSteps variant="app-only" wrapperClassName="p-4 sm:p-6" />
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -312,8 +329,8 @@ export const NoLicenseView = ({ handleConnectClick, connecting }) => {
               <AlertTriangle className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" />
             </div>
             <div>
-              <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Connect your Tailwatch Account</h2>
-              <p className="text-sm sm:text-base text-black">Gain access to dozens of more tools and connect your site to your My Tailwatch Dashboard</p>
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Connect your Tailwatch account (FREE)</h2>
+              <p className="text-sm sm:text-base text-black">Connect your free account to manage and recover your site remotely.</p>
             </div>
           </div>
 
@@ -321,9 +338,10 @@ export const NoLicenseView = ({ handleConnectClick, connecting }) => {
         </div>
 
         <p className="text-xs text-gray-500 mt-3 sm:mt-4">
-          Connecting links this site to your Tailwatch account and sends your site URL, environment type, and a WordPress recovery credential to dashboard.wptailwatch.com so the dashboard can help restore access if your site later becomes unreachable. See our{' '}
-          <a href="https://wptailwatch.com/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-700">Privacy Policy</a>.
+          <span className="font-semibold text-gray-600">Privacy Notice:</span> Connecting your site to your WP Tailwatch Cloud account sends your site URL and the site settings required for remote recovery and management. This allows you to connect to and manage your site remotely through the WP Tailwatch Cloud Dashboard (dashboard.wptailwatch.com) or mobile app. See our{' '}
+          <a href="https://wptailwatch.com/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-700">Privacy Policy</a>{' '}for details.
         </p>
+        <MobileAppSetupSteps variant="full" wrapperClassName="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-200" />
       </div>
 
       {/* License Benefits */}

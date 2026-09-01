@@ -1,0 +1,73 @@
+name: Version bump
+
+# Bumps the version across all four files, scaffolds the changelog entry, and
+# opens a PR to main. You still write the changelog bullets on the PR before merging.
+#
+#   dry_run = true  -> print what would change, open no PR
+#   dry_run = false -> commit to release/<version> and open a PR to main
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "New version to set everywhere, e.g. 1.0.3"
+        required: true
+        type: string
+      dry_run:
+        description: "Dry run: show changes only, do NOT open a PR"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+
+      - name: Bump version + scaffold changelog
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            node scripts/bump-version.js "${{ inputs.version }}" --dry-run
+          else
+            node scripts/bump-version.js "${{ inputs.version }}"
+          fi
+
+      - name: Commit and open the version-bump PR
+        if: ${{ !inputs.dry_run }}
+        run: |
+          V="${{ inputs.version }}"
+          BRANCH="release/${V}"
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "::error::Branch ${BRANCH} already exists"; exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add tailwatch.php readme.txt changelog.txt Admin/Config/Constants.php package.json
+          if git diff --cached --quiet; then
+            echo "::error::No version changes staged (already at ${V}?)"; exit 1
+          fi
+          git commit -m "chore: bump version to ${V}"
+          git push origin "$BRANCH"
+          gh pr create --base main --head "$BRANCH" \
+            --title "chore: bump version to ${V}" \
+            --body "Bumps the version to **${V}** in tailwatch.php, readme.txt, Admin/Config/Constants.php and package.json, and scaffolds the \`= ${V} =\` changelog entry.
+
+          **Before merging:** fill in the \`= ${V} =\` changelog bullet(s) under \`== Changelog ==\` in readme.txt.
+
+          Opened by the Version bump workflow."

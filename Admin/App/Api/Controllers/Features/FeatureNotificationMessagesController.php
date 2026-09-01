@@ -70,6 +70,7 @@ class FeatureNotificationMessagesController {
 			'default_file_integrity_check'   => 'scan',
 			'default_hardening_audit'        => 'scan',
 			'broken_link_checker_settings'   => 'scan',
+			'default_config_generate_key'    => 'scan',
 			// Blocker: runtime gates intercepting requests.
 			'default_disable_keys'           => 'blocker',
 			'default_two_step_authenticate'  => 'blocker',
@@ -183,6 +184,10 @@ class FeatureNotificationMessagesController {
 			'default_email_configure'        => array(
 				'enabled'  => 'Every outgoing email is being logged and SMTP is configured for reliable delivery. You\'ll catch delivery failures before customers do.',
 				'disabled' => 'Outgoing email is no longer logged. If welcome emails, password resets, or order confirmations stop reaching customers, you won\'t notice.',
+			),
+			'default_config_generate_key'    => array(
+				'enabled'  => 'Tailwatch is rotating your wp-config auth and salt keys on a schedule. Stolen session cookies stop working as soon as the next rotation runs.',
+				'disabled' => 'Your auth and salt keys are no longer being rotated. If a session cookie ever leaks, the attacker stays logged in until you manually rotate keys.',
 			),
 			'default_verify_ssl'             => array(
 				'enabled'  => 'Your SSL certificate is being checked daily. You\'ll get an alert well before it expires, so visitors never see a "Not Secure" warning.',

@@ -23,8 +23,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Layer 1 — configuration short-circuits (cheap, no HTTP):
  *   - external cron runner present (Cavalcade / Cron Control) -> managed
- *   - ALTERNATE_WP_CRON                                        -> alternate
  *   - DISABLE_WP_CRON                                          -> disabled
+ *   - ALTERNATE_WP_CRON                                        -> alternate
  * Layer 2 — a single blocking loopback probe to wp-cron.php, with a
  *   positive-only short-lived cache so healthy sites are not re-probed on
  *   every request.
@@ -80,24 +80,25 @@ class CronHealthService {
 			}
 		}
 
-		// Layer 1b: ALTERNATE_WP_CRON triggers scheduled tasks on page visits.
-		if ( defined( 'ALTERNATE_WP_CRON' ) && ALTERNATE_WP_CRON ) {
-			return $this->result(
-				'alternate',
-				true,
-				__( 'This site uses ALTERNATE_WP_CRON, so scheduled tasks are triggered during page visits. Tailwatch\'s tasks will run this way.', 'tailwatch' )
-			);
-		}
-
-		// Layer 1c: DISABLE_WP_CRON turns off WordPress's built-in trigger. This is
-		// a valid, common setup on managed hosts that call wp-cron.php from a system
-		// crontab. That cannot be detected from PHP, so allow the plugin to continue
-		// and present this as guidance rather than a failure.
+		// Layer 1b: DISABLE_WP_CRON turns off WordPress's built-in trigger. Checked before
+		// ALTERNATE_WP_CRON because WordPress core (_wp_cron) honours DISABLE_WP_CRON even when
+		// ALTERNATE_WP_CRON is also set, so it is the flag that decides whether WP-Cron self-runs
+		// (this mirrors WP Crontrol's ordering). A system crontab calling wp-cron.php is a valid
+		// setup that cannot be detected from PHP, so the plugin continues with guidance, not a failure.
 		if ( defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON ) {
 			return $this->result(
 				'disabled',
 				true,
 				__( 'WordPress\'s built-in cron trigger is switched off on this site (DISABLE_WP_CRON is set to true). That is fine if your host runs a system cron that calls wp-cron.php; if it does not, Tailwatch\'s scheduled tasks will not run on time.', 'tailwatch' )
+			);
+		}
+
+		// Layer 1c: ALTERNATE_WP_CRON triggers scheduled tasks on page visits.
+		if ( defined( 'ALTERNATE_WP_CRON' ) && ALTERNATE_WP_CRON ) {
+			return $this->result(
+				'alternate',
+				true,
+				__( 'This site uses ALTERNATE_WP_CRON, so scheduled tasks are triggered during page visits. Tailwatch\'s tasks will run this way.', 'tailwatch' )
 			);
 		}
 

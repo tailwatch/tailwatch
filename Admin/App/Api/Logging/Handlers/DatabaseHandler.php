@@ -222,27 +222,6 @@ class DatabaseHandler implements LogHandlerInterface {
 	}
 
 	/**
-	 * Sanitize stack trace array.
-	 *
-	 * @param array $trace Stack trace array.
-	 *
-	 * @return array Sanitized trace array.
-	 */
-	private function sanitize_trace( array $trace ) {
-		$sanitized = array();
-		foreach ( $trace as $frame ) {
-			if ( is_array( $frame ) ) {
-				$sanitized[] = array(
-					'file'     => isset( $frame['file'] ) ? sanitize_text_field( $frame['file'] ) : '',
-					'line'     => isset( $frame['line'] ) ? absint( $frame['line'] ) : 0,
-					'function' => isset( $frame['function'] ) ? sanitize_text_field( $frame['function'] ) : '',
-				);
-			}
-		}
-		return $sanitized;
-	}
-
-	/**
 	 * Flush batch to database.
 	 *
 	 * Writes all batched logs to database using true bulk insert for performance.

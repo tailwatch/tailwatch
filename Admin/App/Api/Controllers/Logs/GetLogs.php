@@ -8,6 +8,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 use Tailwatch\Admin\App\Api\Models\DBModel;
 use Tailwatch\Admin\App\Api\Controllers\Logs\LogActivityController;
 use Tailwatch\Admin\App\Api\Controllers\Logs\MonitoringLogController;
+use Tailwatch\Admin\App\Api\Controllers\Logs\NetworkLogsController;
 use Tailwatch\Admin\App\Api\Controllers\Email\EmailLogController;
 
 /**
@@ -277,7 +278,7 @@ class GetLogs {
 				'default_logs_activity'       => array( 'type' => 'Action', 'username' => 'User' ),
 				'default_monitoring_logs'     => array( 'type' => 'Status Code', 'type_state' => 'URL', 'ip_address' => 'IP Address' ),
 				'default_email_logs'          => array( 'type' => 'Status', 'facet_1' => 'Sent To' ),
-				'tailwatch_capturing_all_activity' => array( 'type' => 'Request Type', 'action' => 'Action', 'facet_2' => 'Method', 'ip_address' => 'IP Address', 'username' => 'User' ),
+				'default_network_logs' => array( 'type' => 'Request Type', 'action' => 'Action', 'facet_2' => 'Method', 'ip_address' => 'IP Address', 'username' => 'User' ),
 			);
 			if ( ! isset( $facet_map[ $option ] ) ) {
 				return array( 'data' => array(), 'message' => __( 'Invalid option provided', 'tailwatch' ), 'code' => 400 );
@@ -315,11 +316,9 @@ class GetLogs {
 				$email_logs = new EmailLogController();
 				return $email_logs->tailwatch_email_log_is_enabled();
 
-			case 'tailwatch_capturing_all_activity':
-				return array(
-					'parent_enable'  => true,
-					'feature_enable' => true,
-				);
+			case 'default_network_logs':
+				$network_logs = new NetworkLogsController();
+				return $network_logs->tailwatch_network_logs_is_enabled();
 
 			default:
 				return array(
@@ -341,7 +340,7 @@ class GetLogs {
 			'default_logs_activity',
 			'default_monitoring_logs',
 			'default_email_logs',
-			'tailwatch_capturing_all_activity',
+			'default_network_logs',
 		);
 	}
 }

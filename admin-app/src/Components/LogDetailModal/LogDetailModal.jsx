@@ -1,14 +1,11 @@
 import React, { useState } from 'react';
 import PopUpModal from '../Modal/PopUpModal';
 import { AlertCircle, Info, FileText, Calendar, Tag, Activity, CheckCircle, XCircle, ArrowRight, Database } from 'lucide-react';
-import { FaCopy, FaCheck } from 'react-icons/fa';
 import { formatLabel } from '../Utils/formatText/formatText.js';
 import { safeUrl } from '../Utils/HelperFunctions/urlSafety';
 
 const LogDetailModal = ({ log, onClose }) => {
     const [activeTab, setActiveTab] = useState('headers');
-    const [copied, setCopied] = useState(false);
-    const [isJsonPretty, setIsJsonPretty] = useState(true);
     
     if (!log) return null;
 
@@ -516,167 +513,6 @@ const LogDetailModal = ({ log, onClose }) => {
         );
     };
 
-    const renderCookieTab = () => {
-        if (!isAjaxLog) return <p className="text-gray-400">No cookies available</p>;
-
-        const request = ajaxData?.request || {};
-        const rawCookies = Array.isArray(request.cookies) ? request.cookies : [];
-
-        // The API returns cookies as an array of cookie names (strings) for privacy/security.
-        // Older shape may have been [{name, value}] — handle both.
-        const cookies = rawCookies
-            .map((c) => {
-                if (typeof c === 'string') return { name: c, value: null };
-                if (c && typeof c === 'object') return { name: c.name || null, value: c.value || null };
-                return null;
-            })
-            .filter((c) => c && c.name);
-
-        if (cookies.length === 0) {
-            return <p className="text-gray-400 text-sm">No cookies found</p>;
-        }
-
-        return (
-            <div className="space-y-6">
-                <div>
-                    <h4 className="text-sm font-semibold text-gray-700 mb-3 pb-2 border-b border-gray-200 flex items-center">
-                        <FileText className="w-4 h-4 mr-2" />
-                        Request Cookies
-                    </h4>
-                    <div className="bg-gray-50 rounded p-4">
-                        <div className="space-y-2">
-                            {cookies.map((cookie, idx) => (
-                                <div key={idx} className="flex gap-4 py-1.5 border-b border-gray-200 last:border-0">
-                                    <div className="font-mono text-xs font-medium text-gray-600 min-w-max">
-                                        {cookie.name}
-                                    </div>
-                                    {cookie.value !== null && (
-                                        <div className="font-mono text-xs text-gray-700 break-all">
-                                            {cookie.value}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-
-    const handleCopy = () => {
-        const response = ajaxData?.response || {};
-        const body = response.body || '';
-        const textToCopy = typeof body === 'string' ? body : JSON.stringify(body, null, 2);
-        navigator.clipboard.writeText(textToCopy);
-        setCopied(true);
-        setTimeout(() => {
-            setCopied(false);
-        }, 2000);
-    };
-
-    const tryParseJson = (str) => {
-        if (typeof str !== 'string') return null;
-        try {
-            const parsed = JSON.parse(str);
-            if (typeof parsed === 'object' && parsed !== null) return parsed;
-        } catch (e) { }
-        return null;
-    };
-
-    const renderResponseTab = () => {
-        if (!isAjaxLog) return <p className="text-gray-400">No response available</p>;
-
-        const response = ajaxData?.response || {};
-        const body = response.body || '';
-
-        let parsedJson = null;
-        if (typeof body === 'object' && body !== null) {
-            parsedJson = body;
-        } else if (typeof body === 'string') {
-            parsedJson = tryParseJson(body);
-        }
-
-        const VALUE_PREVIEW_CHARS = 100;
-        const truncateValuesDeep = (input) => {
-            if (Array.isArray(input)) {
-                return input.map(truncateValuesDeep);
-            }
-            if (input && typeof input === 'object') {
-                const out = {};
-                for (const [k, v] of Object.entries(input)) {
-                    if (k === 'value' && typeof v === 'string' && v.length > VALUE_PREVIEW_CHARS) {
-                        out[k] = v.substring(0, VALUE_PREVIEW_CHARS) + '...';
-                    } else {
-                        out[k] = truncateValuesDeep(v);
-                    }
-                }
-                return out;
-            }
-            return input;
-        };
-
-        let finalDisplay;
-        if (parsedJson !== null) {
-            const truncated = truncateValuesDeep(parsedJson);
-            finalDisplay = isJsonPretty
-                ? JSON.stringify(truncated, null, 2)
-                : JSON.stringify(truncated);
-        } else {
-            finalDisplay = typeof body === 'string' ? body : JSON.stringify(body);
-        }
-
-        return (
-            <div className="space-y-6">
-                {body ? (
-                    <div>
-                        <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200">
-                            <h4 className="text-sm font-semibold text-gray-700 flex items-center">
-                                <FileText className="w-4 h-4 mr-2" />
-                                Response Body
-                            </h4>
-                            {parsedJson !== null && (
-                                <div className="flex items-center gap-1 bg-gray-100 rounded p-0.5">
-                                    <button
-                                        onClick={() => setIsJsonPretty(true)}
-                                        className={`px-2 py-1 text-xs rounded transition-colors ${isJsonPretty ? 'bg-white text-gray-800 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}
-                                    >
-                                        Pretty
-                                    </button>
-                                    <button
-                                        onClick={() => setIsJsonPretty(false)}
-                                        className={`px-2 py-1 text-xs rounded transition-colors ${!isJsonPretty ? 'bg-white text-gray-800 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}
-                                    >
-                                        Raw
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                        <div className="relative bg-gray-900 text-gray-100 rounded p-4 font-mono text-xs overflow-x-auto max-h-96">
-                            <button
-                                onClick={handleCopy}
-                                className="absolute top-2 right-2 flex items-center justify-center p-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors duration-200 z-10"
-                                title="Copy response body to clipboard"
-                            >
-                                {copied ? (
-                                    <FaCheck className="w-4 h-4 text-green-400" />
-                                ) : (
-                                    <FaCopy className="w-4 h-4" />
-                                )}
-                            </button>
-                            <pre className="whitespace-pre-wrap break-words pr-28">
-                                {finalDisplay}
-                            </pre>
-                        </div>
-                    </div>
-                ) : (
-                    <p className="text-gray-400 text-sm">No response body</p>
-                )}
-            </div>
-        );
-    };
-
     const renderErrorLogContent = () => {
         const userData = typeof errorData.user_data === 'string'
             ? (() => { try { return JSON.parse(errorData.user_data); } catch { return {}; } })()
@@ -889,8 +725,6 @@ const LogDetailModal = ({ log, onClose }) => {
                         <div className="flex space-x-1 px-4 pt-4">
                             <TabButton id="headers" label="Headers" active={activeTab === 'headers'} />
                             <TabButton id="payload" label="Payload" active={activeTab === 'payload'} />
-                            <TabButton id="response" label="Response" active={activeTab === 'response'} />
-                            <TabButton id="cookies" label="Cookies" active={activeTab === 'cookies'} />
                         </div>
                     </div>
                 )}
@@ -900,8 +734,6 @@ const LogDetailModal = ({ log, onClose }) => {
                         <>
                             {activeTab === 'headers' && renderHeadersTab()}
                             {activeTab === 'payload' && renderPayloadTab()}
-                            {activeTab === 'response' && renderResponseTab()}
-                            {activeTab === 'cookies' && renderCookieTab()}
                         </>
                     ) : isErrorLog ? (
                         renderErrorLogContent()

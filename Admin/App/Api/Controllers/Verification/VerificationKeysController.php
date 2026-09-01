@@ -71,12 +71,12 @@ class VerificationKeysController {
 			$auth_header_key = bin2hex( random_bytes( 32 ) );
 
 			update_option( 'tailwatch_cta_id', $cta_id );
-			update_option( 'tailwatch_cta_secret_' . $cta_id, password_hash( $cta_secret, PASSWORD_BCRYPT ) );
+			update_option( 'tailwatch_cta_secret_' . $cta_id, password_hash( $cta_secret, PASSWORD_BCRYPT ), false );
 			update_option( 'tailwatch_auth_header_key', $auth_header_key, false );
 			// Bind this pairing to the admin who created it (this method runs behind a
 			// manage_options gate). Connect requests re-verify this user's live capability
 			// and act as them, so WordPress capability checks apply to dispatched actions.
-			update_option( 'tailwatch_cta_user_' . $cta_id, get_current_user_id() );
+			update_option( 'tailwatch_cta_user_' . $cta_id, get_current_user_id(), false );
 
 			return array(
 				'cta_id'          => $cta_id,

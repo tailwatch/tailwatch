@@ -66,6 +66,7 @@ use Tailwatch\Admin\App\Api\Controllers\HardeningAudit\HardeningAuditController;
 use Tailwatch\Admin\App\Api\Controllers\Features\SecurityFeaturesVerifyController;
 use Tailwatch\Admin\App\Api\Controllers\Redirections\RedirectionsManager;
 use Tailwatch\Admin\App\Api\Controllers\BrokenLinkChecker\BrokenLinkChecker;
+use Tailwatch\Admin\App\Api\Controllers\Media\MediaController;
 use Tailwatch\Admin\App\Api\Controllers\BrokenLinkChecker\BrokenLinkStatus;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\CronControl\GetCronJobDetailsController;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\CronControl\CronJobManagerController;
@@ -342,6 +343,18 @@ class ActionDispatcher {
 			'tailwatch_update_feature_status'                => array(
 				'controller' => new FeaturesController(),
 				'method'     => 'tailwatch_update_feature_status',
+			),
+			'tailwatch_get_wp_media' => array(
+				'controller' => new MediaController(),
+				'method'     => 'tailwatch_get_wp_media',
+			),
+			'tailwatch_upload_wp_media' => array(
+				'controller' => new MediaController(),
+				'method'     => 'tailwatch_upload_wp_media',
+			),
+			'tailwatch_delete_wp_media' => array(
+				'controller' => new MediaController(),
+				'method'     => 'tailwatch_delete_wp_media',
 			),
 			'tailwatch_update_inner_feature'                 => array(
 				'controller' => new FeaturesController(),

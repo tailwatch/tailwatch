@@ -1062,16 +1062,6 @@ class BrokenLinkChecker extends BaseController {
 		return $content;
 	}
 
-	private function parse_shortcodes( $content ) {
-		// Ensure content is a string to avoid type errors
-		if ( ! is_string( $content ) ) {
-			$content = (string) $content;
-		}
-
-		// Process all shortcodes in the content
-		return do_shortcode( $content );
-	}
-
 	private function extract_urls( $content ) {
 		try {
 			$urls = array();
@@ -1388,12 +1378,10 @@ class BrokenLinkChecker extends BaseController {
 		}
 
 		try {
-			// WordPress HTTP API. wp_remote_get does not throw on 4xx/5xx — it
-			// returns a successful response object whose status code we read
-			// downstream; that matches the previous `'http_errors' => false`
-			// behaviour. Network-level failures (timeout, DNS, SSL) come back
-			// as a WP_Error.
-			$response = wp_remote_get(
+			// wp_safe_remote_get re-validates the initial URL and every redirect hop through
+			// wp_http_validate_url, so a redirect to a private or loopback host is rejected as a
+			// WP_Error. It does not error on 4xx/5xx; that status is read downstream.
+			$response = wp_safe_remote_get(
 				$url,
 				array(
 					'timeout'     => 15,

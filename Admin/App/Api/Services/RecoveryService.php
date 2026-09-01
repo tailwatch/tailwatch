@@ -94,7 +94,8 @@ class RecoveryService {
 				) );
 				return array(
 					'success'        => false,
-					'message'        => "Too soon to retry. Wait {$required_wait_time}s between attempts.",
+					/* translators: %s: number of seconds to wait */
+					'message'        => sprintf( __( 'Too soon to retry. Wait %ss between attempts.', 'tailwatch' ), $required_wait_time ),
 					'wait_remaining' => $required_wait_time - $time_since_last_recovery,
 				);
 			}
@@ -355,7 +356,8 @@ class RecoveryService {
 				return array(
 					'success' => true,
 					'action'  => 'Scheduled backup recovery',
-					'message' => "Backup recovery scheduled for type: {$backup_type}",
+					/* translators: %s: the backup type */
+					'message' => sprintf( __( 'Backup recovery scheduled for type: %s', 'tailwatch' ), $backup_type ),
 					'details' => 'Resume routed by backup type handler',
 				);
 			}

@@ -327,7 +327,7 @@ class OptionsModel {
 								'tab_icon'  => 'code',
 							),
 							array(
-								'field_ids' => array( 'field_7', 'field_16' ),
+								'field_ids' => array( 'field_7', 'field_16', 'field_3', 'field_4', 'field_5', 'field_6' ),
 								'tab_title' => 'Files & Directory Access',
 								'tab_icon'  => 'folder',
 							),
@@ -337,7 +337,7 @@ class OptionsModel {
 								'tab_icon'  => 'eye-slash',
 							),
 							array(
-								'field_ids' => array( 'field_21', 'field_22', 'field_23' ),
+								'field_ids' => array( 'field_21', 'field_22', 'field_23', 'field_24' ),
 								'tab_title' => 'Scripts & Feeds',
 								'tab_icon'  => 'file-code',
 							),
@@ -406,6 +406,71 @@ class OptionsModel {
 									'option' => array(
 										'value'    => '',
 										'selected' => true,
+									),
+								),
+							),
+
+							'field_3'         => array(
+								'key'         => 'protect_sensitive_files',
+								'id'          => 'protect_sensitive_files',
+								'type'        => 'checkbox',
+								'label'       => 'Protect Sensitive Files',
+								'description' => 'Blocks direct web access to sensitive files such as wp-config.php, .htaccess, readme.html, xmlrpc.php, install.php and debug.log through a marker-scoped block in the site root .htaccess. Written only when the file is writable and removed automatically if a loopback check finds the site stops responding.',
+								'placeholder' => 'Protect Sensitive Files',
+								'required'    => true,
+								'register'    => 'protect_sensitive_files',
+								'values'      => array(
+									'option' => array(
+										'value'    => '',
+										'selected' => false,
+									),
+								),
+							),
+							'field_4'         => array(
+								'key'         => 'disable_directory_browsing',
+								'id'          => 'disable_directory_browsing',
+								'type'        => 'checkbox',
+								'label'       => 'Disable Directory Browsing',
+								'description' => 'Adds "Options -Indexes" to the site root .htaccess so visitors cannot list the contents of directories that have no index file.',
+								'placeholder' => 'Disable Directory Browsing',
+								'required'    => true,
+								'register'    => 'disable_directory_browsing',
+								'values'      => array(
+									'option' => array(
+										'value'    => '',
+										'selected' => false,
+									),
+								),
+							),
+							'field_5'         => array(
+								'key'         => 'disable_php_in_uploads',
+								'id'          => 'disable_php_in_uploads',
+								'type'        => 'checkbox',
+								'label'       => 'Disable PHP Execution in Uploads',
+								'description' => 'Prevents PHP files from being executed inside the uploads directory, a common target for uploaded-malware execution. Applied via a marker-scoped rule placed in a .htaccess inside the uploads directory itself and skipped automatically when the uploads directory is not a writable local directory.',
+								'placeholder' => 'Disable PHP Execution in Uploads',
+								'required'    => true,
+								'register'    => 'disable_php_in_uploads',
+								'values'      => array(
+									'option' => array(
+										'value'    => '',
+										'selected' => false,
+									),
+								),
+							),
+							'field_6'         => array(
+								'key'         => 'restrict_wp_includes',
+								'id'          => 'restrict_wp_includes',
+								'type'        => 'checkbox',
+								'label'       => 'Restrict wp-includes Access',
+								'description' => 'Applies the official WordPress wp-includes hardening rules, blocking direct requests to PHP files inside wp-includes and wp-admin/includes. On multisite the ms-files.php exception is added automatically so image handling keeps working. Optional — leave off if your host already restricts these paths.',
+								'placeholder' => 'Restrict wp-includes Access',
+								'required'    => true,
+								'register'    => 'restrict_wp_includes',
+								'values'      => array(
+									'option' => array(
+										'value'    => '',
+										'selected' => false,
 									),
 								),
 							),
@@ -521,6 +586,22 @@ class OptionsModel {
 									'option' => array(
 										'value'    => '',
 										'selected' => true,
+									),
+								),
+							),
+							'field_24'        => array(
+								'key'         => 'disable_script_concatenation',
+								'id'          => 'disable_script_concatenation',
+								'type'        => 'checkbox',
+								'label'       => 'Disable Script Concatenation',
+								'description' => 'Turns off WordPress admin script and style concatenation by setting the built-in $concatenate_scripts global, with no changes to wp-config.php. Useful when a reverse proxy or server-level compression already bundles assets, or when concatenation interferes with debugging.',
+								'placeholder' => 'Disable Script Concatenation',
+								'required'    => true,
+								'register'    => 'disable_script_concatenation',
+								'values'      => array(
+									'option' => array(
+										'value'    => '',
+										'selected' => false,
 									),
 								),
 							),
@@ -717,6 +798,45 @@ class OptionsModel {
 				'date_created'  => current_time( 'mysql' ),
 				'date_modified' => current_time( 'mysql' ),
 				'is_active'     => 1,
+			),
+			// Network Logs Controller
+			'default_network_logs'               => array(
+				'user_id'       => $user_id,
+				'child_of'      => 0,
+				'key'           => 'default_feature_settings',
+				'option'        => 'default_network_logs',
+				'value'         => wp_json_encode(
+					array(
+						'icon'                => 'Icon',
+						'title'               => 'Network Logs',
+						'category'            => array( 'monitoring' ),
+						'description'         => 'Monitor internal WordPress traffic — REST API, AJAX, cron, and XML-RPC — recording each request\'s endpoint, method, status, and response time. Credentials and tokens are redacted and request bodies are never stored.',
+						'verify_status'       => 'check_network_logs',
+						'options'             => array(
+							'field_1' => array(
+								'key'         => 'log_network_requests',
+								'id'          => 'log_network_requests',
+								'type'        => 'checkbox',
+								'label'       => 'Log Internal Requests',
+								'description' => 'Record metadata for internal REST, AJAX, cron, and XML-RPC requests (endpoint, method, status, and timing). Sensitive fields are redacted and raw request or response bodies are never captured.',
+								'placeholder' => 'Log Internal Requests',
+								'required'    => true,
+								'register'    => 'log_network_requests',
+								'values'      => array(
+									'option' => array(
+										'value'    => '',
+										'selected' => true,
+									),
+								),
+							),
+						),
+					)
+				),
+				'type'          => 'json',
+				'type_state'    => 'inactive',
+				'date_created'  => current_time( 'mysql' ),
+				'date_modified' => current_time( 'mysql' ),
+				'is_active'     => 0,
 			),
 			// Error Log Controller
 			'default_monitoring_logs'        => array(
@@ -1587,6 +1707,24 @@ class OptionsModel {
 										'selected' => true,
 									),
 								),
+								'sub_options'                   => array(
+									'field_2' => array(
+										'key'         => 'enable_auto_update_theme',
+										'id'          => 'enable_auto_update_theme',
+										'type'        => 'checkbox',
+										'label'       => 'Automatic Theme Updates',
+										'description' => 'Automatically install theme updates as they are released, without manual review. Updates are applied by the built-in WordPress auto-updater on its regular schedule, and you can roll back from Update History if an update causes an issue.',
+										'placeholder' => 'Automatic Theme Updates',
+										'required'    => false,
+										'register'    => 'enable_auto_update_theme',
+										'values'      => array(
+											'option' => array(
+												'value'    => '',
+												'selected' => false,
+											),
+										),
+									),
+								),
 							),
 							'field_4' => array(
 								'key'                           => 'enable_updates_rollback_plugin',
@@ -1606,6 +1744,24 @@ class OptionsModel {
 										'selected' => true,
 									),
 								),
+								'sub_options'                   => array(
+									'field_5' => array(
+										'key'         => 'enable_auto_update_plugin',
+										'id'          => 'enable_auto_update_plugin',
+										'type'        => 'checkbox',
+										'label'       => 'Automatic Plugin Updates',
+										'description' => 'Automatically install plugin updates as they are released, without manual review. Updates are applied by the built-in WordPress auto-updater on its regular schedule, and you can roll back from Update History if an update causes an issue.',
+										'placeholder' => 'Automatic Plugin Updates',
+										'required'    => false,
+										'register'    => 'enable_auto_update_plugin',
+										'values'      => array(
+											'option' => array(
+												'value'    => '',
+												'selected' => false,
+											),
+										),
+									),
+								),
 							),
 							'field_7' => array(
 								'key'                           => 'enable_updates_rollback_core',
@@ -1623,6 +1779,24 @@ class OptionsModel {
 									'option' => array(
 										'value'    => '',
 										'selected' => true,
+									),
+								),
+								'sub_options'                   => array(
+									'field_8' => array(
+										'key'         => 'enable_auto_update_core',
+										'id'          => 'enable_auto_update_core',
+										'type'        => 'checkbox',
+										'label'       => 'Automatic Core Updates (Minor & Security)',
+										'description' => 'Automatically install minor and security WordPress core releases (for example 6.5.1 to 6.5.2) as they are published. Major version upgrades are left for you to review and apply manually.',
+										'placeholder' => 'Automatic Core Updates',
+										'required'    => false,
+										'register'    => 'enable_auto_update_core',
+										'values'      => array(
+											'option' => array(
+												'value'    => '',
+												'selected' => false,
+											),
+										),
 									),
 								),
 							),
@@ -1839,11 +2013,11 @@ class OptionsModel {
 										),
 									),
 									'field_13' => array(
-										'key'         => 'ajax_logs',
-										'id'          => 'ajax_logs',
+										'key'         => 'network_logs',
+										'id'          => 'network_logs',
 										'type'        => 'checkbox',
 										'label'       => 'Network Logs',
-										'description' => 'Deletes historical AJAX request logs.',
+										'description' => 'Deletes historical network request logs.',
 										'placeholder' => '',
 										'required'    => true,
 										'register'    => '',
@@ -2394,6 +2568,92 @@ class OptionsModel {
 				'date_modified' => current_time( 'mysql' ),
 				'is_active'     => 0,
 			),
+			// Security Keys Rotation Controller
+			'default_config_generate_key'    => array(
+				'user_id'       => $user_id,
+				'child_of'      => 0,
+				'key'           => 'default_feature_settings',
+				'option'        => 'default_config_generate_key',
+				'value'         => wp_json_encode(
+					array(
+						'icon'                => 'Icon',
+						'title'               => 'Security Keys Rotation',
+						'category'            => array( 'security' ),
+						'description'         => 'Automatically regenerate your WordPress security keys inside the wp-config.php file at regular intervals, such as every 15 days or monthly. Enhance protection against cookie theft and session hijacking without any manual editing. Each rotation logs out all active sessions.',
+						'verify_status'       => 'check_security_key',
+						'recommended_feature' => true,
+						'mobile_notification' => true,
+						'options'             => array(
+							'field_1'        => array(
+								'key'                           => 'generate_security_keys',
+								'id'                            => 'generate_security_keys',
+								'push_notification'             => true,
+								'push_notification_title'       => 'Security Keys Rotated',
+								'push_notification_description' => 'You will receive a notification on your mobile each time WordPress auth and salt keys are regenerated and all active sessions are logged out.',
+								'type'                          => 'checkbox',
+								'label'                         => 'Auto Generate Keys',
+								'description'                   => 'Automatically regenerate WordPress auth and salt keys on a schedule. Each rotation signs out all active sessions and invalidates open forms and one-time links (such as pending password-reset emails), which simply need to be reloaded or re-requested. Your content, settings, and user passwords are never changed. If other plugins encrypt data using your security keys, they may need to be reconfigured after a rotation.',
+								'placeholder'                   => 'Auto Generate Keys',
+								'required'                      => true,
+								'register'                      => 'generate_security_keys',
+								'values'                        => array(
+									'option' => array(
+										'value'    => '',
+										'selected' => false,
+									),
+								),
+								'sub_options'                   => array(
+									'field_2' => array(
+										'key'         => 'generate_keys_duration',
+										'id'          => 'generate_keys_duration',
+										'type'        => 'radio',
+										'display'     => 'tab_view',
+										'label'       => 'Rotation Frequency',
+										'description' => 'Choose how often keys should be regenerated.',
+										'placeholder' => 'Auto Generate Keys',
+										'required'    => true,
+										'register'    => 'generate_keys_duration',
+										'values'      => array(
+											'option3' => array(
+												'value'    => '15 Days',
+												'selected' => true,
+											),
+											'option4' => array(
+												'value'    => 'Monthly',
+												'selected' => false,
+											),
+										),
+									),
+								),
+							),
+							'upgrade_notice' => array(
+								'key'         => 'upgrade_notice',
+								'id'          => 'upgrade_notice',
+								'type'        => 'info',
+								'label'       => 'Unlock more with Tailwatch Pro',
+								'description' => 'Tailwatch Pro extends Security Keys Rotation with faster rotation schedules, including daily and weekly options for tighter session-hijack protection.',
+								'links'       => array(
+									array(
+										'url'  => TAILWATCH_PRICING_URL . '?utm_source=wp-plugins&utm_medium=wp-dash&utm_campaign=pro_upgrade&utm_content=upgrade_notice_security_keys',
+										'text' => 'Upgrade Now',
+									),
+								),
+								'values'      => array(
+									'option' => array(
+										'value'    => '',
+										'selected' => true,
+									),
+								),
+							),
+						),
+					)
+				),
+				'type'          => 'json',
+				'type_state'    => 'inactive',
+				'date_created'  => current_time( 'mysql' ),
+				'date_modified' => current_time( 'mysql' ),
+				'is_active'     => 0,
+			),
 			// Content Restrictions Controller
 			'default_disable_keys'           => array(
 				'user_id'       => $user_id,
@@ -2689,6 +2949,22 @@ class OptionsModel {
 											'option' => array(
 												'value'    => '#764ba2',
 												'selected' => true,
+											),
+										),
+									),
+									'field_3' => array(
+										'key'         => 'block_page_background_image',
+										'id'          => 'block_page_background_image',
+										'type'        => 'file',
+										'label'       => 'Background Image',
+										'description' => 'Optional image shown behind the block page. When set, it is used instead of the background colors.',
+										'placeholder' => 'Upload a background image',
+										'required'    => false,
+										'register'    => 'block_page_background_image',
+										'values'      => array(
+											'option' => array(
+												'value'    => '',
+												'selected' => false,
 											),
 										),
 									),
@@ -3295,6 +3571,398 @@ class OptionsModel {
 		}
 
 		return $inserted;
+	}
+
+	/**
+	 * Add-only reconcile of NEW default sub-fields into EXISTING feature rows.
+	 *
+	 * The row-level backfill ({@see tailwatch_sync_missing_features()}) only inserts
+	 * entirely-missing feature rows; it never looks inside an existing row's value
+	 * JSON. When a plugin update adds a new field INSIDE a feature a site already has
+	 * (for example a new sub_option of the block-page design), that field would stay
+	 * invisible forever without this pass.
+	 *
+	 * Strictly add-only: a default field is added only where its exact key path is
+	 * ABSENT from the stored tree, and an existing key is never rewritten, renamed,
+	 * renumbered, or reordered. That preserves saved values, selected states,
+	 * is_locked flags, user-duplicated fields, and any node stamped by a pro
+	 * extension. It keys by associative path via recursion (options -> field ->
+	 * sub_options), never by bare leaf name, and never touches tab_config,
+	 * upgrade_notice, or the row's own columns.
+	 *
+	 * @return int Feature rows updated, or -1 while the site is not fully seeded.
+	 */
+	public function tailwatch_reconcile_missing_subfields() {
+		global $wpdb;
+		$table = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
+
+		// Leave a fresh / mid-seed install to the wizard's batch loop.
+		$visit_data = json_decode( get_option( TAILWATCH_VISIT_DATA ), true );
+		if ( empty( $visit_data['db_initialize']['is_completed'] ) ) {
+			return -1;
+		}
+
+		$updated = 0;
+		foreach ( $this->tailwatch_complete_site_data() as $default_row ) {
+			if ( empty( $default_row['value'] ) || ! isset( $default_row['key'], $default_row['option'] ) ) {
+				continue;
+			}
+			$default_value = json_decode( $default_row['value'], true );
+			if ( ! is_array( $default_value ) || empty( $default_value['options'] ) || ! is_array( $default_value['options'] ) ) {
+				continue;
+			}
+
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- one-time additive sub-field backfill after a plugin update; reads a single feature row's stored JSON that no feature cache layer covers.
+			$stored = $wpdb->get_row(
+				$wpdb->prepare( 'SELECT id, value FROM %i WHERE `key` = %s AND `option` = %s', $table, $default_row['key'], $default_row['option'] ),
+				ARRAY_A
+			);
+			if ( empty( $stored ) ) {
+				continue; // Entirely-missing rows are handled by tailwatch_sync_missing_features().
+			}
+
+			$stored_value = json_decode( $stored['value'], true );
+			if ( ! is_array( $stored_value ) || ! isset( $stored_value['options'] ) || ! is_array( $stored_value['options'] ) ) {
+				continue;
+			}
+
+			$changed = false;
+			$this->tailwatch_add_missing_fields( $default_value['options'], $stored_value['options'], $changed );
+
+			// tab_config groups the feature's fields into UI tabs. A field added in a later
+			// release renders only when it is listed here too, so reconcile the stored tab_config
+			// against the default (add-only), or new fields stay invisible even though options has them.
+			if ( isset( $default_value['tab_config'], $stored_value['tab_config'] )
+				&& is_array( $default_value['tab_config'] ) && is_array( $stored_value['tab_config'] ) ) {
+				$this->tailwatch_add_missing_tab_fields( $default_value['tab_config'], $stored_value['tab_config'], $changed );
+			}
+
+			if ( $changed ) {
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- writes back only when a default field was added; mirrors the backfill's single-row update.
+				$wpdb->update(
+					$table,
+					array(
+						'value'         => wp_json_encode( $stored_value ),
+						'date_modified' => current_time( 'mysql' ),
+					),
+					array( 'id' => (int) $stored['id'] ),
+					array( '%s', '%s' ),
+					array( '%d' )
+				);
+				++$updated;
+			}
+		}
+
+		if ( $updated > 0 ) {
+			( new \Tailwatch\Admin\App\Api\Controllers\Features\FeatureCacheController() )->invalidate_all_caches();
+		}
+
+		return $updated;
+	}
+
+	/**
+	 * Recursively add fields present in $default but absent from $stored — add-only.
+	 *
+	 * Operates on a "fields map" (options / sub_options / values[].sub_options). An
+	 * existing field is left byte-for-byte; only its structural containers are
+	 * recursed into to find deeper missing siblings. Pro-owned nodes (stamped with
+	 * pro_extension_id / is_pro_added) and the pro-managed upgrade_notice card are
+	 * never entered or written, so the merge can never unlock or clobber pro state.
+	 *
+	 * @param array $default Canonical default fields map.
+	 * @param array $stored  Stored fields map (modified by reference).
+	 * @param bool  $changed Set to true when anything is added (by reference).
+	 * @return void
+	 */
+	private function tailwatch_add_missing_fields( array $default, array &$stored, &$changed ) {
+		foreach ( $default as $field_key => $default_field ) {
+			// Pro owns the upgrade card; never re-seed or descend into it.
+			if ( 'upgrade_notice' === $field_key ) {
+				continue;
+			}
+
+			if ( ! array_key_exists( $field_key, $stored ) ) {
+				// Absent → add the canonical default as-is (add-only).
+				$stored[ $field_key ] = $default_field;
+				$changed              = true;
+				continue;
+			}
+
+			if ( ! is_array( $stored[ $field_key ] ) || ! is_array( $default_field ) ) {
+				continue; // Existing leaf/scalar — never overwrite.
+			}
+
+			// Pro-stamped subtree — opaque and untouchable.
+			if ( ! empty( $stored[ $field_key ]['pro_extension_id'] )
+				|| ( isset( $stored[ $field_key ]['is_pro_added'] ) && true === $stored[ $field_key ]['is_pro_added'] ) ) {
+				continue;
+			}
+
+			// Recurse into nested design sub_options.
+			if ( isset( $default_field['sub_options'] ) && is_array( $default_field['sub_options'] ) ) {
+				if ( ! isset( $stored[ $field_key ]['sub_options'] ) || ! is_array( $stored[ $field_key ]['sub_options'] ) ) {
+					$stored[ $field_key ]['sub_options'] = $default_field['sub_options'];
+					$changed                             = true;
+				} else {
+					$this->tailwatch_add_missing_fields( $default_field['sub_options'], $stored[ $field_key ]['sub_options'], $changed );
+				}
+			}
+
+			// Recurse into sub_options nested under a value option (e.g. SMTP provider).
+			// Reconcile value options (radio/select choices) only when the stored field already
+			// carries a values map; a field that structurally has none is left untouched.
+			if ( isset( $default_field['values'], $stored[ $field_key ]['values'] )
+				&& is_array( $default_field['values'] ) && is_array( $stored[ $field_key ]['values'] ) ) {
+				foreach ( $default_field['values'] as $value_key => $value_node ) {
+					if ( ! is_array( $value_node ) ) {
+						continue;
+					}
+
+					// A new choice the stored field lacks: add it, but never as the selected one, so the
+					// user's saved selection is never changed and no field ends up with two selected choices.
+					if ( ! isset( $stored[ $field_key ]['values'][ $value_key ] ) ) {
+						if ( array_key_exists( 'selected', $value_node ) ) {
+							$value_node['selected'] = false;
+						}
+						$stored[ $field_key ]['values'][ $value_key ] = $value_node;
+						$changed = true;
+						continue;
+					}
+
+					if ( ! is_array( $stored[ $field_key ]['values'][ $value_key ] ) ) {
+						continue; // Existing leaf/scalar is never overwritten.
+					}
+
+					// Existing choice: recurse into its nested sub_options only.
+					if ( isset( $value_node['sub_options'] ) && is_array( $value_node['sub_options'] ) ) {
+						if ( ! isset( $stored[ $field_key ]['values'][ $value_key ]['sub_options'] ) || ! is_array( $stored[ $field_key ]['values'][ $value_key ]['sub_options'] ) ) {
+							$stored[ $field_key ]['values'][ $value_key ]['sub_options'] = $value_node['sub_options'];
+							$changed = true;
+						} else {
+							$this->tailwatch_add_missing_fields( $value_node['sub_options'], $stored[ $field_key ]['values'][ $value_key ]['sub_options'], $changed );
+						}
+					}
+				}
+			}
+		}
+	}
+
+	/**
+	 * Add-only reconcile of tab_config field groupings. Tabs are matched by tab_title;
+	 * field_ids present in the default tab but missing from the stored tab are appended,
+	 * and a default tab absent from the stored tree is appended whole. Existing tabs, their
+	 * order, and any user- or pro-added entries are never removed or reordered.
+	 *
+	 * @param array $default_tabs Canonical default tab_config (list of tab arrays).
+	 * @param array $stored_tabs  Stored tab_config (modified by reference).
+	 * @param bool  $changed      Set to true when anything is added (by reference).
+	 * @return void
+	 */
+	private function tailwatch_add_missing_tab_fields( array $default_tabs, array &$stored_tabs, &$changed ) {
+		$stored_index = array();
+		foreach ( $stored_tabs as $i => $stored_tab ) {
+			if ( is_array( $stored_tab ) && isset( $stored_tab['tab_title'] ) ) {
+				$stored_index[ $stored_tab['tab_title'] ] = $i;
+			}
+		}
+
+		foreach ( $default_tabs as $default_tab ) {
+			if ( ! is_array( $default_tab ) || ! isset( $default_tab['tab_title'] ) ) {
+				continue;
+			}
+			$title = $default_tab['tab_title'];
+
+			// Entirely-new tab: append it as authored.
+			if ( ! isset( $stored_index[ $title ] ) ) {
+				$stored_tabs[] = $default_tab;
+				$changed       = true;
+				continue;
+			}
+
+			$idx         = $stored_index[ $title ];
+			$default_ids = ( isset( $default_tab['field_ids'] ) && is_array( $default_tab['field_ids'] ) ) ? $default_tab['field_ids'] : array();
+
+			if ( ! isset( $stored_tabs[ $idx ]['field_ids'] ) || ! is_array( $stored_tabs[ $idx ]['field_ids'] ) ) {
+				$stored_tabs[ $idx ]['field_ids'] = $default_ids;
+				$changed                          = true;
+				continue;
+			}
+
+			foreach ( $default_ids as $field_id ) {
+				if ( ! in_array( $field_id, $stored_tabs[ $idx ]['field_ids'], true ) ) {
+					$stored_tabs[ $idx ]['field_ids'][] = $field_id;
+					$changed                            = true;
+				}
+			}
+		}
+	}
+
+	/**
+	 * Refresh presentational field metadata on already-seeded sites after an update.
+	 *
+	 * The add-only reconciler delivers new fields but never rewrites an existing one,
+	 * so wording improvements to a label / description / placeholder shipped in an
+	 * update never reach a site seeded before it. This pass copies ONLY presentational
+	 * text from the canonical defaults onto fields that already exist. It never touches
+	 * a stored value, selected state, key, id, register, type, is_locked, or any pro
+	 * marker, so a user's saved choices are preserved exactly and no field is ever
+	 * renamed (a key/id rename is a dedicated migration, not this). Pro-stamped nodes
+	 * and the pro-managed upgrade_notice card are skipped entirely.
+	 *
+	 * Version-gated by the caller (runs once per plugin version); a row is written only
+	 * when a presentational string actually changed.
+	 *
+	 * @return int Rows updated, or -1 when the site is not in a reconcilable state yet
+	 *             (initial seed unfinished) so the caller can retry later.
+	 */
+	public function tailwatch_refresh_field_metadata() {
+		global $wpdb;
+		$table = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
+
+		// Leave a fresh / mid-seed install to the wizard's batch loop.
+		$visit_data = json_decode( get_option( TAILWATCH_VISIT_DATA ), true );
+		if ( empty( $visit_data['db_initialize']['is_completed'] ) ) {
+			return -1;
+		}
+
+		$updated = 0;
+		foreach ( $this->tailwatch_complete_site_data() as $default_row ) {
+			if ( empty( $default_row['value'] ) || ! isset( $default_row['key'], $default_row['option'] ) ) {
+				continue;
+			}
+			$default_value = json_decode( $default_row['value'], true );
+			if ( ! is_array( $default_value ) ) {
+				continue;
+			}
+
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- one-time presentational refresh after a plugin update; reads a single feature row's stored JSON that no feature cache layer covers.
+			$stored = $wpdb->get_row(
+				$wpdb->prepare( 'SELECT id, value FROM %i WHERE `key` = %s AND `option` = %s', $table, $default_row['key'], $default_row['option'] ),
+				ARRAY_A
+			);
+			if ( empty( $stored ) ) {
+				continue; // Entirely-missing rows are handled by tailwatch_sync_missing_features().
+			}
+
+			$stored_value = json_decode( $stored['value'], true );
+			if ( ! is_array( $stored_value ) ) {
+				continue;
+			}
+
+			$changed = false;
+
+			// Feature-level card text (title + blurb). Behavioral / structural keys
+			// (verify_status, category, tab_config, etc.) are intentionally excluded.
+			$this->tailwatch_apply_presentational_updates( $default_value, $stored_value, array( 'title', 'description' ), $changed );
+
+			// Field-level text across options / sub_options / values[].sub_options.
+			if ( isset( $default_value['options'], $stored_value['options'] )
+				&& is_array( $default_value['options'] ) && is_array( $stored_value['options'] ) ) {
+				$this->tailwatch_refresh_fields_metadata( $default_value['options'], $stored_value['options'], $changed );
+			}
+
+			if ( $changed ) {
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- writes back only when a presentational string changed; mirrors the backfill's single-row update.
+				$wpdb->update(
+					$table,
+					array(
+						'value'         => wp_json_encode( $stored_value ),
+						'date_modified' => current_time( 'mysql' ),
+					),
+					array( 'id' => (int) $stored['id'] ),
+					array( '%s', '%s' ),
+					array( '%d' )
+				);
+				++$updated;
+			}
+		}
+
+		if ( $updated > 0 ) {
+			( new \Tailwatch\Admin\App\Api\Controllers\Features\FeatureCacheController() )->invalidate_all_caches();
+		}
+
+		return $updated;
+	}
+
+	/**
+	 * Recursively refresh presentational text on fields present in both maps.
+	 *
+	 * Mirrors tailwatch_add_missing_fields()'s structure (options / sub_options /
+	 * values[].sub_options) but UPDATES presentational scalars on existing fields
+	 * instead of adding missing ones. Fields absent from $stored are left to the
+	 * add-only reconciler; value nodes (their value / selected) are never entered —
+	 * only their nested sub_options are recursed. Pro-owned nodes and upgrade_notice
+	 * are skipped.
+	 *
+	 * @param array $default Canonical default fields map.
+	 * @param array $stored  Stored fields map (modified by reference).
+	 * @param bool  $changed Set true when any presentational string was updated.
+	 * @return void
+	 */
+	private function tailwatch_refresh_fields_metadata( array $default, array &$stored, &$changed ) {
+		$presentational = array( 'label', 'description', 'placeholder', 'push_notification_title', 'push_notification_description' );
+
+		foreach ( $default as $field_key => $default_field ) {
+			// Pro owns the upgrade card; never touch it.
+			if ( 'upgrade_notice' === $field_key ) {
+				continue;
+			}
+			// Refresh only fields that already exist — adds are the reconciler's job.
+			if ( ! array_key_exists( $field_key, $stored ) || ! is_array( $stored[ $field_key ] ) || ! is_array( $default_field ) ) {
+				continue;
+			}
+			// Pro-stamped subtree — opaque and untouchable.
+			if ( ! empty( $stored[ $field_key ]['pro_extension_id'] )
+				|| ( isset( $stored[ $field_key ]['is_pro_added'] ) && true === $stored[ $field_key ]['is_pro_added'] ) ) {
+				continue;
+			}
+
+			$this->tailwatch_apply_presentational_updates( $default_field, $stored[ $field_key ], $presentational, $changed );
+
+			// Recurse into nested design sub_options.
+			if ( isset( $default_field['sub_options'], $stored[ $field_key ]['sub_options'] )
+				&& is_array( $default_field['sub_options'] ) && is_array( $stored[ $field_key ]['sub_options'] ) ) {
+				$this->tailwatch_refresh_fields_metadata( $default_field['sub_options'], $stored[ $field_key ]['sub_options'], $changed );
+			}
+
+			// Recurse into sub_options nested under a value option (e.g. SMTP provider) —
+			// the value node's own value / selected are never read or written.
+			if ( isset( $default_field['values'] ) && is_array( $default_field['values'] ) ) {
+				foreach ( $default_field['values'] as $value_key => $value_node ) {
+					if ( ! is_array( $value_node ) || ! isset( $value_node['sub_options'] ) || ! is_array( $value_node['sub_options'] ) ) {
+						continue;
+					}
+					if ( ! isset( $stored[ $field_key ]['values'][ $value_key ]['sub_options'] )
+						|| ! is_array( $stored[ $field_key ]['values'][ $value_key ]['sub_options'] ) ) {
+						continue;
+					}
+					$this->tailwatch_refresh_fields_metadata( $value_node['sub_options'], $stored[ $field_key ]['values'][ $value_key ]['sub_options'], $changed );
+				}
+			}
+		}
+	}
+
+	/**
+	 * Copy an allowlist of presentational scalar keys from a default node onto a
+	 * stored node, flagging a change when a value actually differs. Only scalar
+	 * presentational text is ever assigned — no structural or value key is touched.
+	 *
+	 * @param array    $default Canonical default node.
+	 * @param array    $stored  Stored node (modified by reference).
+	 * @param string[] $keys    Presentational keys allowed to be refreshed.
+	 * @param bool     $changed Set true when any key was updated.
+	 * @return void
+	 */
+	private function tailwatch_apply_presentational_updates( array $default, array &$stored, array $keys, &$changed ) {
+		foreach ( $keys as $pkey ) {
+			if ( ! array_key_exists( $pkey, $default ) || ! is_scalar( $default[ $pkey ] ) ) {
+				continue;
+			}
+			if ( ! array_key_exists( $pkey, $stored ) || $stored[ $pkey ] !== $default[ $pkey ] ) {
+				$stored[ $pkey ] = $default[ $pkey ];
+				$changed         = true;
+			}
+		}
 	}
 
 	public function get_last_insert_index() {

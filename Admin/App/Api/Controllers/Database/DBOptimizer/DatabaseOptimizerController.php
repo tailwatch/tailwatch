@@ -776,8 +776,8 @@ class DatabaseOptimizerController {
 				$optimize_database->tailwatch_clean_logs_activity( $json_data, $number_interval );
 				$this->tailwatch_render_optimizer_cron();
 				return;
-			} elseif ( 'ajax_logs' === $db_key ) {
-				$optimize_database->tailwatch_clean_ajax_logs( $json_data, $number_interval );
+			} elseif ( 'network_logs' === $db_key ) {
+				$optimize_database->tailwatch_clean_network_logs( $json_data, $number_interval );
 				$this->tailwatch_render_optimizer_cron();
 				return;
 			} elseif ( 'monitoring_logs' === $db_key ) {
