@@ -23,6 +23,39 @@ const DiskManagement = ({ data, isLoading, fetchData }) => {
     );
   }
 
+  if (data.available === false) {
+    return (
+      <div className={`rounded-xl shadow-lg ${otherGradient} border border-[#85cbcf] overflow-hidden transition-all duration-300 hover:shadow-xl p-4 sm:p-6 h-full flex flex-col`}>
+        <div className="flex items-center justify-between mb-4 gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#07C07E1A] flex items-center justify-center flex-shrink-0">
+              <Database size={24} className="text-[#007980]" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-semibold text-black leading-tight">Database Storage</h2>
+              <p className="text-xs sm:text-sm text-black hidden sm:block">Track website database tables and storage usage.</p>
+            </div>
+          </div>
+          <IconButton
+            onClick={() => fetchData(true)}
+            icon={RefreshCcw}
+            bgColor={`bg-[${primaryGreen}]`}
+            hoverBgColor="hover:bg-[#07C07E1A]"
+            textColor={iconprimary}
+            roundedFull={true}
+            className="!p-2 !rounded-[5px] transition duration-200 hover:shadow-sm"
+          />
+        </div>
+        <div className="flex-1 flex items-center justify-center text-center px-4 min-h-[200px]">
+          <div className="text-gray-600 font-medium flex flex-col items-center">
+            <div className="mb-2 text-lg sm:text-xl">Storage usage unavailable</div>
+            <div className="text-xs sm:text-sm">The calculation did not finish on this site. It can time out on very large sites or a low memory limit. Try Refresh.</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`rounded-xl shadow-lg ${otherGradient} border border-[#85cbcf] overflow-hidden transition-all duration-300 hover:shadow-xl p-4 sm:p-6 h-full flex flex-col`}
@@ -48,7 +81,7 @@ const DiskManagement = ({ data, isLoading, fetchData }) => {
             {data?.database?.totalSize}
           </div>
           <IconButton
-            onClick={fetchData}
+            onClick={() => fetchData(true)}
             icon={RefreshCcw}
             bgColor={`bg-[${primaryGreen}]`}
             hoverBgColor="hover:bg-[#07C07E1A]"

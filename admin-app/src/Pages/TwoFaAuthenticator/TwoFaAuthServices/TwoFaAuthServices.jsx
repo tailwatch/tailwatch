@@ -49,7 +49,7 @@ export const getTwoFaStatus = async ({ set2FaStatus, setLoading }) => {
   }
 };
 
-export const verifyTwoFaStatus = async ({ code, set2FaStatus, setLoading }) => {
+export const verifyTwoFaStatus = async ({ code, set2FaStatus, setAuthData, setLoading }) => {
   setLoading(true);
   try {
     const formData = new FormData();
@@ -65,7 +65,10 @@ export const verifyTwoFaStatus = async ({ code, set2FaStatus, setLoading }) => {
     });
 
     if (response.data.data.code === 200) {
-      
+      const codes = response.data.data.backup_codes;
+      if (setAuthData && Array.isArray(codes)) {
+        setAuthData((prev) => ({ ...(prev || {}), backup_codes: codes }));
+      }
       await getTwoFaStatus({ set2FaStatus, setLoading });
     } else {
       console.error('Failed to verify 2FA code:', response.data.data.message);

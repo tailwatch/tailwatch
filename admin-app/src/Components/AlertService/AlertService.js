@@ -237,11 +237,18 @@ const manageLoginPopup = (
     `
     : '';
 
+  // Escape the whole message (keeps a user-controlled username safe), then allow
+  // only the intended <strong> tags back, so the username renders bold without
+  // opening an XSS hole. escapeHtml turns <strong> into &lt;strong&gt;.
+  const messageHtml = escapeHtml(message)
+    .replace(/&lt;strong&gt;/g, '<strong>')
+    .replace(/&lt;\/strong&gt;/g, '</strong>');
+
   return Swal.fire({
     ...baseConfig,
     title: title,
     html: `
-      <div class="alert-message">${escapeHtml(message)}</div>
+      <div class="alert-message">${messageHtml}</div>
       ${expiryHtml}
       ${resetLoginHtml}
     `,

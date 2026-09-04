@@ -267,6 +267,17 @@ class SearchReplaceController extends BaseController {
 	 */
 	public function tailwatch_start_search_replace( $post_data ) {
 		try {
+			// Search & replace rewrites rows across every table (SHOW TABLES), which on
+			// multisite spans all sites; require a super-admin-level capability there. A
+			// plain site admin keeps manage_options on single-site.
+			$sr_network_cap = is_multisite() ? 'manage_network_options' : 'manage_options';
+			if ( ! current_user_can( $sr_network_cap ) ) {
+				return array(
+					'code'    => 403,
+					'message' => __( 'You are not allowed to run a search and replace on this site.', 'tailwatch' ),
+				);
+			}
+
 			$json_data = isset( $post_data ) ? wp_unslash( $post_data ) : '';
 			$data      = json_decode( $json_data, true );
 
@@ -1332,6 +1343,17 @@ class SearchReplaceController extends BaseController {
 	 */
 	public function tailwatch_resume_search_replace() {
 		try {
+			// Search & replace rewrites rows across every table (SHOW TABLES), which on
+			// multisite spans all sites; require a super-admin-level capability there. A
+			// plain site admin keeps manage_options on single-site.
+			$sr_network_cap = is_multisite() ? 'manage_network_options' : 'manage_options';
+			if ( ! current_user_can( $sr_network_cap ) ) {
+				return array(
+					'code'    => 403,
+					'message' => __( 'You are not allowed to run a search and replace on this site.', 'tailwatch' ),
+				);
+			}
+
 			$existing_data = $this->search_replace_cancel_pause_data();
 
 			if ( ! empty( $existing_data ) && ! empty( $existing_data['scan_state'] ) && 'pause' === $existing_data['scan_state'] ) {

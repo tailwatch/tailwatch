@@ -19,4 +19,4 @@ export const dbImage6 = getImagePath('trackback-pingback.svg');
 export const dbImage7 = getImagePath('trash_comment.svg');
 export const dbImage8 = getImagePath('trash_post.svg');
 export const logo = getImagePath('foxbranding.png');
-export const tailwatch = getImagePath('tailwatch.png');
+export const tailwatch = getImagePath('tailwatch-visit-logo.png');

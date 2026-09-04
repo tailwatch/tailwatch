@@ -193,6 +193,24 @@ class ConnectAuthenticator {
 			}
 		}
 
+		// Fallback for hosts that strip the standard Authorization header before it
+		// reaches PHP (CGI/FastCGI, plain-permalink Apache, or nginx without the
+		// fastcgi_param). The dashboard mirrors the identical "Bearer <jwt>" value under
+		// a custom X-Tailwatch-Authorization header, which those servers do forward.
+		// Consulted only when Authorization is absent; the two-factor gate is unchanged
+		// (this Bearer JWT AND the separate X-Tailwatch-Auth-Key are both still required).
+		if ( '' === $auth ) {
+			$fallback = (string) $request->get_header( 'x-tailwatch-authorization' );
+			if ( '' === $fallback ) {
+				if ( isset( $_SERVER['HTTP_X_TAILWATCH_AUTHORIZATION'] ) ) {
+					$fallback = sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_TAILWATCH_AUTHORIZATION'] ) );
+				} elseif ( isset( $_SERVER['REDIRECT_HTTP_X_TAILWATCH_AUTHORIZATION'] ) ) {
+					$fallback = sanitize_text_field( wp_unslash( $_SERVER['REDIRECT_HTTP_X_TAILWATCH_AUTHORIZATION'] ) );
+				}
+			}
+			$auth = $fallback;
+		}
+
 		if ( '' === $auth || 0 !== stripos( $auth, 'Bearer ' ) ) {
 			return '';
 		}

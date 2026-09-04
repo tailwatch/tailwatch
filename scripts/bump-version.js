@@ -2,29 +2,24 @@
 
 /**
  * Bump the Tailwatch version across every file that must agree with the
- * WordPress.org Stable Tag, and sync the changelog:
- *   - changelog.txt is the COMPLETE archive (newest first, and it INCLUDES the
- *     current version),
- *   - readme.txt shows ONLY the current version, mirrored from the top of
- *     changelog.txt, plus a pointer to the full changelog.
- * Author each new version at the TOP of changelog.txt, then run this script: it
- * mirrors that top entry into readme.txt. If you bump before writing the entry,
- * an empty "= <version> =" stub is added to the top of changelog.txt for you to
- * fill in (then re-run to mirror it across). Edits are surgical + byte-preserving,
- * so line endings (CRLF) and every other byte stay intact.
+ * WordPress.org Stable Tag, and keep the changelog in readme.txt.
+ * The complete changelog lives in readme.txt's "== Changelog ==" section
+ * (newest first, current version included). On bump, if the target version is
+ * not already the top entry, an empty "= <version> =" stub is added at the top
+ * of that section for you to fill in. Edits are surgical + byte-preserving, so
+ * line endings (CRLF) and every other byte stay intact.
  *
  *   node scripts/bump-version.js 1.0.3
  *   node scripts/bump-version.js 1.0.3 --dry-run
  *   node scripts/bump-version.js 1.0.3 --no-changelog
  *
- * changelog.txt is the complete history; readme.txt mirrors the latest entry.
+ * readme.txt's Changelog section is the complete history.
  */
 
 const fs = require('fs');
 
 const SEMVER = /^\d+\.\d+\.\d+(?:-[A-Za-z0-9.]+)?$/;
 const VERSION = '(\\d+\\.\\d+\\.\\d+(?:-[A-Za-z0-9.]+)?)';
-const POINTER = 'See changelog.txt (included with the plugin) for the full changelog.';
 
 const TARGETS = [
   { file: 'tailwatch.php',              re: new RegExp('(\\*\\s*Version:\\s*)' + VERSION) },
@@ -43,13 +38,12 @@ function fail(msg) {
 function readBytes(file) { return fs.readFileSync(file, 'latin1'); }
 function writeBytes(file, content) { fs.writeFileSync(file, content, 'latin1'); }
 
-// Keep changelog.txt as the complete archive (newest first, current version
-// included) and mirror its top entry into readme.txt's Changelog section. If the
-// target version is not yet at the top of changelog.txt, an empty stub is added
-// there first, so readme.txt never shows a version that the archive is missing.
+// readme.txt's "== Changelog ==" section is the complete archive (newest first,
+// current version included). On bump, if the target version is not already the
+// top entry, add an empty "= <version> =" stub at the top of that section for
+// the author to fill in. The rest of the section is preserved verbatim.
 function rollChangelog(version, dryRun) {
   const readmeFile = 'readme.txt';
-  const clFile = 'changelog.txt';
   const HEADER = '== Changelog ==';
 
   const readme = readBytes(readmeFile);
@@ -58,44 +52,27 @@ function rollChangelog(version, dryRun) {
   const hIdx = readme.indexOf(HEADER);
   if (hIdx === -1) { console.log('  ! readme.txt has no "== Changelog ==" section; skipped changelog'); return; }
 
-  // 1) changelog.txt: make sure the target version is the top entry.
-  let archive = fs.existsSync(clFile) ? readBytes(clFile) : (HEADER + eol + eol);
-  let aHdr = archive.indexOf(HEADER);
-  if (aHdr === -1) { archive = HEADER + eol + eol + archive; aHdr = 0; }
-  const body = archive.slice(aHdr + HEADER.length).replace(/^(?:\r?\n)+/, '');
-  const topVer = (body.match(/^= ([^ ]+) =/) || [])[1];
-
-  const stubbed = topVer !== version;
-  const newBody = stubbed
-    ? '= ' + version + ' =' + eol + '* ' + eol + eol + body
-    : body;
-  const newArchive = HEADER + eol + eol + newBody.replace(/(?:\r?\n)+$/, '') + eol;
-
-  // 2) extract the top (current) entry to mirror into readme.txt.
-  const secondAt = newBody.search(/\r?\n= [^\r\n]+ =/);
-  const topEntry = (secondAt === -1 ? newBody : newBody.slice(0, secondAt)).replace(/(?:\r?\n)+$/, '');
-
-  // 3) readme.txt: replace the Changelog section with that entry + the pointer.
   const afterHeader = hIdx + HEADER.length;
   const nextSec = readme.slice(afterHeader).search(/\r?\n== [^\r\n]+ ==/);
   const secEnd = nextSec === -1 ? readme.length : afterHeader + nextSec;
-  const newSection = HEADER + eol + eol + topEntry + eol + eol + POINTER + eol + eol;
+  const body = readme.slice(afterHeader, secEnd).replace(/^(?:\r?\n)+/, '').replace(/(?:\r?\n)+$/, '');
+
+  const topVer = (body.match(/^= ([^ ]+) =/) || [])[1];
+  if (topVer === version) {
+    console.log('  = readme.txt Changelog already has "= ' + version + ' =" at the top');
+    return;
+  }
+
+  const stub = '= ' + version + ' =' + eol + '* ' + eol;
+  const newSection = HEADER + eol + eol + stub + eol + body + eol + eol;
   const newReadme = readme.slice(0, hIdx) + newSection + readme.slice(secEnd).replace(/^(?:\r?\n)+/, '');
 
   if (dryRun) {
-    console.log('  ~ changelog: ' + (stubbed
-      ? 'would add "= ' + version + ' =" stub to changelog.txt, then mirror it into readme.txt'
-      : 'would mirror changelog.txt top entry (' + version + ') into readme.txt') + ' (dry run)');
+    console.log('  ~ changelog: would add "= ' + version + ' =" stub at the top of readme.txt Changelog (dry run)');
     return;
   }
-  writeBytes(clFile, newArchive);
   writeBytes(readmeFile, newReadme);
-  if (stubbed) {
-    console.log('  * changelog.txt: added "= ' + version + ' =" stub at the top - fill in the bullet(s) there, then re-run to mirror into readme.txt');
-  } else {
-    console.log('  * changelog.txt: "= ' + version + ' =" already at the top (complete archive kept)');
-  }
-  console.log('  * readme.txt: Changelog now mirrors changelog.txt top entry (' + version + ') + pointer');
+  console.log('  * readme.txt: added "= ' + version + ' =" stub at the top of the Changelog - fill in the bullet(s)');
 }
 
 // Keep readme.txt's Upgrade Notice to the current version only (it is a per-update
@@ -170,5 +147,5 @@ if (!noChangelog) {
 if (dryRun) {
   console.log('\nDry run complete: ' + changed + ' file(s) would change to ' + version + '.');
 } else {
-  console.log('\nBumped ' + changed + ' file(s) to ' + version + '. Make sure the ' + version + ' entry at the top of changelog.txt is filled in (readme.txt mirrors it), then open a PR.');
+  console.log('\nBumped ' + changed + ' file(s) to ' + version + '. Make sure the ' + version + ' entry at the top of readme.txt Changelog is filled in, then open a PR.');
 }

@@ -40,6 +40,43 @@ class InterfaceController {
 		// (An earlier implementation tried to do this from admin_init, but
 		// admin_init runs AFTER init — too late to suppress the toolbar.)
 		$hook_controllers->add_filter_hook( 'show_admin_bar', array( $this, 'hide_admin_bar_on_tailwatch' ) );
+
+		// Remove third-party admin notices on the Tailwatch full-screen React screen ONLY.
+		// in_admin_header fires in admin-header.php immediately before the admin_notices /
+		// all_admin_notices do_action calls, and PHP_INT_MAX runs after every plugin has
+		// registered, so callbacks are cleared before they can print. Strictly screen-scoped.
+		$hook_controllers->add_action_hook( 'in_admin_header', array( $this, 'remove_admin_notices_on_tailwatch' ), PHP_INT_MAX );
+	}
+
+	/**
+	 * Remove third-party admin notices on the Tailwatch full-screen React screen.
+	 *
+	 * The dashboard is a single-page React app rendered in #root. Admin notices from other
+	 * plugins and themes render inside #wpbody-content ABOVE it and break the layout. Core
+	 * only relocates standard-class notices (div.notice/.updated/.error), so custom-class
+	 * review/upsell notices cannot be moved or reliably hidden by CSS; removing the notice
+	 * hooks is the only method that clears both custom-class and hook-registered notices.
+	 *
+	 * Scope: runs ONLY on the Tailwatch top-level screen and returns immediately on every
+	 * other admin screen, so other plugins' notices display normally everywhere else. This
+	 * clears only the Tailwatch canvas - the compliant, non-global pattern used by
+	 * WooCommerce Admin and Yoast on their own screens.
+	 *
+	 * @return void
+	 */
+	public function remove_admin_notices_on_tailwatch() {
+		if ( ! function_exists( 'get_current_screen' ) ) {
+			return;
+		}
+		$screen = get_current_screen();
+		if ( ! $screen || ! isset( $screen->id ) || 'toplevel_page_tailwatch' !== $screen->id ) {
+			return;
+		}
+
+		remove_all_actions( 'admin_notices' );
+		remove_all_actions( 'all_admin_notices' );
+		remove_all_actions( 'network_admin_notices' );
+		remove_all_actions( 'user_admin_notices' );
 	}
 
 	/**

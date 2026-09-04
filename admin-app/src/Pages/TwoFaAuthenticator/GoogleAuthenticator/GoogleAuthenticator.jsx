@@ -29,6 +29,9 @@ const GoogleAuthenticator = () => {
         if (!isConfirmed) return;
         await disconnectTwoFa({ set2FaStatus, setLoading });
         setCode('');
+        // Teardown leaves the account with no secret; fetch a fresh QR + secret so the
+        // re-setup screen renders immediately (the backend issues a new secret on this call).
+        await googleAuthData({ setAuthData, setLoading });
     };
     useEffect(() => {
         fetchGoogleAuthData();
@@ -47,7 +50,7 @@ const GoogleAuthenticator = () => {
     };
 
     const copyAllBackupCodes = () => {
-        const allCodes = get2FaStatus?.backup_codes?.join('\n');
+        const allCodes = authData?.backup_codes?.join('\n');
         navigator.clipboard.writeText(allCodes);
         toast.success('All backup codes copied!');
     };
@@ -57,7 +60,7 @@ const GoogleAuthenticator = () => {
             toast.error('Please enter a 6-digit code');
             return;
         }
-        await verifyTwoFaStatus({ code, set2FaStatus, setLoading });
+        await verifyTwoFaStatus({ code, set2FaStatus, setAuthData, setLoading });
     };
 
     const renderSecretKey = () => {
@@ -79,8 +82,27 @@ const GoogleAuthenticator = () => {
         );
     };
 
+    const renderRemainingBackupCodes = () => {
+        const remaining = get2FaStatus?.backup_codes_remaining;
+        if (remaining === undefined || remaining === null) return null;
+        const low = remaining <= 2;
+        return (
+            <div className={`mt-6 p-5 rounded-lg border-l-4 ${low ? 'bg-amber-50 border-amber-400' : 'bg-gray-50 border-teal-700'}`}>
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">Backup Codes</h3>
+                <p className="text-gray-600 text-sm">
+                    You have <span className="font-semibold">{remaining}</span> unused backup code{remaining === 1 ? '' : 's'} remaining. Each can be used once if you lose access to your authenticator app.
+                </p>
+                {low && (
+                    <p className="text-xs text-amber-700 mt-2 font-medium">
+                        You are running low on backup codes.
+                    </p>
+                )}
+            </div>
+        );
+    };
+
     const renderBackupCodes = () => {
-        const backupCodes = get2FaStatus?.backup_codes;
+        const backupCodes = authData?.backup_codes;
         if (!backupCodes || backupCodes.length === 0) return null;
 
         return (
@@ -148,7 +170,7 @@ const GoogleAuthenticator = () => {
                                                 isDisabled={loading}
                                             />
                                         </div>
-                                        {renderBackupCodes()}
+                                        {authData?.backup_codes?.length ? renderBackupCodes() : renderRemainingBackupCodes()}
                                     </div>
                                 ) : (
                                     <>

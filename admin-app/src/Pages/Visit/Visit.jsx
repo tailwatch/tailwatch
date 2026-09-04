@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { FaCheckCircle, FaSpinner, FaTimesCircle, FaRocket } from "react-icons/fa";
+import { FaCheckCircle, FaSpinner, FaTimesCircle } from "react-icons/fa";
 import { useVerifyVisitStatus } from '../../Components/Hooks/VerifyVisitStatus/VerifyVisitStatus';
 import { verifyVisitStatus, checkPhpVersion, checkWpVersion, checkCronStatus, check_tailwatch_table, markSetupStarted } from "./VisitServices/VisitServices";
 import VisitModal from "./VisitModal/VisitModal";
 import VisitSteps from "./VisitSteps/VisitSteps";
 import { CronHealer } from "../../Components/CroneHealer/CronHealer";
+import { tailwatch } from "../../Components/Hooks/useImages/useImages";
 
 /* global tailwatch_ajax */
 
@@ -275,10 +276,8 @@ const Visit = () => {
           ) : !hasStarted ? (
             <div className="flex justify-center">
               <div className="bg-white bg-opacity-95 border border-teal-200 backdrop-blur-sm shadow-2xl rounded-3xl p-10 w-full max-w-2xl text-center">
-                <div className="flex justify-center mb-6">
-                  <div className="bg-gradient-to-br from-teal-500 to-emerald-600 text-white rounded-full p-6 shadow-xl">
-                    <FaRocket className="text-4xl" />
-                  </div>
+                <div className="flex justify-center mb-5">
+                  <img src={tailwatch} alt="Tailwatch" className="h-16 w-auto" />
                 </div>
                 <h2 className="text-3xl font-bold mb-4 text-gray-800">Welcome to Tailwatch</h2>
                 <p className="text-gray-600 text-lg leading-relaxed mb-2">

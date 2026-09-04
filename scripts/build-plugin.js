@@ -19,7 +19,7 @@ const SLUG = 'tailwatch';
 const OUT = path.join('dist', SLUG);
 
 // The ONLY things that ship. Nothing else is ever copied.
-const SHIP_FILES = ['tailwatch.php', 'tw_autoload.php', 'readme.txt', 'changelog.txt', 'license.txt'];
+const SHIP_FILES = ['tailwatch.php', 'tw_autoload.php', 'readme.txt', 'license.txt'];
 const SHIP_DIRS = ['Admin', 'Vendor', 'languages'];
 // admin-app/src (the React source) is intentionally NOT shipped: the compiled bundle
 // in Admin/View/Static/ runs the dashboard, and the GPL source + build tooling are
