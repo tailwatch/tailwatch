@@ -3,12 +3,15 @@ import { toast } from "react-toastify";
 import { updateLocalStorage } from "../../../Components/Utils/HelperFunctions/LocalStorageHelper";
 /* global tailwatch_ajax */
 
-export const pieChartData = async () => {
+export const pieChartData = async (forceRefresh = false) => {
   try {
     const formData = new FormData();
     formData.append('action', 'tailwatch_global_ajax_handler');
     formData.append('action_type', 'tailwatch_disk_and_db_usage');
     formData.append('nonce', tailwatch_ajax.nonce);
+    if (forceRefresh) {
+      formData.append('data', JSON.stringify({ force_refresh: true }));
+    }
 
     const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {
@@ -18,11 +21,20 @@ export const pieChartData = async () => {
 
     if (response.data.data.code === 200) {
       const data = response.data.data;
+
+      // The backend always returns 200 (a stat widget must not 500) and signals a
+      // failed/timed-out calculation with available === false. Surface that as an
+      // explicit unavailable state instead of rendering empty/zero sizes as real data.
+      if (data.available === false) {
+        return { available: false };
+      }
+
       const database = data.database || {};
       const tables = database.tables || [];
       updateLocalStorage('pieChart', { 'site size': data.files.total_site_size });
 
       return {
+        available: true,
         total_site_size: data.files.total_site_size,
         plugins: data.files.plugins,
         root: data.files.root,

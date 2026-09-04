@@ -1,57 +1,79 @@
 import { showLocalStorageError } from '../../ErrorModal/localStorageErrorHandler';
 
+const STORAGE_KEY = 'WpTailWatch';
+
+// A QuotaExceededError means the cached blob is larger than the browser localStorage
+// limit (~5MB). This cache is a best-effort fast-path only: the same data also lives in
+// memory (React state / FeaturesDataContext), so a failed write must never crash the app
+// or show an error modal - it is simply skipped.
+const isQuotaError = (error) =>
+    !!error && (
+        error.name === 'QuotaExceededError' ||
+        error.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+        error.code === 22 ||
+        error.code === 1014
+    );
+
 export const getLocalStorage = (section, key) => {
     try {
-        const item = localStorage.getItem('WpTailWatch');
+        const item = localStorage.getItem(STORAGE_KEY);
         if (!item) return undefined;
-        
-        const getItem = JSON.parse(item);
-        
-        if (getItem && getItem[section] && key in getItem[section]) {
-            return getItem[section][key];
-        }    
+
+        const parsed = JSON.parse(item);
+        if (parsed && parsed[section] && key in parsed[section]) {
+            return parsed[section][key];
+        }
         return undefined;
     } catch (error) {
+        // Unparseable (corrupted) value: drop it so future writes start clean, then fall
+        // back to undefined. Callers already treat a missing cache as "not set".
         console.error('Error parsing localStorage:', error);
-        // Clear corrupted data
-        localStorage.removeItem('WpTailWatch');
-        // Show error modal
-        showLocalStorageError(error);
+        try {
+            localStorage.removeItem(STORAGE_KEY);
+        } catch (removeError) {
+            // Nothing more we can do on the read path.
+        }
         return undefined;
     }
-  };
-  
-  export const updateLocalStorage = (section, updates, removeKeys = []) => {
+};
+
+export const updateLocalStorage = (section, updates, removeKeys = []) => {
     try {
-        const item = localStorage.getItem('WpTailWatch');
-        const getItem = item ? JSON.parse(item) : {};
-        
-        const updatedSection = { ...getItem[section], ...updates };
-        
+        const item = localStorage.getItem(STORAGE_KEY);
+        const store = item ? JSON.parse(item) : {};
+
+        const updatedSection = { ...store[section], ...updates };
         removeKeys.forEach((key) => {
             delete updatedSection[key];
         });
-    
-        const updatedProcess = {
-            ...getItem,
+
+        const next = {
+            ...store,
             [section]: updatedSection
         };
-    
-        localStorage.setItem('WpTailWatch', JSON.stringify(updatedProcess));
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     } catch (error) {
-        console.error('Error parsing localStorage in updateLocalStorage:', error);
-        // Clear corrupted data and initialize fresh
-        try {
-            const freshData = {
-                [section]: updates
-            };
-            localStorage.setItem('WpTailWatch', JSON.stringify(freshData));
-        } catch (setError) {
-            console.error('Error setting localStorage after corruption:', setError);
-            // Show error modal if setting also fails
-            showLocalStorageError(setError);
+        // Out of quota: the data is too large to cache. The app keeps working from
+        // in-memory state, so skip the write silently - no modal, no crash.
+        if (isQuotaError(error)) {
+            console.warn('Tailwatch: localStorage quota exceeded; skipping cache write for', section);
+            return;
         }
-        // Show error modal for JSON parsing errors
-        showLocalStorageError(error);
+
+        // Not a quota error - the store is likely corrupted. Reset it once with just this
+        // update so future reads/writes start clean.
+        console.error('Error updating localStorage:', error);
+        try {
+            localStorage.removeItem(STORAGE_KEY);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ [section]: updates }));
+        } catch (resetError) {
+            if (isQuotaError(resetError)) {
+                console.warn('Tailwatch: localStorage quota exceeded on reset; skipping cache write.');
+                return;
+            }
+            console.error('Error resetting localStorage:', resetError);
+            showLocalStorageError(resetError);
+        }
     }
-  };
+};

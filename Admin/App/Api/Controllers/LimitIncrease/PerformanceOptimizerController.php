@@ -227,6 +227,16 @@ class PerformanceOptimizerController {
 	 * @return array<string, mixed>
 	 */
 	public function tailwatch_save_php_settings( $post_data ) {
+		// Writes .htaccess / .user.ini at ABSPATH, shared across a whole multisite
+		// network; require a super-admin-level capability on multisite.
+		$fs_network_cap = is_multisite() ? 'manage_network_options' : 'manage_options';
+		if ( ! current_user_can( $fs_network_cap ) ) {
+			return array(
+				'code'    => 403,
+				'message' => __( 'You are not allowed to modify server performance settings.', 'tailwatch' ),
+			);
+		}
+
 		$json_data       = isset( $post_data ) ? wp_unslash( $post_data ) : '';
 		$custom_settings = json_decode( $json_data, true );
 
@@ -387,6 +397,16 @@ class PerformanceOptimizerController {
 	 * @return array<string, mixed>
 	 */
 	public function tailwatch_remove_php_settings() {
+		// Writes .htaccess / .user.ini at ABSPATH, shared across a whole multisite
+		// network; require a super-admin-level capability on multisite.
+		$fs_network_cap = is_multisite() ? 'manage_network_options' : 'manage_options';
+		if ( ! current_user_can( $fs_network_cap ) ) {
+			return array(
+				'code'    => 403,
+				'message' => __( 'You are not allowed to modify server performance settings.', 'tailwatch' ),
+			);
+		}
+
 		$db_model = new DBModel();
 		$existing = $this->get_settings();
 

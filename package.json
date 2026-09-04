@@ -1,6 +1,6 @@
 {
 	"name": "tailwatch",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"private": true,
 	"description": "Tailwatch WordPress plugin — orchestration for building the React admin dashboard (admin-app/) and syncing the compiled bundle into Admin/View/Static/.",
 	"scripts": {

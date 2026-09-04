@@ -1,10 +1,10 @@
 === Tailwatch – Security, Backups, Monitoring & Management ===
 Contributors: wptailwatch
-Tags: security, backup, monitoring, ssl, audit-log
+Tags: security, backup, monitoring, 2FA, audit-log
 Requires at least: 6.3
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.2
+Stable tag: 1.0.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -113,6 +113,9 @@ During a heavy operation you start — a malware scan, file-integrity check, har
 = What does the optional Network Logs feature record? =
 The optional Network Logs feature (off by default) records lightweight metadata about internal WordPress traffic — REST API, admin-ajax, cron, and XML-RPC requests — so you can review recent activity, status codes, and slow responses. For REST requests it reads the already-parsed request through WordPress's own rest_post_dispatch hook; for the others it reads only the sanitized action and request parameters. It stores the endpoint/route, HTTP method, status code, response time, and the requesting user and IP. Before anything is saved, credential, token, and nonce values are redacted, cookies are never captured or stored, and every value is length-capped. Raw request bodies and response bodies are never stored, and none of this data is sent anywhere — it is kept in your own database and can be cleared at any time from the feature. The feature only records while you have it switched on.
 
+= Can I move Tailwatch's security keys into wp-config.php? =
+Yes. For extra defense in depth you can define TAILWATCH_JWT_SECRET_KEY, TAILWATCH_APP_SECRET_KEY, and TAILWATCH_ENCRYPTION_KEY in your wp-config.php file (seed each with a fresh value from https://api.wordpress.org/secret-key/1.1/salt/). When these constants are set, Tailwatch uses them for token signing and encryption instead of generating and storing a key in the database, which keeps the secret out of database backups, staging clones, and read-only SQL exposure, the same way WordPress keeps its own security keys and salts in wp-config.php. This is entirely optional: if you do not set them, Tailwatch automatically generates a strong random key and stores it in a non-autoloaded option, the same approach WordPress core uses for its own fallback salts.
+
 == External Services ==
 
 This plugin connects to several external services. Each service, the data sent, and the conditions under which the connection is made are listed below. Most connections only occur when the corresponding optional feature is enabled by the site administrator.
@@ -122,8 +125,8 @@ Used for license verification, push notification delivery, and optional deactiva
 
 What is sent and when:
 - License verification: your anonymized Tailwatch user identifier and your site URL (query string), plus an `X-Tailwatch-Header-Key` request header containing the license credential issued when you connected your account. Sent on dashboard visits (throttled by a short server-side cache) and on demand when you click "Verify License". No system metadata is included in this request;
-- Recovery access provisioning: when you connect your account, the plugin generates a standard WordPress recovery-mode cookie for your own site and sends it to the Tailwatch service so the dashboard can help you regain access if your site later becomes unreachable (for example, a fatal error that prevents wp-admin from loading). This value is a single site-scoped recovery credential — the same kind WordPress itself issues for its built-in recovery mode — that grants recovery-mode access to your site and nothing more. It is transmitted only over the authenticated connect handshake and only after you choose to connect your account;
-- Mobile push notifications: anonymized user identifier, your site domain, and the notification type/severity tag (the plugin no longer sends a pre-written title or body; the Tailwatch service composes those from the event context below, and the request goes to a single relay endpoint authenticated with a per-site routing token request header). When mobile notifications are enabled, an additional event-context payload is also stored on api.wptailwatch.com so the mobile app can render notification details when you tap a push. This event-context payload contains: the event name and feature, the action and any state-change narrative (before/after) describing what occurred, the timestamp, the requesting admin's own forensic baseline (IP address and user agent at the time of the event), and per-event fields needed for the mobile app's detail view (for example, for Email / SMTP events the recipient address and subject line so the notification is actionable). It does NOT include message bodies, credentials, tokens, license keys, or any other secret. The event-context payload is held on api.wptailwatch.com only; it is NOT forwarded to Firebase Cloud Messaging (see below) — Firebase only ever receives the slim title/body/type payload.
+- Recovery access provisioning: when you connect your account, the plugin generates a standard WordPress recovery-mode cookie for your own site (a single site-scoped credential, the same kind WordPress issues for its built-in recovery mode) and sends it to the Tailwatch service so the dashboard can help you regain access if your site later becomes unreachable. It is sent only over the authenticated connect handshake, only after you choose to connect;
+- Mobile push notifications: anonymized user identifier, your site domain, and the notification type/severity tag, sent to a single relay endpoint authenticated with a per-site routing token (the plugin sends no pre-written title or body; the service composes those from the event context). When mobile notifications are enabled, an event-context payload is also stored on api.wptailwatch.com so the mobile app can show details when you tap a push: the event name and feature, the action and any before/after state change, the timestamp, the acting admin's IP address and user agent, and per-event display fields (for example, an Email/SMTP event's recipient address and subject line). It never includes message bodies, credentials, tokens, or license keys. This payload stays on api.wptailwatch.com and is not forwarded to Firebase Cloud Messaging (below), which only ever receives the slim title/body/type payload.
 - Deactivation feedback: site domain, deactivation reason, plugin version, your "keep data / delete data" choice from the deactivation modal, and optional free-form comments — sent only if you voluntarily click "Submit & Deactivate" (the "Skip & Deactivate" button avoids any transmission).
 
 Service provider: WP Tailwatch
@@ -149,10 +152,10 @@ Privacy policy: https://firebase.google.com/support/privacy
 Terms: https://firebase.google.com/terms
 
 = Smart SSL Monitoring — host certificate inspection =
-The Smart SSL feature opens a TLS connection (raw socket) to your own site's domain (derived from your WordPress Site Address / `home_url()`) to read its certificate metadata (issuer, validity dates, chain). It also issues an HTTP HEAD probe over plain HTTP to your own site to detect HTTP→HTTPS redirection behaviour. Only your own site is contacted — Tailwatch does not connect to any third-party service for this purpose. Disable the Smart SSL feature in plugin settings if you do not want these requests issued.
+The Smart SSL feature connects to your own site's domain (from home_url()) to read its certificate metadata (issuer, validity dates, chain) and issues an HTTP HEAD probe to detect HTTP to HTTPS redirection. Only your own site is contacted; no third-party service is involved. Disable Smart SSL in plugin settings to stop these requests.
 
 = Broken Link Checker — external URL scanning =
-The Broken Links scanner contacts URLs that you (or your site's authors) have placed in your post content, pages, term descriptions, user meta, and options. The plugin issues GET requests to those URLs to determine whether they return 4xx or 5xx errors. The set of URLs contacted is therefore controlled entirely by your own site content — Tailwatch does not maintain a list of external services for this purpose. Disable the Broken Links feature in plugin settings if you do not want these requests issued.
+The Broken Links scanner issues GET requests to URLs found in your own post content, pages, term descriptions, user meta, and options to check whether they return 4xx or 5xx errors. The URLs contacted are controlled entirely by your site's content; Tailwatch maintains no external list. Disable the Broken Links feature in plugin settings to stop these requests.
 
 = MaxMind GeoLite2 database download (download.maxmind.com) =
 The optional GeoIP integration downloads the MaxMind GeoLite2-Country database so the plugin can resolve visitor IP addresses to a country (used to display the country of an event in the Login Defender logs, and — with the Pro add-on — for country-based access rules). This connection is made ONLY when you have entered your own MaxMind license key on the Integrations screen, and ONLY on an explicit action you take: when you save the key, and when you click "Check for updates". There is no automatic, background, or scheduled download.
@@ -164,7 +167,7 @@ Privacy policy: https://www.maxmind.com/en/privacy-policy
 GeoLite2 EULA: https://www.maxmind.com/en/geolite2/eula
 
 = WordPress.org — plugin, theme, and core updates & rollback =
-The optional Updates & Rollback feature contacts WordPress.org to manage updates for your plugins, themes, and WordPress core. When you open the Updates screen it queries api.wordpress.org for available-update information and version lists (the same API WordPress core itself uses); when you update or roll back an item it downloads the official package from downloads.wordpress.org and installs it through WordPress's own upgrade routines (WP_Upgrader / Core_Upgrader). Only official WordPress.org packages are ever downloaded — no third-party source is contacted. By default these requests are made only when you open the Updates screen or explicitly click Update or Rollback. If you turn on automatic updates for plugins, themes, or WordPress core (minor and security core releases only), WordPress's own built-in auto-updater additionally downloads and installs those updates on its regular schedule from the same WordPress.org sources — only for the update types you switch on, and only while the feature is enabled. Disable the Updates & Rollback feature (or the individual automatic-update toggles) in plugin settings if you do not want these requests issued.
+The optional Updates & Rollback feature contacts WordPress.org (api.wordpress.org for available-update and version information, downloads.wordpress.org for packages) to update or roll back your plugins, themes, and WordPress core through WordPress's own upgrade routines (WP_Upgrader / Core_Upgrader). Only official WordPress.org packages are downloaded; no third-party source is contacted. These requests are made when you open the Updates screen or click Update or Rollback and, if you turn on automatic updates (core limited to minor and security releases), on WordPress's own auto-update schedule for the types you switch on, while the feature is enabled. Disable the feature (or the individual automatic-update toggles) in plugin settings to stop these requests.
 
 Service provider: WordPress.org (The WordPress Foundation)
 Privacy policy: https://wordpress.org/about/privacy/
@@ -245,6 +248,16 @@ No user data, logs, or PII is transmitted to external servers unless an optional
 
 == Changelog ==
 
+= 1.0.3 =
+* Hardening: on multisite, database Search & Replace and PHP performance-limit changes now require network administrator capabilities.
+* Hardening: stricter Connect API token validation, and a safeguard that prevents an already-connected site from being silently re-paired.
+* Improved: broader hosting compatibility for the Connect API on servers that don't forward the standard HTTP Authorization header to PHP.
+* Improved: File & Directory Access protections, Network Logs metadata handling, and cron-health detection refinements.
+* Added the Tailwatch logo to the connection consent screen.
+* Improved: the Tailwatch dashboard hides admin notices from other plugins on its own screen so they no longer overlap the interface; notices still appear normally on every other admin screen.
+* Fix: dashboard disk and database usage no longer fails with an error on sites with a low PHP memory limit; the figures are now cached, calculated within a safe time budget, and can be refreshed on demand.
+* Housekeeping: the full changelog now lives in this readme file.
+
 = 1.0.2 =
 * New: Media Library - browse, upload, and delete your WordPress media library from the Tailwatch dashboard and connected mobile app. Uploads use WordPress's standard handler, are limited to images, and respect your media capabilities.
 * New: Scheduled Automatic Updates for plugins, themes, and WordPress core, using WordPress's own built-in updater; core is limited to minor and security releases. Off by default, with per-type toggles.
@@ -265,7 +278,31 @@ No user data, logs, or PII is transmitted to external servers unless an optional
 * Note: the security score weighting was rebalanced to include the new Security Keys Rotation and Auto-Update features, so your displayed score may change after updating even if your settings are unchanged.
 * Tested up to WordPress 7.1.
 
-See changelog.txt (included with the plugin) for the full changelog.
+= 1.0.1 =
+* Connect a free Tailwatch (wptailwatch.com) account for web-dashboard and mobile app access with real-time push notifications, over a hardened REST connection with dedicated-key encryption.
+* One-click administrator login links (single-use, hashed, expire within one hour) initiated from a connected Tailwatch session.
+* Recovery Mode provisioning so you can regain access if your site becomes unreachable.
+* SMTP test tool for verifying your outgoing email configuration.
+* MaxMind GeoLite2 database integration (admin-initiated download) for country detection in logs and geo features.
+* Plugin and theme update management with one-click rollback.
+* Performance Optimizer that raises PHP limits during heavy operations, with optional .htaccess tuning.
+* Setup now runs only after you choose to begin, and remembers your choice.
+* Login Defender: trusted allow-list IPs and countries are consistently excluded from brute-force tracking while the allow-list is enabled.
+* Feature backfill on update so newly added features appear on existing sites; incompatibility notices are limited to administrators.
+* Tested up to WordPress 7.1.
+
+= 1.0.0 =
+* Initial release
+* Activity monitoring system
+* Error (HTTP 4xx / 5xx) logging
+* File integrity monitoring
+* SSL monitoring
+* Backup system (files and database)
+* Database optimization tools
+* Cron job manager
+* Login Defender (IP-based brute-force protection + lockouts)
+* Geo-blocking (IP and IP-range allow/block lists)
+* Event-based push notifications
 
 == Source Code ==
 
@@ -293,6 +330,6 @@ https://github.com/tailwatch/tailwatch/issues
 
 == Upgrade Notice ==
 
-= 1.0.2 =
-Adds optional Media Library, scheduled auto-updates, security-key rotation, network logs, and file-access hardening, plus safer broken-link checks, a minification fix, broader database compatibility, and multisite capability hardening.
+= 1.0.3 =
+Security hardening for multisite capability checks and the Connect API, plus logging and file-protection refinements. Recommended update.
 

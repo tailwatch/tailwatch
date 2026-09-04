@@ -67,7 +67,7 @@ class Constants {
 		self::define( 'TAILWATCH_FILE', TAILWATCH_PLUGIN_FILE );
 
 		// Plugin version number.
-		self::define( 'TAILWATCH_VERSION', '1.0.2' );
+		self::define( 'TAILWATCH_VERSION', '1.0.3' );
 
 		// WordPress plugins directory path.
 		self::define( 'TAILWATCH_PLUGIN_DIR', WP_PLUGIN_DIR );

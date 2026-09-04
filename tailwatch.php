@@ -13,7 +13,7 @@
  * Author:      WP Tailwatch
  * Author URI:  https://wptailwatch.com/?utm_source=wp-plugins&utm_medium=wp-dash&utm_campaign=free&utm_content=author_uri
  * Description: WordPress security with backups, monitoring, SSL tracking, and file integrity checks, managed from a mobile app with real-time push alerts.
- * Version:     1.0.2
+ * Version:     1.0.3
  * License:     GPLv2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: tailwatch

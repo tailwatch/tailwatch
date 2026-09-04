@@ -19,9 +19,9 @@ export const useHome = () => {
     const [scanningFeatures, setScanningFeatures] = useState([]);
     const [verifyingFeatures, setVerifyingFeatures] = useState(false);
 
-    const fetchData = async () => {
+    const fetchData = async (forceRefresh = false) => {
         setLoadingDisk(true);
-        const data = await pieChartData();
+        const data = await pieChartData(forceRefresh);
         if (data) {
             const transformedData = {
                 ...data, database: { totalSize: data.total_size, tables: data.tables, },

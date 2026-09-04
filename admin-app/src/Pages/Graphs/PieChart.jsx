@@ -49,7 +49,7 @@ const ColumnChart = ({ data, fetchData, isLoading }) => {
   const handleRefetch = async () => {
     setInternalLoading(true);
     try {
-      await fetchData();
+      await fetchData(true);
     } catch (err) {
       setInternalLoading(false);
     }
@@ -59,6 +59,41 @@ const ColumnChart = ({ data, fetchData, isLoading }) => {
     return (
       <div className="py-6">
         <Skeleton height={447} borderRadius={12} />
+      </div>
+    );
+  }
+
+  if (data.available === false) {
+    return (
+      <div className={`rounded-xl shadow-lg ${otherGradient} border border-[#85cbcf] overflow-hidden transition-all duration-300 hover:shadow-xl p-3 sm:p-4 md:p-6`}>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3">
+          <div className="flex items-center w-full sm:w-auto">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#07C07E1A] flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
+              <Folder size={window.innerWidth < 640 ? 20 : 24} className="text-[#007980]" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-base sm:text-lg font-semibold text-black truncate">File Storage</h2>
+              <p className="text-xs sm:text-sm text-black line-clamp-2 sm:line-clamp-1">
+                Monitor website file directories and their storage.
+              </p>
+            </div>
+          </div>
+          <IconButton
+            onClick={handleRefetch}
+            icon={RefreshCcw}
+            bgColor={`bg-[${primaryGreen}]`}
+            hoverBgColor="hover:bg-[#07C07E1A]"
+            textColor={iconprimary}
+            roundedFull={true}
+            className="!p-2 !rounded-[5px] transition duration-200 hover:shadow-sm flex-shrink-0"
+          />
+        </div>
+        <div className="bg-white rounded-lg shadow-sm p-2 sm:p-3 md:p-4 border border-blue-100 flex items-center justify-center h-64 sm:h-80 md:h-96">
+          <div className="text-gray-600 font-medium flex flex-col items-center text-center px-4">
+            <div className="mb-2 text-lg sm:text-xl">Storage usage unavailable</div>
+            <div className="text-xs sm:text-sm">The calculation did not finish on this site. It can time out on very large sites or a low memory limit. Try Refresh.</div>
+          </div>
+        </div>
       </div>
     );
   }

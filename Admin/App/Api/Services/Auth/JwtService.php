@@ -156,6 +156,13 @@ class JwtService {
 		try {
 			$decoded = JWT::decode( $token, new Key( $signing_key, self::ALGORITHM ) );
 
+			// Only an access token may authorize a request. A refresh token carries no
+			// 'api_access' scope, so this rejects a refresh token presented as a Bearer
+			// access token on the dispatch route.
+			if ( 'api_access' !== ( $decoded->scope ?? '' ) ) {
+				return false;
+			}
+
 			// Defense in depth: reject all tokens when the license is no
 			// longer connected. The JTI revocation check below catches
 			// pre-existing tokens that were explicitly revoked, but this

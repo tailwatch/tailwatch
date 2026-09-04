@@ -53,6 +53,17 @@ class VerificationKeysController {
 				);
 			}
 
+			// Refuse to (re)mint pairing credentials while the site is already connected -
+			// a held token or a second admin must not silently rebind the site. The admin
+			// must disconnect first (which clears these keys). Matches ManageWP/MainWP.
+			$activation = ( new VerifyStatusController() )->get_plugin_activation_status();
+			if ( is_array( $activation ) && ! empty( $activation['extended_connected'] ) ) {
+				return array(
+					'code'    => 409,
+					'message' => __( 'This site is already connected. Please disconnect it before reconnecting.', 'tailwatch' ),
+				);
+			}
+
 			// Clear the previous pairing so only one is active at a time.
 			$previous_cta_id = get_option( 'tailwatch_cta_id' );
 			if ( $previous_cta_id ) {

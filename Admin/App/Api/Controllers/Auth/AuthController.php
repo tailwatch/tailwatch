@@ -70,6 +70,21 @@ class AuthController {
 				$auth_header = sanitize_text_field( wp_unslash( $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ) );
 			}
 
+			// Fallback for hosts (CGI/FastCGI, plain-permalink Apache, or nginx without
+			// the fastcgi_param) that strip the standard Authorization header before PHP
+			// receives it. The dashboard mirrors the identical "Basic <base64>" value
+			// under a custom X-Tailwatch-Authorization header, which those servers do pass
+			// through. Consulted only when the standard header is absent, so compliant
+			// hosts are unaffected. A custom header, like Authorization, cannot be set by a
+			// cross-origin HTML form, so the CSRF property noted above is preserved.
+			if ( '' === $auth_header ) {
+				if ( isset( $_SERVER['HTTP_X_TAILWATCH_AUTHORIZATION'] ) ) {
+					$auth_header = sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_TAILWATCH_AUTHORIZATION'] ) );
+				} elseif ( isset( $_SERVER['REDIRECT_HTTP_X_TAILWATCH_AUTHORIZATION'] ) ) {
+					$auth_header = sanitize_text_field( wp_unslash( $_SERVER['REDIRECT_HTTP_X_TAILWATCH_AUTHORIZATION'] ) );
+				}
+			}
+
 			if ( '' === $auth_header || 0 !== strpos( $auth_header, 'Basic ' ) ) {
 				return array(
 					'data'    => array(),
