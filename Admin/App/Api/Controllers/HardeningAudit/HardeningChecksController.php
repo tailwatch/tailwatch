@@ -1382,7 +1382,7 @@ class HardeningChecksController {
 	 *
 	 * Reading → Search Engine Visibility maps to the `blog_public` option:
 	 * 1 = visible, 0 = discouraged. Many sites get launched with 0 from
-	 * the staging environment and silently disappear from Google for weeks.
+	 * the staging environment and silently drop out of search results for weeks.
 	 * Not a security risk per se, but flagged because it's almost always
 	 * unintentional on a production install.
 	 *

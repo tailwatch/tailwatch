@@ -1,3 +1,4 @@
+import { readFeatureGate } from '../../../Components/Utils/featureGate';
 import axios from 'axios';
 import { updateLocalStorage, getLocalStorage } from '../../../Components/Utils/HelperFunctions/LocalStorageHelper';
 import { toast } from 'react-toastify';
@@ -149,6 +150,7 @@ export const fetchLogs = async (
     setOperationLoading,
     isLastLogIndex,
     setIsLastLogIndex,
+    setIsFailed,
 ) => {
 
     try {
@@ -183,6 +185,27 @@ export const fetchLogs = async (
             } else {
                 
             }
+        }
+
+        // Returns before the retry timer at the bottom: the site has given up on this run,
+        // so asking it to restart the cron would only be refused.
+        if (scan_state === "failed") {
+            setIsScanInProgress(false);
+            setIsPaused(false);
+            setIsPausing(false);
+            setIsResuming(false);
+            setIsCanceling(false);
+            setInfoRevertChange(false);
+            setOperationLoading(false);
+            setIsLogsVisible(true);
+            if (typeof setIsFailed === "function") {
+                setIsFailed(true);
+            }
+            setLogs((prevLogs) => [
+                ...prevLogs,
+                "This run stopped because of an error before it finished. The log above shows how far it got.",
+            ]);
+            return;
         }
 
         if (scan_state === "reverting_changes" && is_completed === true) {
@@ -252,6 +275,7 @@ export const fetchLogs = async (
                             setOperationLoading,
                             last_log_index,
                             setIsLastLogIndex,
+                            setIsFailed,
                         );
                     }, 4000);
                 } else {
@@ -298,6 +322,10 @@ export const verifySearchReplaceStatus = async ({ setSearchText, setReplaceText,
                 'Content-Type': 'multipart/form-data',
             },
         });
+        // A reply the gate let through is proof both switches are on. Read from every
+        // response, not only refusals, so these flags cannot latch to false and stay there.
+        readFeatureGate(response, setFeatureEnable, setParentEnable);
+
         const scanStates = response.data?.data?.scan_state;
         const options = response.data?.data?.options;
 
@@ -356,6 +384,9 @@ export const seartchActions = async ({ scan_state, setIsScanInProgress, setIsPau
                 setIsDryRun(isDryRun);
                 return isDryRun;
             }
+        } else {
+            toast.error(response.data?.data?.message || "Search & Replace could not be paused or canceled.");
+            return null;
         }
         return false;
     } catch (error) {

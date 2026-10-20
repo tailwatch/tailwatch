@@ -67,7 +67,7 @@ const StatusProgressCard = ({ statusMessage, scanProgress }) => {
   );
 };
 
-const MoniteringActions = ({ isLicenseConnect, ismonitering, featureEnable,parentEnable, isScanInProgress, isStarting, isPaused, isCompleted, handleInstantScan, toggleLogs, isLogsVisible, isOperationInProgress, handleResume, verifyStatus, isCanceled, isPausing, isCanceling, handlePause, handleCancel, isDisabled, statusMessage, scanProgress, resetAllStates, checkIntegrityFileStatus, featureId }) => {
+const MoniteringActions = ({ isLicenseConnect, ismonitering, featureEnable,parentEnable, isScanInProgress, isStarting, isPaused, isCompleted, handleInstantScan, toggleLogs, isLogsVisible, isOperationInProgress, handleResume, verifyStatus, isCanceled, isPausing, isCanceling, handlePause, handleCancel, isDisabled, statusMessage, scanProgress, resetAllStates, checkIntegrityFileStatus, featureId, isFailed }) => {
 
   return (
     <div>
@@ -83,7 +83,7 @@ const MoniteringActions = ({ isLicenseConnect, ismonitering, featureEnable,paren
           {(isPaused || !verifyStatus) && (
             <ActionButton onClick={handleResume} isDisabled={ featureEnable === false || parentEnable===false || isDisabled || isScanInProgress} isInProgress={isScanInProgress} isCompleted={isCompleted} defaultText="Resume process" inProgressText="In Progress..." completedText="Completed" />
           )}
-          {(isCompleted || isCanceled) && (
+          {(isCompleted || isCanceled || isFailed) && (
             <div className='flex cursor-pointer' onClick={resetAllStates} role="button" >
               <RiRestartFill className='text-[25px] text-[#007980] hover:text-opacity-80' />
               <p className='pl-[5px] text-md text-gray-600 font-semibold'>Refresh</p>

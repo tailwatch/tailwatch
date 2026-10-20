@@ -1,3 +1,4 @@
+import { readFeatureGate } from '../../../Components/Utils/featureGate';
 import React, { useState, useEffect } from 'react'
 import InfoBar from '../../../Components/InfoBar/InfoBar.jsx';
 import { SkeletonStatus } from '../../../Components/Skeleton/LoaderSkeleton.jsx';
@@ -22,6 +23,10 @@ const FileMoniteringDetails = ({ featureEnable, setFeatureEnable, parentEnable, 
                     'Content-Type': 'multipart/form-data',
                 },
             });
+            // A reply the gate let through is proof both switches are on. Read from every
+            // response, not only refusals, so these flags cannot latch to false and stay there.
+            readFeatureGate(response, setFeatureEnable, setParentEnable);
+
 
             if (response.status === 200 && response.data.success) {
                 const backupData = response.data.data.data;
@@ -35,7 +40,7 @@ const FileMoniteringDetails = ({ featureEnable, setFeatureEnable, parentEnable, 
                 console.error('Monitering details do not exist');
             }
         } catch (error) {
-            if (error.response.data.data.code === 403) {
+            if (error.response?.data?.data?.code === 403) {
                 setIsLicenseConnect(true);
             } else {
             }

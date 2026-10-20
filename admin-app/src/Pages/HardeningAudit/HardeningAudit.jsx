@@ -19,7 +19,7 @@ const HardeningAudit = () => {
         loading, showErrorAccordion, errorMessages, scanType, isCompleted, scanState, isCanceled, handleToggleDetails, showDetails, isPaused, handleInstantScan, handlePause, handleCancel, setIsLogsVisible, setParentEnable, setFeatureEnable,
         isLogsVisible, verifyStatus, isScanInProgress, isStarting, isOperationInProgress, handleResume, isPausing, isCanceling, resetAllStates, progress, progressBarColor, logs, setLogs, isModalOpen, setIsModalOpen, fetchLogs, featureEnable, parentEnable,
         setIsScanInProgress, setIsCompleted, setProgress, setIsOperationInProgress, isComponentActive, setIsFetchingLogs, setErrorMessages, setRenderKey, setIsPaused, setIsCanceled, renderKey, verifyAuditStatus, isOperationLoading, setOperationLoading, isLastLogIndex, setIsLastLogIndex,
-        enableHardeningAudit, refreshHardeningAuditStatus,
+        enableHardeningAudit, refreshHardeningAuditStatus, isFailed, setIsFailed,
     } = useHardeningAudit();
 
     const loadingBarRef = useRef(null);
@@ -74,7 +74,7 @@ const HardeningAudit = () => {
                         {showErrorAccordion && (
                             <ErrorAccordian errors={errorMessages} />
                         )}
-                        {scanType === "automatically" && !isCompleted && scanState !== "completed" && scanState !== "pause" && !isCanceled && (
+                        {scanType === "automatically" && !isCompleted && !isFailed && scanState !== "completed" && scanState !== "pause" && !isCanceled && (
                             <InfoBar type="progress"
                                 message={<>Hardening Audit is in progress by ' Auto Schedule '. <button onClick={handleToggleDetails} className="text-blue-500 underline ml-2">{showDetails ? "Hide" : "View "}</button> &nbsp; you can also View, Cancel, and Pause the process by clicking on the View Link.</>}
                             />
@@ -106,6 +106,7 @@ const HardeningAudit = () => {
                         parentEnable={parentEnable}
                         featureId={enableHardeningAudit?.featureId}
                         checkStatus={checkAuditStatus}
+                        isFailed={isFailed}
                     />
                     <div className='px-4 py-2'>
                         {(isScanInProgress || isPaused || !verifyStatus) && !isCanceled && scanType !== "automatically" && (
@@ -115,10 +116,10 @@ const HardeningAudit = () => {
                             logs={logs}
                             setLogs={setLogs}
                             isPaused={isPaused}
-                            isCanceled={isCanceled}
+                            isCanceled={isCanceled || isFailed}
                             isLogsVisible={isLogsVisible}
                             isCompleted={isCompleted}
-                            cancelMessage="Hardening Audit is canceled!"
+                            cancelMessage={isFailed ? "Hardening Audit stopped because of an error before it finished." : "Hardening Audit is canceled!"}
                             successMessage="Hardening Audit Completed successfully!"
                         />
                     </div>
@@ -153,6 +154,7 @@ const HardeningAudit = () => {
                 setRenderKey={setRenderKey}
                 setIsPaused={setIsPaused}
                 setIsCanceled={setIsCanceled}
+                setIsFailed={setIsFailed}
                 handleInstantScan={handleInstantScan}
             />
             <AuditReports

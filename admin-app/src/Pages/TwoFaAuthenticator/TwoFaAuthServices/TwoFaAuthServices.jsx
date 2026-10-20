@@ -140,7 +140,7 @@ export const verifyMethod = async ({ setLoading, setIsLicenseConnect, setIsLicen
   }
 };
 
-export const verifyEmailStatus = async ({ setIsVerifyEmail, setEmailId, setLoading, setUserName }) => {
+export const verifyEmailStatus = async ({ setIsVerifyEmail, setEmailId, setLoading, setUserName, setIsRequired, setCanExempt, setIsExempt }) => {
   setLoading(true);
   try {
     const formData = new FormData();
@@ -156,6 +156,9 @@ export const verifyEmailStatus = async ({ setIsVerifyEmail, setEmailId, setLoadi
       setIsVerifyEmail(response.data.data.is_enabled);
       setEmailId(response.data.data.id);
       setUserName(response.data.data.name);
+      if (setIsRequired) setIsRequired(response.data.data.is_required === true);
+      if (setCanExempt) setCanExempt(response.data.data.can_exempt === true);
+      if (setIsExempt) setIsExempt(response.data.data.is_exempt === true);
     } else {
       console.error('Failed to retrieve Email status :', response.data.data.message);
     }
@@ -166,7 +169,7 @@ export const verifyEmailStatus = async ({ setIsVerifyEmail, setEmailId, setLoadi
   }
 };
 
-export const updateEmailStatus = async ({ id, state, setIsVerifyEmail, setEmailId, setLoading, setUserName }) => {
+export const updateEmailStatus = async ({ id, state, setIsVerifyEmail, setEmailId, setLoading, setUserName, setIsRequired, setCanExempt, setIsExempt }) => {
   setLoading(true);
   try {
     const formData = new FormData();
@@ -183,14 +186,13 @@ export const updateEmailStatus = async ({ id, state, setIsVerifyEmail, setEmailI
 
     if (response.data.success) {
       // re-fetch updated status
-      await verifyEmailStatus({ setIsVerifyEmail, setEmailId, setLoading, setUserName });
-      return true;
-    } else {
-      throw new Error(response.data.message || 'Failed to update 2FA.');
+      await verifyEmailStatus({ setIsVerifyEmail, setEmailId, setLoading, setUserName, setIsRequired, setCanExempt, setIsExempt });
+      return { success: true, message: response.data.data?.message };
     }
+    return { success: false, message: response.data.data?.message || 'Failed to update 2FA.' };
   } catch (error) {
     console.error('Error updating 2FA:', error);
-    return false;
+    return { success: false, message: 'Failed to update 2FA.' };
   } finally {
     setLoading(false);
   }

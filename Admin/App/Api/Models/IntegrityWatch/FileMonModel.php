@@ -191,8 +191,8 @@ class FileMonModel {
 	}
 
 	/**
-	 * Stamp last_seen_scan_id on matched files (replaces current_status_copy.json
-	 * deletion tracking). Batched over IN_CHUNK.
+	 * Stamp last_seen_scan_id on matched files; get_deleted() relies on this stamp
+	 * to find files missing from disk. Batched over IN_CHUNK.
 	 *
 	 * @param int   $scan_id Current scan id.
 	 * @param array $hashes  md5(path) values that were seen on disk.
@@ -263,6 +263,51 @@ class FileMonModel {
 	}
 
 	/**
+	 * Record the current size and mtime of files a scan re-hashed and found unchanged.
+	 *
+	 * A comparison reports only hash changes, so a file whose content is the same but whose
+	 * mtime moved — a restore rewrites every file it puts back — would keep the old stat,
+	 * and fast mode would re-hash it on every scan from then on.
+	 *
+	 * @param array<string,array{file_hash:string,size:int,modified:int}> $rows path_key => what the scan saw.
+	 * @return int Rows updated.
+	 */
+	public function refresh_stat( array $rows ) {
+		if ( empty( $rows ) ) {
+			return 0;
+		}
+		global $wpdb;
+		$table   = $this->table( 'baseline' );
+		$now     = current_time( 'mysql' );
+		$updated = 0;
+
+		foreach ( array_chunk( $rows, self::INSERT_CHUNK, true ) as $chunk ) {
+			$wpdb->query( 'START TRANSACTION' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- transaction control.
+			foreach ( $chunk as $key => $row ) {
+				// Conditional on the hash, so a row rewritten since the scan read it is left alone.
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- values bound via prepare().
+				$result = $wpdb->query(
+					$wpdb->prepare(
+						'UPDATE %i SET file_size = %d, file_modified = %s, date_modified = %s WHERE file_path_hash = %s AND file_hash = %s',
+						$table,
+						(int) $row['size'],
+						gmdate( 'Y-m-d H:i:s', (int) $row['modified'] ),
+						$now,
+						(string) $key,
+						(string) $row['file_hash']
+					)
+				);
+				if ( false !== $result ) {
+					$updated += (int) $result;
+				}
+			}
+			$wpdb->query( 'COMMIT' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- transaction control.
+		}
+
+		return $updated;
+	}
+
+	/**
 	 * Count baseline rows for a monitored root.
 	 *
 	 * @param string $monitored_path Monitored root.
@@ -286,6 +331,18 @@ class FileMonModel {
 		$table = $this->table( 'baseline' );
 		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- values bound via prepare().
 		$wpdb->query( $wpdb->prepare( 'DELETE FROM %i WHERE monitored_path = %s', $table, self::norm_path( $monitored_path ) ) );
+	}
+
+	/**
+	 * Wipe every baseline, whatever root it was recorded for.
+	 *
+	 * @return void
+	 */
+	public function clear_all_baselines() {
+		global $wpdb;
+		$table = $this->table( 'baseline' );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- the plugin's own table, emptied in one statement.
+		$wpdb->query( $wpdb->prepare( 'DELETE FROM %i', $table ) );
 	}
 
 	/* ---------------------------------------------------------------- Scans */
@@ -639,7 +696,6 @@ class FileMonModel {
 		if ( ! $fs ) {
 			return '';
 		}
-		// Atomic write (temp + rename) is added in the concurrency-hardening phase.
 		$ok = $fs->put_contents( $path, $json, defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : false );
 		return $ok ? ( (int) $scan_id . '.json' ) : '';
 	}

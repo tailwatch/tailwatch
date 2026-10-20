@@ -1,7 +1,7 @@
 import React from 'react';
 import { CiImageOff } from 'react-icons/ci';
 import { ArrowUpCircle, CheckCircle, XCircle } from 'lucide-react';
-import DOMPurify from 'dompurify';
+import { safeHtml } from '../../../../Components/Utils/HelperFunctions/safeHtml';
 
 const UpdateHeader = ({ pluginDetails, pluginSlug }) => {
   const fallbackName = pluginSlug?.includes("theme") ? "Theme Name" : "Plugin Name";
@@ -35,7 +35,7 @@ const UpdateHeader = ({ pluginDetails, pluginSlug }) => {
         <div className="min-w-0">
           <div
             className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-800 truncate"
-            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(displayName) }}
+            dangerouslySetInnerHTML={{ __html: safeHtml(displayName) }}
           />
 
           <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">

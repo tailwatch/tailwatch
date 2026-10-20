@@ -2,6 +2,23 @@
 /**
  * Recovery Mode Service
  *
+ * @package    Tailwatch
+ * @subpackage Admin\App\Api\Controllers\RecoveryMode
+ * @author     WP Tailwatch
+ * @copyright  2025-2026 WP TAILWATCH LLC
+ * @license    GPL-2.0+
+ * @since      1.0.0
+ */
+
+namespace Tailwatch\Admin\App\Api\Controllers\RecoveryMode;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+use Tailwatch\Admin\App\Api\Logging\Log;
+
+/**
  * Generates the two recovery credentials used to reach a broken site:
  *
  *   1. A recovery-mode *link* via core's own recovery services (generate_url) — the
@@ -29,23 +46,7 @@
  *     the connected flag is persisted, so an in-method connected re-check would block
  *     the legitimate connect flow; the upstream nonce + manage_options gate is the control.
  * Authorization rests entirely on those upstream, scanner-visible gates.
- *
- * @package    Tailwatch
- * @subpackage Admin\App\Api\Controllers\RecoveryMode
- * @author     WP Tailwatch
- * @copyright  2025-2026 WP TAILWATCH LLC
- * @license    GPL-2.0+
- * @since      1.0.0
  */
-
-namespace Tailwatch\Admin\App\Api\Controllers\RecoveryMode;
-
-if ( ! defined( 'ABSPATH' ) ) {
-	exit;
-}
-
-use Tailwatch\Admin\App\Api\Logging\Log;
-
 class RecoveryModeService {
 
 	/**

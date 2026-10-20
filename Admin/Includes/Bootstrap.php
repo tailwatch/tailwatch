@@ -6,9 +6,15 @@ defined( 'ABSPATH' ) || exit;
 use Tailwatch\Admin\App\Api\Models\OptionsModel;
 use Tailwatch\Admin\App\Api\Controllers\Routes\AjaxRequestController;
 use Tailwatch\Admin\App\Api\Rest\Connect\ConnectController;
+use Tailwatch\Admin\App\Api\Rest\Backup\BackupStreamController;
+use Tailwatch\Admin\App\Api\Rest\Connect\ProvisionController;
+use Tailwatch\Admin\App\Api\Services\Restore\MaintenanceMode;
+use Tailwatch\Admin\App\Api\Controllers\Restore\RestoreController;
 use Tailwatch\Admin\App\Api\Services\Login\AutoLogin;
+use Tailwatch\Admin\App\Api\Services\Login\PasswordlessAccountGuard;
 use Tailwatch\Admin\App\Api\Controllers\RecoveryMode\RecoveryModeController;
 use Tailwatch\Admin\View\Controller\InterfaceController;
+use Tailwatch\Admin\App\Api\Controllers\Dashboard\DashboardBannerController;
 use Tailwatch\Admin\App\Api\Controllers\Logs\LogActivityController;
 use Tailwatch\Admin\App\Api\Controllers\Logs\MonitoringLogController;
 use Tailwatch\Admin\App\Api\Controllers\Logs\NetworkLogsController;
@@ -19,6 +25,7 @@ use Tailwatch\Admin\App\Api\Controllers\Ssl\SslVerificationController;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\CronJobManager;
 use Tailwatch\Admin\App\Api\Controllers\Email\EmailLogController;
 use Tailwatch\Admin\App\Api\Controllers\Backup\BackupController;
+use Tailwatch\Admin\App\Api\Controllers\Migration\MigrationManualController;
 use Tailwatch\Admin\App\Api\Controllers\Database\DBOptimizer\DatabaseOptimizerController;
 use Tailwatch\Admin\App\Api\Controllers\Database\DBOptimizer\TablesOptimizeController;
 use Tailwatch\Admin\App\Api\Controllers\SearchReplace\SearchReplaceController;
@@ -54,6 +61,7 @@ class Bootstrap {
 		register_activation_hook( TAILWATCH_PLUGIN_FILE, array( $this, 'upon_activation' ) );
 		register_deactivation_hook( TAILWATCH_PLUGIN_FILE, array( $this, 'upon_deactivation' ) );
 		add_action( 'plugins_loaded', array( $this, 'plugin_loaded' ) );
+
 		add_action( 'admin_init', array( $this, 'ensure_private_storage' ) );
 		add_action( 'admin_init', array( $this, 'tailwatch_maybe_backfill_features' ) );
 		add_action( 'admin_init', array( $this, 'tailwatch_maybe_activation_redirect' ) );
@@ -69,6 +77,16 @@ class Bootstrap {
 		self::$loaded = true;
 
 		$this->load_autoload();
+
+		// Registered unconditionally, on every request: the watchdog exists to tear down
+		// a maintenance mode whose worker died, so it has to be listening precisely when
+		// nothing else is running. Gating it behind an admin or cron context would leave
+		// the event firing with no listener on exactly the sites that need it.
+		//
+		// Registered here rather than in the constructor because the constructor runs
+		// before load_autoload(), so naming the class there would trigger an autoload
+		// that cannot resolve yet — which fatals the whole plugin on every request.
+		add_action( MaintenanceMode::WATCHDOG_HOOK, array( MaintenanceMode::class, 'watchdog_run' ) );
 	}
 
 	public function load_autoload() {
@@ -86,9 +104,13 @@ class Bootstrap {
 		$tailwatch_options_model->tailwatch_maybe_upgrade_schema();
 		new AjaxRequestController();
 		new ConnectController();
+		new ProvisionController();
+		new BackupStreamController();
 		( new AutoLogin() )->register();
+		( new PasswordlessAccountGuard() )->register();
 		( new RecoveryModeController() )->register();
 		new InterfaceController();
+		new DashboardBannerController();
 		new LogActivityController();
 		new MonitoringLogController();
 		new NetworkLogsController();
@@ -102,6 +124,9 @@ class Bootstrap {
 		CronJobManager::get_instance();
 		new EmailLogController();
 		new BackupController();
+		add_filter( 'tailwatch_backup_protected_folders', array( MigrationManualController::class, 'protect_import_folder' ) );
+		new RestoreController();
+		add_filter( 'tailwatch_backup_protected_folders', array( RestoreController::class, 'protect_restoring_folder' ) );
 		new DatabaseOptimizerController();
 		new TablesOptimizeController();
 		new SearchReplaceController();
@@ -186,13 +211,13 @@ class Bootstrap {
 		}
 
 		// WP-Cron health is intentionally NOT gated at activation. DISABLE_WP_CRON,
-		// ALTERNATE_WP_CRON and external cron runners (Cavalcade, Cron Control) are all
-		// valid setups where scheduled tasks still run, so blocking activation would lock
-		// out managed hosts. Cron health is surfaced in the setup wizard and admin notices
-		// via CronHealthService instead of preventing activation.
+		// ALTERNATE_WP_CRON and external cron runners are all valid setups where scheduled
+		// tasks still run, so blocking activation would lock out managed hosts. Cron health
+		// is surfaced in the setup wizard and admin notices via CronHealthService instead of
+		// preventing activation.
 
 		// Schedule the always-on maintenance events now so they run even when the plugin is
-		// activated without a browser admin session (e.g. via WP-CLI) on a front-end-only site.
+		// activated without a browser admin session (e.g. from the command line) on a front-end-only site.
 		// Feature-specific events stay unscheduled until their feature is enabled (their
 		// settings do not exist yet); each job is isolated so one cannot break activation.
 		CronJobManager::get_instance()->schedule_all( true );
@@ -348,14 +373,20 @@ class Bootstrap {
 
 		$suggested = '<strong class="privacy-policy-tutorial">' . esc_html__( 'Suggested text:', 'tailwatch' ) . '</strong> ';
 		$content   = '<p>' . $suggested . esc_html__(
-			'This site uses Tailwatch to monitor security. When its logging features are enabled, Tailwatch records the IP address of requests and, for logged-in users, the user ID and username, together with request metadata such as the endpoint or action, HTTP method, status code, and response time, for events including logins, failed logins, and administrative actions. Passwords, authentication tokens, and nonces are never stored, and captured values are length-capped. This information is kept only in the database on your own site, is used solely to detect and investigate suspicious activity, is never sent to any third party, and can be cleared at any time from the plugin.',
+			'This site uses Tailwatch to monitor security. When its logging features are enabled, Tailwatch records the IP address of requests and, for logged-in users, the user ID and username, together with request metadata such as the endpoint or action, HTTP method, status code, and response time, for events including logins, failed logins, and administrative actions. Passwords, authentication tokens, and nonces are never stored, and captured values are length-capped. This information is kept in the database on your own site, is used to detect and investigate suspicious activity, and can be cleared at any time from the plugin. If the site is connected to a Tailwatch account and mobile notifications are turned on, alerts about these events are sent through the Tailwatch service to the site owner\'s mobile app; they can include the IP address, the username and the browser.',
 			'tailwatch'
 		) . '</p>';
 
 		wp_add_privacy_policy_content( 'Tailwatch', wp_kses_post( $content ) );
 	}
 
-	public function upon_deactivation() {
+	/**
+	 * Deactivation.
+	 *
+	 * @param bool $network_wide Whether the plugin is being deactivated for the whole network.
+	 * @return void
+	 */
+	public function upon_deactivation( $network_wide = false ) {
 		$autoload_file = TAILWATCH_DIR . 'tw_autoload.php';
 		if ( file_exists( $autoload_file ) ) {
 			require_once $autoload_file;
@@ -364,13 +395,12 @@ class Bootstrap {
 		}
 
 		// Always unschedule the plugin's WP-Cron events on deactivation, independent of the
-		// user's "delete data" choice. These events are recurring and self-reschedule, so
-		// leaving them behind keeps firing orphaned hooks after the plugin is deactivated.
-		// Reactivation re-registers them via the normal scheduling path.
-		CronJobManager::clear_all_cron_events();
+		// user's "delete data" choice, including the one-off steps of any run in progress.
+		// Reactivation re-registers the recurring ones via the normal scheduling path.
+		CronJobManager::clear_all_cron_events( true );
 
 		$deactivate = new Deactivation();
-		$deactivate->tailwatch_remove_plugin_data();
+		$deactivate->tailwatch_remove_plugin_data( (bool) $network_wide );
 
 		$this->rewrite_rules();
 	}

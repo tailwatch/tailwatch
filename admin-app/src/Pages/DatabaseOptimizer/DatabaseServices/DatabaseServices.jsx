@@ -1,3 +1,4 @@
+import { readFeatureGate } from '../../../Components/Utils/featureGate';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { CronHealer } from '../../../Components/CroneHealer/CronHealer';
@@ -159,7 +160,7 @@ const checkCronExecution = async (message, cron_running) => {
   }
 };
 
-export const fetchLogs = async (setLogs, setIsCompleted, isFirstExecution = true, isComponentActiveRef, setIsLogsVisible, setIsScanInProgress, setProgress, setRenderKey, setIsPausing, setIsPaused, setIsCanceled, setOperationLoading, isLastLogIndex, setIsLastLogIndex) => {
+export const fetchLogs = async (setLogs, setIsCompleted, isFirstExecution = true, isComponentActiveRef, setIsLogsVisible, setIsScanInProgress, setProgress, setRenderKey, setIsPausing, setIsPaused, setIsCanceled, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setIsFailed) => {
   try {
     const formData = new FormData();
     formData.append("action", "tailwatch_global_ajax_handler");
@@ -180,7 +181,6 @@ export const fetchLogs = async (setLogs, setIsCompleted, isFirstExecution = true
       setLogs((prevLogs) => [...prevLogs, ...new_logs]);
     }
 
-    // Check if cronHealer should be executed
     if (function_completed && completion_timestamp && current_timestamp) {
       const timeDifference = current_timestamp - completion_timestamp;
       
@@ -191,6 +191,20 @@ export const fetchLogs = async (setLogs, setIsCompleted, isFirstExecution = true
       } else {
         
       }
+    }
+
+    // Placed before the is_completed === false branch, which would otherwise re-poll a failed
+    // run forever, and returns before the retry timer at the bottom, which the site refuses.
+    if (scan_state === "failed") {
+      setIsScanInProgress(false);
+      setIsPaused(false);
+      setOperationLoading(false);
+      setIsLogsVisible(true);
+      if (typeof setIsFailed === "function") {
+        setIsFailed(true);
+      }
+      setLogs((prevLogs) => [...prevLogs, "The database optimization stopped because of an error before it finished. The log above shows how far it got."]);
+      return;
     }
 
     if (is_completed) {
@@ -234,7 +248,7 @@ export const fetchLogs = async (setLogs, setIsCompleted, isFirstExecution = true
             setIsPaused,
             setIsCanceled,
             setOperationLoading,
-            last_log_index, setIsLastLogIndex
+            last_log_index, setIsLastLogIndex, setIsFailed
           );
         }, 4000);
       } else {
@@ -265,6 +279,10 @@ export const verifyDatabaseOptimizeStatus = async ({ setProgress, setScanState, 
     const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
+    // A reply the gate let through is proof both switches are on. Read from every
+    // response, not only refusals, so these flags cannot latch to false and stay there.
+    readFeatureGate(response, setFeatureEnable, setParentEnable);
+
 
     const { is_completed, progress, scan_state, scan_type, process_run } = response.data.data;
     setProgress(progress);
@@ -315,7 +333,10 @@ export const onPauseOrCancel = async ({ scan_state, setIsLogsVisible, setLogs, s
         setIsPaused(true);
         setLogs((prevLogs) => [...prevLogs, "The database optimization process has been paused successfully."]);
       }
+      return true;
     }
+    toast.error(response.data?.data?.message || "The database optimization could not be paused or canceled.");
+    return false;
   } catch (error) {
     setErrorMessages((prevErrors) => [...prevErrors, "Error while do cancel and pause"]);
     console.error(`Error during ${scan_state === 'cancel' ? 'cancel' : 'pause'} optimize action:`, error);

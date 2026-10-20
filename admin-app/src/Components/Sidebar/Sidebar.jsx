@@ -3,7 +3,7 @@ import { FaWordpressSimple } from "react-icons/fa";
 import "react-loading-skeleton/dist/skeleton.css";
 import { SiGoogleauthenticator } from "react-icons/si";
 
-import { LayoutDashboard, Users, Network, MoveRight, ExternalLink, ShieldCheck, EarthLock, Unlink, ListOrdered,Clock, FileTerminal, MonitorCog, Database, Search, FileSearch, Settings, Menu, X, Star, Zap, Smartphone, Wifi, Bell, Shield, RefreshCw, HardDriveDownload } from "lucide-react";
+import { LayoutDashboard, Users, Network, MoveRight, ExternalLink, ShieldCheck, EarthLock, Unlink, ListOrdered,Clock, FileTerminal, MonitorCog, Database, Search, FileSearch, Settings, Menu, X, Star, Zap, Smartphone, Wifi, Bell, Shield, RefreshCw, HardDriveDownload, UserRound } from "lucide-react";
 import IconButton from "../Buttons/IconButton";
 import { useSidebar } from "../Hooks/useSidebar/useSidebar";
 import { bgprimary, sidebarColor } from "../Utils/Colors/Colors";
@@ -12,18 +12,20 @@ import { useUser } from "../Context/UserContext";
 import MobileConnectCTA from "./MobileConnectCTA";
 import { useLicenseProvider } from "../Context/LicenseProvider";
 import UserCard from "./UserCard";
+import { accountBadge } from "./accountBadge";
 /* global tailwatch_ajax */
 
 const Sidebar = () => {
   const [isOpen, setIsOpen] = useState(false);  
-  const { isMalwareStarted, renderNavButton, location, renderSectionHeader, expandedMenu } = useSidebar();
+  const { isMalwareStarted, isRestoring, renderNavButton, location, renderSectionHeader, expandedMenu } = useSidebar();
   const { userData, loading } = useUser();
-  const { planName, devices, loading: licenseLoading } = useLicenseProvider();
+  const { planName, devices, licenseStatus, loading: licenseLoading } = useLicenseProvider();
 
   // Check if pathnames are active
   const isDashboardActive = location.pathname === "/dashboard";
   const isFeaturesActive = location.pathname.startsWith("/dashboard/features");
-  // Security  
+  const isAccountActive = location.pathname.startsWith("/dashboard/account");
+  // Security
   const isMalwareActive = location.pathname.startsWith("/dashboard/malwarescanner");
   const isFileMonitoringActive = location.pathname.startsWith("/dashboard/integrity-watch");
   const isGeoBlockingActive = location.pathname.startsWith("/dashboard/geo-blocking");
@@ -77,6 +79,11 @@ const Sidebar = () => {
 
   const mobileFeatures = [{ icon: Wifi, text: "Cross-Device Sync" }, { icon: Bell, text: "Real time Notifications" }];
 
+  const badge = accountBadge({ loading: licenseLoading, licenseStatus, planName });
+  const accountPill = badge ? (
+    <span className={`shrink-0 -mr-1.5 rounded-full px-1 py-0.5 text-[10px] font-semibold leading-none ${badge.className}`}>{badge.text}</span>
+  ) : null;
+
   return (
     <>
       <div className="fixed top-5 right-20 z-[100] xl:hidden">
@@ -91,7 +98,7 @@ const Sidebar = () => {
           </div>
         </div>
         <div className="flex justify-center items-center mb-4 px-4">
-          <IconButton icon={FaWordpressSimple} text="Back to WordPress" onClick={handleBackToWordPress} disabled={isMalwareStarted} bgColor={bgprimary} hoverBgColor="hover:bg-teal-600" textColor="text-white" className="w-full justify-center py-3 transition-all duration-300" />
+          <IconButton icon={FaWordpressSimple} text="Back to WordPress" onClick={handleBackToWordPress} disabled={isMalwareStarted || isRestoring} bgColor={bgprimary} hoverBgColor="hover:bg-teal-600" textColor="text-white" className="w-full justify-center py-3 transition-all duration-300" />
         </div>
 
         {/* ── Nav Links ── */}
@@ -101,6 +108,7 @@ const Sidebar = () => {
           <div className="flex flex-col justify-start items-center px-4 w-full border-gray-600 border-b space-y-1 pb-4">
             {renderNavButton("/dashboard", <LayoutDashboard size={20} />, "Dashboard", isDashboardActive)}
             {renderNavButton("/dashboard/features", <ListOrdered size={20} />, "Features", isFeaturesActive)}
+            {renderNavButton("/dashboard/account", <UserRound size={20} />, "Connect Account", isAccountActive, accountPill)}
           </div>
           {/* Security Section */}
           <div className="flex flex-col justify-start items-center px-4 border-b border-gray-600 w-full">
@@ -150,7 +158,7 @@ const Sidebar = () => {
               </div>
             )}
           </div>
-          {/* User Management, ASK GPT, Settings */}
+          {/* User Management, Settings */}
           <div className="flex flex-col justify-start items-center px-4 w-full space-y-1 py-4">
             {renderNavButton("/dashboard/usermangement", <Users size={20} />, "User Management", isUserManagementActive)}            
             {renderNavButton("/dashboard/settings", <Settings size={20} />, "Settings", isSettingsActive)}

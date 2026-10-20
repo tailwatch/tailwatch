@@ -69,17 +69,16 @@ class IpManagementController {
 			);
 		}
 
-		// country_feature (field_3) is a pro/Business-only inner feature — pro
-		// sets is_locked on it for non-qualifying plans, so a Business→Basic
-		// downgrade must read as disabled at runtime even if the stored
-		// selection is still true. Whitelist/blacklist are free; no lock guard.
-		$country_locked = $feature_settings['field_3']['is_locked'] ?? false;
-
-		return array(
-			'parent_enable'     => true,
-			'whitelist_feature' => $feature_settings['field_1']['options']['option']['selected'] ?? false,
-			'blacklist_feature' => $feature_settings['field_2']['options']['option']['selected'] ?? false,
-			'country_feature'   => ! $country_locked && ( $feature_settings['field_3']['options']['option']['selected'] ?? false ),
+		// Country rules (field_3) belong to an add-on, which answers whether they may run.
+		return apply_filters(
+			'tailwatch_ips_managment_status',
+			array(
+				'parent_enable'     => true,
+				'whitelist_feature' => $feature_settings['field_1']['options']['option']['selected'] ?? false,
+				'blacklist_feature' => $feature_settings['field_2']['options']['option']['selected'] ?? false,
+				'country_feature'   => $feature_settings['field_3']['options']['option']['selected'] ?? false,
+			),
+			$feature_settings
 		);
 	}
 
@@ -386,7 +385,7 @@ class IpManagementController {
 		$country = $this->geoip->get_country( $ip );
 
 		if ( $country && 'Unknown' !== $country ) {
-			if ( $this->whitelist->is_country_whitelisted( $country ) ) {
+			if ( apply_filters( 'tailwatch_is_country_whitelisted', false, $country, $ip ) ) {
 				return null;
 			}
 		}

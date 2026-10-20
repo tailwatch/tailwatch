@@ -22,7 +22,8 @@ const AuditButton = ({
     featureEnable,
     parentEnable,
     featureId,
-    checkStatus
+    checkStatus,
+    isFailed
 }) => {
     return (
         <div className="flex justify-between items-center px-4">
@@ -57,7 +58,7 @@ const AuditButton = ({
                         canceledText="Canceled"
                     />
                 )}
-                {(isCompleted || isCanceled) && (
+                {(isCompleted || isCanceled || isFailed) && (
                     <div className='flex cursor-pointer' onClick={resetAllStates} role="button">
                         <RiRestartFill className='text-[25px] text-[#007980] hover:text-opacity-80' />
                         <p className='pl-[5px] text-md text-gray-600 font-semibold'>Refresh</p>

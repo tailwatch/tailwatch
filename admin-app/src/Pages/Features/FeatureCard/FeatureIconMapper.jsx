@@ -7,8 +7,7 @@ import {
   Cctv, LineChart, Eye, UserCheck, FolderLock, ListChecks, KeyRound, RefreshCw
 } from 'lucide-react';
 
-// Maps each feature to a Lucide icon (ISC-licensed, GPL-compatible). These replace
-// the previous animated Lottie icons; the outline style mirrors the originals.
+// Maps each feature to a Lucide icon (ISC-licensed, GPL-compatible).
 const FEATURE_ICON_MAP = {
   'Security Headers': ShieldCheck,
   'Daily Reports': ClipboardCheck,
@@ -32,8 +31,10 @@ const FEATURE_ICON_MAP = {
   'Database Optimizer': Database,
   'Search & Replace': Replace,
   'Site Migration': FolderSync,
+  'Restore & Migration': FolderSync,
   'Firewall': BrickWall,
   'User Management': Users,
+  'Advanced User Management': Users,
   '301 Redirection': Forward,
   'Broken Links': Unlink,
   'Geo-blocking': Globe,
@@ -50,15 +51,15 @@ const FEATURE_ICON_MAP = {
 const FeatureIconMapper = forwardRef(({ title, isActive, isPro, isLocked, size = 24, colorClass = 'text-[#007980]', onReady }, ref) => {
   const IconComponent = FEATURE_ICON_MAP[title];
 
-  // Icons render synchronously now (no async Lottie load), so report ready on mount.
+  // Icons render synchronously, so report ready on mount.
   useEffect(() => {
     if (onReady) {
       onReady();
     }
   }, [onReady]);
 
-  // Preserve the previous play()/stop() ref API as no-ops so callers that drove the
-  // old hover animation (FeatureCard) keep working without any changes.
+  // play()/stop() stay on the ref as no-ops because callers such as FeatureCard still
+  // call them on hover, and a static icon has nothing to animate.
   useImperativeHandle(ref, () => ({ play: () => {}, stop: () => {} }), []);
 
   if (!IconComponent) {

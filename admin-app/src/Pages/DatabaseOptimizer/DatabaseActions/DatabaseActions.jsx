@@ -5,7 +5,7 @@ import { RiRestartFill } from "react-icons/ri";
 import ShowCanvas from '../../../Components/ShowCanvasButton/ShowCanvas';
 
 /* global tailwatch_ajax */
-const DatabaseActions = ({ checkTableStatus, isScanInProgress, isStarting, featureEnable, isPaused, isCompleted, handleInstantScan, toggleLogs, isLogsVisible, handlePauseOptimize, handleCancelOptimize, isOperationInProgress, handleResumeOptimize, verifyStatus, isCanceled, isPausing, isCanceling,   resetAllStates, processType, checkDatabaseStatus }) => {
+const DatabaseActions = ({ checkTableStatus, isScanInProgress, isStarting, featureEnable, isPaused, isCompleted, handleInstantScan, toggleLogs, isLogsVisible, handlePauseOptimize, handleCancelOptimize, isOperationInProgress, handleResumeOptimize, verifyStatus, isCanceled, isPausing, isCanceling,   resetAllStates, processType, checkDatabaseStatus, isFailed }) => {
   const { enableDatabase } = UseDatabaseOptimizer();
   const { areAllSubOptionsFalse } = useSubOptionsCheck();
   const isDatabaseFeatureEnabled = enableDatabase?.isActiveState === '0';
@@ -36,7 +36,7 @@ const DatabaseActions = ({ checkTableStatus, isScanInProgress, isStarting, featu
           {(isPaused || !verifyStatus) && !isCanceled && !isBackupProcess && (
             <ActionButton onClick={handleResumeOptimize} isDisabled={isScanInProgress || isCompleted || isDatabaseFeatureEnabled} isInProgress={isScanInProgress} isCompleted={isCompleted} defaultText="Resume process" inProgressText="In Progress..." completedText="Completed" />
           )}
-          {(isCompleted || isCanceled) && (
+          {(isCompleted || isCanceled || isFailed) && (
             <div
               className={`flex items-center ${isResetting ? 'cursor-not-allowed opacity-60 pointer-events-none' : 'cursor-pointer'}`}
               onClick={handleRefreshClick}

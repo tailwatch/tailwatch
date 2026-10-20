@@ -12,19 +12,18 @@ const ShowCanvas = ({ featureId, onClose, tableStrip, parentEnable, isDisabled }
         if (featureId) {
             setIsLoading(true);
             try {
-                // if (featuresData.length === 0) {
                     const fetched = await fetchFeaturesData();
                     handleShowCanvas(featureId, fetched);
-                // } else {
-                    // handleShowCanvas(featureId);
-                // }
             } finally {
                 setIsLoading(false);
             }
         }
     };
     const buttonClassName = tableStrip ? "border border-[#007980] !px-3 text-sm" : "border border-[#007980]";
-    const isButtonDisabled = parentEnable === false || isDisabled || isLoading;
+    // Styled from the same answer that disables it, so a button that cannot act never
+    // looks clickable.
+    const looksDisabled = parentEnable === false || isDisabled || !featureId;
+    const isButtonDisabled = looksDisabled || isLoading;
     return (
         <div>
             <button
@@ -33,7 +32,7 @@ const ShowCanvas = ({ featureId, onClose, tableStrip, parentEnable, isDisabled }
                 className={`
                     inline-flex items-center font-[500] !py-2 !px-3 rounded-[5px] transition-colors
                     ${buttonClassName}
-                    ${isDisabled ? 'bg-gray-300 text-white border-transparent cursor-not-allowed' : 'bg-white hover:bg-gray-100 text-[#007980] text-sm'}
+                    ${looksDisabled ? 'bg-gray-300 text-white border-transparent cursor-not-allowed' : 'bg-white hover:bg-gray-100 text-[#007980] text-sm'}
                     ${isLoading ? 'cursor-not-allowed opacity-75' : ''}
                 `}
             >

@@ -58,7 +58,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
-          git add tailwatch.php readme.txt changelog.txt Admin/Config/Constants.php package.json
+          git add tailwatch.php readme.txt Admin/Config/Constants.php package.json
           if git diff --cached --quiet; then
             echo "::error::No version changes staged (already at ${V}?)"; exit 1
           fi

@@ -22,8 +22,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * The strict rule is: while ANY process that has declared this feature in its
  * `locks_features` is running, no save to that feature is permitted.
- * Distinguishing "disable" from "tweak a sub-option" turned out to be the
- * wrong granularity — config changes mid-run can break the running process
+ * Distinguishing "disable" from "tweak a sub-option" is the wrong
+ * granularity — config changes mid-run can break the running process
  * just as surely as disabling can. Strict matches the intent.
  *
  * Layered with the rest of the service tier:
@@ -44,13 +44,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 class ProcessGuard {
 
 	/**
-	 * Friendly labels used when composing the user-facing rejection message.
-	 * Falls back to the raw process_type when an entry is missing — works,
-	 * just less polished.
-	 *
-	 * @var array<string,string>
-	 */
-	/**
 	 * Process types that, when running, block ANY feature modification —
 	 * regardless of which feature the user is trying to modify. These are
 	 * site-wide operations that rewrite feature configuration in bulk
@@ -70,6 +63,44 @@ class ProcessGuard {
 		'reset_all',
 	);
 
+	/**
+	 * Process types that put back or replace the site's files and database. While one runs,
+	 * plugins, themes and WordPress itself are left as they are: a change would be overwritten,
+	 * or would land in a site that is half put back.
+	 *
+	 * @var array<string>
+	 */
+	const SITE_REPLACING_PROCESSES = array(
+		'restore',
+		'migration',
+		'malware_restore',
+	);
+
+	/**
+	 * Process types that change the site's files, database or settings. A paused run holds
+	 * half-done work that such a change would leave it to finish against something different,
+	 * so these do not start, or resume, while a run they conflict with is paused. A process that
+	 * only reads the site (a backup, a scan, an audit) starts beside a paused run.
+	 *
+	 * @var array<string>
+	 */
+	const SITE_CHANGING_PROCESSES = array(
+		'restore',
+		'migration',
+		'malware_restore',
+		'search_replace',
+		'db_optimize',
+		'settings_import',
+		'reset_all',
+	);
+
+	/**
+	 * Friendly labels used when composing the user-facing rejection message.
+	 * Falls back to the raw process_type when an entry is missing — works,
+	 * just less polished.
+	 *
+	 * @var array<string,string>
+	 */
 	const PROCESS_TYPE_LABELS = array(
 		'backup'                  => 'Backup',
 		'backup_download'         => 'Backup Download',
@@ -80,6 +111,7 @@ class ProcessGuard {
 		'malware_restore'         => 'Malware Restoration',
 		'search_replace'          => 'Search & Replace',
 		'broken_link_checker'     => 'Broken Link Checker',
+		'hardening_audit'         => 'Hardening Audit',
 		'restore'                 => 'Site Restore',
 		'migration'               => 'Site Migration',
 		'migration_backup'        => 'Migration Backup',
@@ -228,10 +260,12 @@ class ProcessGuard {
 	 * (e.g. backup spawning db_optimize via tailwatch_database_optimize_start) do
 	 * NOT go through this guard; only the user-trigger AJAX entry points do.
 	 *
-	 * @param string $process_type The process_type the user is attempting to start.
+	 * @param string        $process_type The process_type the user is attempting to start.
+	 * @param array<string> $ignore       Running processes this start belongs to, such as the
+	 *                                    scan that backs the site up first.
 	 * @return array|null Blocked-response array, or null if safe to proceed.
 	 */
-	public function ensure_can_start_process( $process_type ) {
+	public function ensure_can_start_process( $process_type, array $ignore = array() ) {
 		if ( ! is_string( $process_type ) || '' === $process_type ) {
 			return null;
 		}
@@ -246,14 +280,80 @@ class ProcessGuard {
 		// already running?"), so the second-tab "click Run again" case would
 		// otherwise slip through. Prepend the requested type to the check list
 		// so self-starts and peer-conflicts are caught in a single DB read.
-		$types_to_check = array_values( array_unique( array_merge( array( $process_type ), $cannot_start_while ) ) );
+		$types_to_check = array_values( array_diff( array_unique( array_merge( array( $process_type ), $cannot_start_while ) ), $ignore ) );
 
 		$running = $this->status_service->find_first_running( $types_to_check );
+		if ( null !== $running ) {
+			return $this->build_start_blocked_response( $running, $process_type );
+		}
+
+		// A paused run of another kind holds half-done work: a start that changes the site is
+		// refused until that run is resumed and finished, or cancelled. A paused run of this kind
+		// never blocks: it is the run a resume continues, or the one a new start replaces.
+		if ( in_array( $process_type, self::SITE_CHANGING_PROCESSES, true ) ) {
+			$paused = $this->status_service->find_first_paused( array_values( array_diff( $cannot_start_while, array( $process_type ), $ignore ) ) );
+			if ( null !== $paused ) {
+				return $this->build_start_blocked_response( $paused, $process_type, true );
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Check whether plugins, themes or WordPress itself may be changed right now: updated,
+	 * rolled back, switched on or off, or deleted.
+	 *
+	 * @return array|null Blocked-response array, or null if safe to proceed.
+	 */
+	public function ensure_site_can_change() {
+		$running = $this->status_service->find_first_running( self::SITE_REPLACING_PROCESSES );
 		if ( null === $running ) {
 			return null;
 		}
 
-		return $this->build_start_blocked_response( $running, $process_type );
+		return $this->build_start_blocked_response( $running );
+	}
+
+	/**
+	 * Claim the start of a job that takes over the site's files or database, and check again
+	 * under the claim.
+	 *
+	 * Backup, restore and migration check with ensure_can_start_process() first, then spend
+	 * seconds estimating sizes or reading archives before their process row exists. Two starts
+	 * in that gap would both pass. Under the claim the check is asked again and the row created,
+	 * so the later start finds the earlier one running:
+	 *
+	 *     $claim = ( new ProcessGuard() )->claim_start( 'restore' );
+	 *     if ( is_array( $claim ) ) {
+	 *         return $claim;
+	 *     }
+	 *     try {
+	 *         // Create the process row.
+	 *     } finally {
+	 *         ProcessStartClaim::release( $claim );
+	 *     }
+	 *
+	 * @param string        $process_type The process_type being started.
+	 * @param array<string> $ignore       Running processes this start belongs to, such as the
+	 *                                    scan that backs the site up first.
+	 * @return array|string The blocked response, or the claim to release once the process row
+	 *                      exists ('' when the claim could not be recorded).
+	 */
+	public function claim_start( $process_type, array $ignore = array() ) {
+		$claim = ProcessStartClaim::claim( $process_type );
+		if ( false === $claim ) {
+			$holder = ProcessStartClaim::holder();
+			return $this->build_start_blocked_response( '' !== $holder ? $holder : $process_type, $process_type );
+		}
+
+		$blocked = $this->ensure_can_start_process( $process_type, $ignore );
+		if ( null !== $blocked ) {
+			ProcessStartClaim::release( $claim );
+			return $blocked;
+		}
+
+		return $claim;
 	}
 
 	/**
@@ -266,14 +366,21 @@ class ProcessGuard {
 	 *                                    When equal to $running_type the message switches
 	 *                                    to "already in progress" wording so the user sees
 	 *                                    a duplicate-start, not a peer-conflict.
+	 * @param bool        $paused         True when the blocking run is paused, not running.
 	 * @return array
 	 */
-	private function build_start_blocked_response( $running_type, $requested_type = null ) {
+	private function build_start_blocked_response( $running_type, $requested_type = null, $paused = false ) {
 		$label = isset( self::PROCESS_TYPE_LABELS[ $running_type ] )
 			? self::PROCESS_TYPE_LABELS[ $running_type ]
 			: $running_type;
 
-		if ( null !== $requested_type && $requested_type === $running_type ) {
+		if ( $paused ) {
+			$message = sprintf(
+				/* translators: %s: name of the paused module (e.g. "Backup"). */
+				__( '%s is paused. Resume it and let it finish, or cancel it, before starting a new task.', 'tailwatch' ),
+				$label
+			);
+		} elseif ( null !== $requested_type && $requested_type === $running_type ) {
 			$message = sprintf(
 				/* translators: %s: name of the running module (e.g. "Backup"). */
 				__( 'A %s is already in progress. Please wait for it to finish before starting another.', 'tailwatch' ),
@@ -289,10 +396,16 @@ class ProcessGuard {
 
 		return array(
 			'feature_data' => array(),
-			'data'         => array(
-				'blocked_by_process' => true,
-				'running_process'    => $running_type,
-			),
+			'data'         => $paused
+				? array(
+					'blocked_by_process' => true,
+					'running_process'    => $running_type,
+					'paused'             => true,
+				)
+				: array(
+					'blocked_by_process' => true,
+					'running_process'    => $running_type,
+				),
 			'message'      => $message,
 			'code'         => 409,
 		);

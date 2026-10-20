@@ -74,13 +74,19 @@ class JwtService {
 	 *
 	 * @param string $client_id Client identifier the tokens are minted for.
 	 * @param string $ip        Client IP resolved by IpService at mint time.
+	 * @param string $purpose   Purpose claim governing the /dispatch action gate
+	 *                          (RemoteActionAllowlist): 'manage' (default, full
+	 *                          management plane) or 'provision' (onboarding subset).
 	 * @return array{access_token:string,access_token_expiration:int,refresh_token:string,refresh_token_expiration:int,client_id:string}|array{}
 	 */
-	public function generate_jwt( $client_id, $ip ) {
+	public function generate_jwt( $client_id, $ip, $purpose = 'manage' ) {
 		$signing_key = self::get_signing_key();
 		if ( '' === $signing_key ) {
 			return array();
 		}
+
+		// Fail-closed purpose: anything unrecognised collapses to the default plane.
+		$purpose = ( 'provision' === $purpose ) ? 'provision' : 'manage';
 
 		$jti                = bin2hex( random_bytes( 16 ) );
 		$access_expiration  = time() + $this->access_token_expiration;
@@ -96,6 +102,7 @@ class JwtService {
 			'jti'       => $jti,
 			'client_id' => $client_id,
 			'scope'     => 'api_access',
+			'purpose'   => $purpose,
 			'device'    => $device_fingerprint,
 		);
 
@@ -105,6 +112,7 @@ class JwtService {
 			'exp'       => $refresh_expiration,
 			'jti'       => $jti . '_refresh',
 			'client_id' => $client_id,
+			'purpose'   => $purpose,
 			'device'    => $device_fingerprint,
 		);
 
@@ -232,6 +240,30 @@ class JwtService {
 					'code'    => 401,
 				);
 			}
+
+			// Only a REFRESH token may be exchanged here. An access token carries
+			// scope 'api_access' and a jti WITHOUT the _refresh suffix; accepting it
+			// would let a captured access token be laundered into fresh token pairs
+			// indefinitely, defeating the access TTL. Reject on either signal.
+			if ( 'api_access' === ( $decoded->scope ?? '' ) || '_refresh' !== substr( $jti, -8 ) ) {
+				return array(
+					'data'    => array(),
+					'message' => __( 'Invalid refresh token', 'tailwatch' ),
+					'code'    => 401,
+				);
+			}
+
+			// Defense in depth (mirrors validate_jwt): no rotation on a site whose
+			// license is no longer connected — disconnect must end every token chain.
+			$activation = ( new VerifyStatusController() )->get_plugin_activation_status();
+			if ( ! is_array( $activation ) || empty( $activation['extended_connected'] ) ) {
+				return array(
+					'data'    => array(),
+					'message' => __( 'Invalid refresh token', 'tailwatch' ),
+					'code'    => 401,
+				);
+			}
+
 			if ( get_option( 'tailwatch_token_revoked_' . $jti ) ) {
 				return array(
 					'data'    => array(),
@@ -251,7 +283,9 @@ class JwtService {
 				);
 			}
 
-			if ( $decoded->exp < time() ) {
+			// JWT::decode() refuses an expired token itself, but checks exp only when the
+			// claim is present; a refresh token without one is refused here.
+			if ( ! isset( $decoded->exp ) ) {
 				return array(
 					'data'    => array(),
 					'message' => __( 'Refresh token expired', 'tailwatch' ),
@@ -259,7 +293,21 @@ class JwtService {
 				);
 			}
 
-			$this->revoke_token( $decoded->jti );
+			// Purpose survives rotation; a missing or unrecognised purpose collapses to
+			// the default management plane (matches generate_jwt's fail-closed rule).
+			$purpose = ( isset( $decoded->purpose ) && 'provision' === $decoded->purpose ) ? 'provision' : 'manage';
+
+			if ( ! $this->claim_refresh_token( $jti ) ) {
+				return array(
+					'data'    => array(),
+					'message' => __( 'Refresh token revoked', 'tailwatch' ),
+					'code'    => 401,
+				);
+			}
+			// Retire the WHOLE pair: also revoke the sibling access token (same id
+			// without the _refresh suffix) so an already-issued access token cannot
+			// outlive the rotation it belongs to.
+			$this->revoke_token( substr( $jti, 0, -8 ) );
 
 			$new_jti                = bin2hex( random_bytes( 16 ) );
 			$new_access_expiration  = time() + $this->access_token_expiration;
@@ -273,6 +321,7 @@ class JwtService {
 					'jti'       => $new_jti,
 					'client_id' => $decoded->client_id,
 					'scope'     => 'api_access',
+					'purpose'   => $purpose,
 					'device'    => $device_fingerprint,
 				),
 				$signing_key,
@@ -286,6 +335,7 @@ class JwtService {
 					'exp'       => $new_refresh_expiration,
 					'jti'       => $new_jti . '_refresh',
 					'client_id' => $decoded->client_id,
+					'purpose'   => $purpose,
 					'device'    => $device_fingerprint,
 				),
 				$signing_key,
@@ -335,6 +385,24 @@ class JwtService {
 		}
 		// Non-autoloaded: revocation flag is checked on demand by exact key.
 		update_option( 'tailwatch_token_revoked_' . $jti, true, false );
+	}
+
+	/**
+	 * Spend a refresh token by adding its revocation flag.
+	 *
+	 * The flag is added, never updated: add_option() is true only when its own insert
+	 * wrote the row, so of two requests presenting the same token at once exactly one
+	 * gets true, and a token spent earlier gets false.
+	 *
+	 * @param string $jti Refresh token identifier.
+	 * @return bool True when this request spent it.
+	 */
+	private function claim_refresh_token( $jti ) {
+		if ( ! self::is_valid_jti_format( $jti ) ) {
+			return false;
+		}
+		// Non-autoloaded: revocation flag is checked on demand by exact key.
+		return add_option( 'tailwatch_token_revoked_' . $jti, true, '', false );
 	}
 
 	/**

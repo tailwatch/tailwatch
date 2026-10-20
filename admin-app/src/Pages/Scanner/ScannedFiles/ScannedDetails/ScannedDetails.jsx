@@ -13,6 +13,7 @@ import { viewInfectedContent, retryMalwareFileRemoval, markMalwareFileReviewed }
 import { Tooltip } from '../../../../Components/ToolTip/Tooltip';
 import { toast } from 'react-toastify';
 import { useSelector } from 'react-redux';
+import { warnIfBlocked } from '../../../../Components/Hooks/OwningProcess/warnIfBlocked';
 /* global tailwatch_ajax */
 
 const ScannedDetails = () => {
@@ -128,9 +129,9 @@ const ScannedDetails = () => {
 
   const startMalwareRestore = async (pid) => {
     const isConfirmed = await alertService.verify(
-      scannedData?.confirms?.deploy_files?.body || "This process may take some time depending on the number of files being deployed. During deployment, your website’s landing page may temporarily enter maintenance mode (though this usually does not occur). Once the process has started, it cannot be undone.",
+      scannedData?.confirms?.deploy_files?.body || "This process may take some time depending on the number of files being deployed. During deployment, your website’s landing page may temporarily enter maintenance mode (though this usually does not occur). If the cleanup includes the database, the scanned tables (options, posts, postmeta, comments) are replaced with the cleaned data; if the cleaned database comes back as a full copy, your other plugins are switched off while it loads. Once the process has started, it cannot be undone.",
       scannedData?.confirms?.deploy_files?.title || "Deploy the files ?",
-      "Yess",
+      "Yes",
       "Cancel"
     );
     if (isConfirmed) {
@@ -150,7 +151,7 @@ const ScannedDetails = () => {
         if (response.data.success) {
           navigate('/dashboard/malwarescanner');
         } else {
-          // onBack();
+          await warnIfBlocked(response.data?.data);
         }
       } catch (error) {
         setError('Error Start Malware Response');

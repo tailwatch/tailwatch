@@ -1,17 +1,31 @@
 name: Update WordPress.org assets
 
-# Pushes the plugin's listing assets (banner, icon, screenshots) from the
-# .github/wordpress-org/ folder to the WordPress.org SVN /assets directory,
-# without cutting a code release. Run it by hand after changing anything in
-# .github/wordpress-org/. Note: this action also syncs readme.txt to trunk.
+# Mirrors .github/wordpress-org/ into the WordPress.org SVN /assets directory (banner,
+# icon, screenshots) and copies readme.txt to trunk and the stable tag, without cutting
+# a code release. Run it by hand from main after changing an image or readme wording.
+#
+# The mirror is exact: an image that is not in .github/wordpress-org/ is deleted from
+# WordPress.org. The check step refuses to run while that would happen, unless
+# allow_removal is ticked.
 
 on:
   workflow_dispatch:
+    inputs:
+      allow_removal:
+        description: "Also delete images from WordPress.org that are no longer in .github/wordpress-org/"
+        required: false
+        type: boolean
+        default: false
 
 # Least-privilege GITHUB_TOKEN: the wp.org push uses SVN secrets, not the token,
 # so the token only needs read access to check out the repo.
 permissions:
   contents: read
+
+# Shares the release workflow's group, so the two never push to SVN at the same time.
+concurrency:
+  group: wordpress-org-svn
+  cancel-in-progress: false
 
 jobs:
   assets:
@@ -21,6 +35,47 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Check the folder and readme.txt against WordPress.org
+        env:
+          SLUG: tailwatch
+          ALLOW_REMOVAL: ${{ inputs.allow_removal }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::Run this from main; it publishes main's readme.txt."
+            exit 1
+          fi
+
+          dir=".github/wordpress-org"
+          base="https://plugins.svn.wordpress.org/${SLUG}"
+
+          # Everything in the folder is published, so only listing images belong there.
+          other=$(find "${dir}" -mindepth 1 -maxdepth 1 ! -iname '*.png' ! -iname '*.jpg' ! -iname '*.jpeg' ! -iname '*.gif' ! -iname '*.svg' -printf ' %f')
+          if [ -n "${other}" ]; then
+            echo "::error::Only images may be in ${dir}; remove:${other}"
+            exit 1
+          fi
+
+          live=$(curl -fsSL "${base}/assets/" | sed -n 's|.*<li><a href="\([^"/]*\)">.*|\1|p')
+          missing=""
+          for f in ${live}; do
+            [ -f "${dir}/${f}" ] || missing="${missing} ${f}"
+          done
+          if [ -n "${missing}" ]; then
+            if [ "${ALLOW_REMOVAL}" != "true" ]; then
+              echo "::error::On WordPress.org but not in ${dir}, so the push would delete them:${missing}. Add them, or run again with allow_removal."
+              exit 1
+            fi
+            echo "::warning::Deleting from WordPress.org:${missing}"
+          fi
+
+          stable=$(sed -n '/^Stable tag:/{s/^Stable tag:[[:space:]]*//;s/[[:space:]]*$//;p;q;}' readme.txt)
+          if [ -z "${stable}" ] || ! curl -fsSI "${base}/tags/${stable}/" > /dev/null; then
+            echo "::error::readme.txt names Stable tag '${stable}', which is not published on WordPress.org. Release it first."
+            exit 1
+          fi
+          echo "Stable tag ${stable} is published; $(echo "${live}" | wc -w) live image(s) checked."
+
       - name: Push assets to WordPress.org
         # Pinned to the exact 2.2.0 commit SHA (not the moving @stable tag).
         uses: 10up/action-wordpress-plugin-asset-update@2480306f6f693672726d08b5917ea114cb2825f7 # 2.2.0
@@ -29,3 +84,5 @@ jobs:
           SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
           SLUG: tailwatch
           ASSETS_DIR: .github/wordpress-org
+          # The repo is source, not the built plugin: send readme.txt and the images only.
+          IGNORE_OTHER_FILES: true

@@ -15,6 +15,20 @@ export const UserRow = ({ user, setUserData, setLoading, handleUserRestrictionCl
   const [isGenerating, setIsGenerating] = useState(false);
 
   const handleToggleChange = async (checked) => {
+    // Switching off Email 2FA the user's role requires takes this one user out of the rule.
+    // Said before it happens, because everyone else with the role still gets the code.
+    if (!checked && getTwoFaState().confirmExempt) {
+      const confirmed = await alertService.verify(
+        `${user.username}'s role requires Email 2FA. Switching it off takes only this account out of that rule: it will sign in without the emailed code, while everyone else with the role still gets it. This is recorded in the logs, and you can switch it back on at any time.`,
+        "Switch off Email 2FA for this account?",
+        "Switch off",
+        "Cancel"
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+
     // The real toggle state lives under two_step_verification.data.enabled,
     // so optimistic updates must write into that nested object — writing to a
     // top-level `enabled` field would create a phantom property the UI never reads.
@@ -232,6 +246,20 @@ export const UserRow = ({ user, setUserData, setLoading, handleUserRestrictionCl
     const data = twoFA.data || {};
     if (data.parent_feature_disable === true) {
       return { disabled: true, showTooltip: true, message: "Enable Role-based 2FA feature first" };
+    }
+
+    // Email 2FA the user's role requires. Someone who can change the rules may take this one
+    // user out of it, after confirming; for anyone else the switch stays locked.
+    if (data.is_required === true) {
+      if (data.can_exempt === true) {
+        return { disabled: false, showTooltip: true, confirmExempt: true, message: "Required by this user's role. Switching it off exempts only this user." };
+      }
+      return { disabled: true, showTooltip: true, message: "Email 2FA is required for this user's role. Only an administrator who can change the 2FA rules can exempt this user." };
+    }
+
+    // Taken out of the rule by an administrator: switching it on puts them back under it.
+    if (data.is_exempt === true) {
+      return { disabled: false, showTooltip: true, message: data.status_message || "Exempted from the Email 2FA this user's role requires. Switch it on to require it again." };
     }
 
     const emailEnabled = data.email_enabled;

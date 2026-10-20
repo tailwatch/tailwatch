@@ -31,7 +31,10 @@ class VisitController {
 				'failed_attempt' => 0,
 			),
 			'check_cron_status'    => array(
-				'required'       => true,
+				// Not required: CronHealthService accepts DISABLE_WP_CRON / system-cron
+				// setups, and a host with a blocked wp-cron loopback must not wedge the
+				// wizard — a failed attempt on a non-required step lets setup proceed.
+				'required'       => false,
 				'is_completed'   => false,
 				'failed_attempt' => 0,
 			),
@@ -110,6 +113,16 @@ class VisitController {
 			);
 
 			$get_data = array_merge( $defaults, $get_data );
+
+			// `required` is a code-level property of each step, not user state — always
+			// take it from the defaults above. array_merge lets the STORED step win, so a
+			// stored required=true on check_cron_status would leave a host with a blocked
+			// wp-cron loopback unable to satisfy "all required completed", wedging the
+			// wizard. This also guarantees the key exists even if a stored step blob is
+			// missing it.
+			foreach ( $defaults as $step => $step_defaults ) {
+				$get_data[ $step ]['required'] = $step_defaults['required'];
+			}
 
 			$visit_data = array(
 				'check_php_version'    => $get_data['check_php_version']['is_completed'],
@@ -339,7 +352,7 @@ class VisitController {
 		}
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- SHOW TABLES requires direct query. Table existence check during plugin setup.
-		$table_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) );
+		$table_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table_name ) ) );
 
 		$result_is = false === $update_data && isset( $get_data['tailwatch_table']['is_completed'] ) && false === $get_data['tailwatch_table']['is_completed'];
 

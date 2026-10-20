@@ -81,8 +81,7 @@ class MonitoringLogController {
 		}
 
 		// Iterate the actual keys returned by OptionsController so newly
-		// added fields are automatically considered. The previous
-		// hard-coded 1..10 loop quietly missed any future field_11+.
+		// added fields are automatically considered.
 		$any_feature_enabled = false;
 		foreach ( $feature_settings as $field_entry ) {
 			if ( isset( $field_entry['options']['option']['selected'] )
@@ -160,7 +159,7 @@ class MonitoringLogController {
 
 		$db_model = new DBModel();
 		// Return the inserted row id so callers can attach it to the notification
-		// (record_id) for deep-linking. Callers that ignore the return are unaffected.
+		// (record_id) for deep-linking.
 		return $db_model->insert_row( $logs_activity_data, $db_data_format, TAILWATCH_DB_LOGS_TABLE_NAME );
 	}
 
@@ -179,7 +178,7 @@ class MonitoringLogController {
 		$user_data = array(
 			// Real client IP via the shared IpService — unwraps common
 			// reverse-proxy headers. Plain REMOTE_ADDR would log the
-			// proxy edge (Cloudflare / NGINX / ALB) for every user on
+			// proxy edge (CDN / load balancer) for every user on
 			// any production site behind a CDN.
 			'ip_address'  => IpService::get_client_ip(),
 			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotValidated -- Server variable sanitized below for logging
@@ -260,9 +259,9 @@ class MonitoringLogController {
 			// (URL appended). `title`/`body` are the user-facing strings
 			// sent to the mobile push.
 			//
-			// field_3 is intentionally skipped — historical 501 monitor,
-			// removed in an earlier release. Keep field numbering stable
-			// so existing stored options keep matching.
+			// field_3 is intentionally absent: field numbers are stable
+			// keys into stored options, so a retired field's number is
+			// never reused.
 			$monitoring_config = array(
 				'field_1'  => array(
 					'code'    => 503,
@@ -361,7 +360,7 @@ class MonitoringLogController {
 
 				if ( ! empty( $get_feature[ $field ]['push_notification'] ) ) {
 					$rl_key = 'tailwatch_pn_rl_' . md5( $status_code . '|' . $url );
-					if ( false === get_transient( $rl_key ) ) {
+					if ( false === get_transient( $rl_key ) && PushNotificationController::tailwatch_push_budget_allows( 'error_logs_' . $status_code ) ) {
 						$meta_data = array(
 							'feature'      => 'error_logs',
 							'event'        => 'http_error',

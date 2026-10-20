@@ -4,23 +4,42 @@ import { Lock, Settings, ArrowRight, Loader2 } from "lucide-react";
 import IconButton from "../Buttons/IconButton";
 import { useFeatureContent } from "../Hooks/useFeatureContent/useFeatureContent";
 import {
-  handleConnect,
+  connectWithNewPairing,
 } from "../../Pages/Settings/LicenseTab/LicenseTabServices/LicenseTabServices";
 import { useFeaturesData } from "../Context/FeaturesDataContext";
+import { useLicense } from "../Context/LicenseProvider";
 /* global tailwatch_ajax */
 
+/**
+ * `isActive` from the caller is deliberately ignored.
+ *
+ * This card exists because a feature is off — that is the whole condition every screen
+ * renders it under. The copy of the feature list in browser storage is a snapshot from
+ * when the dashboard loaded and can disagree with the very thing that put the card on
+ * screen: the site saying, just now, that the feature is off. Trusting the snapshot would
+ * draw a toggle already switched on, over a message asking you to switch it on.
+ *
+ * So it is derived. A card that is being shown means off, and off is "0" — which is also
+ * exactly what the rest of the app passes as the previous state when it means "turn this
+ * on" (see the Backup table's own switch-on button).
+ *
+ * The prop is still accepted so no call site breaks.
+ */
 const LockCard = ({
   featureId,
-  isActive: initialIsActive,
+  isActive: ignoredIsActive,
   isLocked,
   afterToggleCallback,
   showOverlay = true,
   featureName,
   featureDescription,
 }) => {
+  const initialIsActive = "0";
   const [isActive, setIsActive] = useState(initialIsActive);
   const { handleToggleChange, loadingFeature } = useFeatureContent();
-  const { fetchFeaturesData } = useFeaturesData();
+  const { fetchFeaturesData, proPluginActive } = useFeaturesData();
+  // Not every screen this card appears on is inside the licence context.
+  const license = useLicense();
   const [loading, setLoading] = useState(false);
   const [connecting, setConnecting] = useState(false);
 
@@ -29,6 +48,8 @@ const LockCard = ({
   }, [initialIsActive]);
 
   const isLoading = loadingFeature === featureId || loading;
+  // A locked feature lives in the pro plugin; a licence only matters once that is installed.
+  const needsProPlugin = isLocked && !proPluginActive;
   const isActiveBoolean = isActive === "1";
 
   const handleToggle = async () => {
@@ -45,21 +66,27 @@ const LockCard = ({
   };
 
   const handleActivateLicense = async () => {
-    setConnecting(true);
-    try {
-      await handleConnect({
-        setLoading: setLoading,
-        tailwatch_ajax,
-        successCallback: async () => {
-          await fetchFeaturesData();
-          if (typeof afterToggleCallback === "function") {
-            await afterToggleCallback();
-          }
-        },
-      });
-    } finally {
-      setConnecting(false);
-    }
+    await connectWithNewPairing({
+      setConnecting,
+      setLoading,
+      tailwatch_ajax,
+      successCallback: async () => {
+        await fetchFeaturesData();
+        // The sidebar and the header read the licence from the context, not from features.
+        if (license && typeof license.refreshLicense === "function") {
+          await license.refreshLicense();
+        }
+        if (typeof afterToggleCallback === "function") {
+          await afterToggleCallback();
+        }
+      },
+    });
+  };
+
+  const contactUrl = window.tailwatch_ajax?.urls?.contact || "https://wptailwatch.com/contact/";
+
+  const handleSeePro = () => {
+    window.open(`${window.tailwatch_ajax?.urls?.pricing || "https://wptailwatch.com/pricing/"}?utm_source=wp-plugins&utm_medium=wp-dash&utm_campaign=pro_upgrade&utm_content=lock_card`, "_blank", "noopener");
   };
 
   const glowColor = "#007980";
@@ -95,8 +122,10 @@ const LockCard = ({
 
           {/* Description */}
           <p className="text-xs sm:text-sm text-gray-600 text-center mb-4 sm:mb-5 px-2 py-1">
-            {isLocked
-              ? "This is a Tailwatch Pro feature. Connect your license to enable it."
+            {needsProPlugin
+              ? "This feature is available in Tailwatch Pro."
+              : isLocked
+              ? "This feature needs an active Tailwatch Pro license."
               : "This feature cannot be used until the required options are enabled."}
           </p>
 
@@ -147,10 +176,21 @@ const LockCard = ({
 
           {/* Action button */}
           <div className="mt-4 sm:mt-5 flex justify-center px-2">
-            {isLocked && (
+            {needsProPlugin && (
+              <IconButton
+                icon={ArrowRight}
+                text="See Tailwatch Pro"
+                onClick={handleSeePro}
+                bgColor="bg-gradient-to-r from-[#007980] to-[#00a0aa]"
+                hoverBgColor="hover:from-[#006970] hover:to-[#008a93]"
+                textColor="text-white"
+                className="shadow-md hover:shadow-lg transition-all duration-200 text-xs sm:text-sm w-full sm:w-auto"
+              />
+            )}
+            {isLocked && !needsProPlugin && (
               <IconButton
                 icon={connecting ? Loader2 : ArrowRight}
-                text={connecting ? "Connecting..." : "Activate License"}
+                text={connecting ? "Connecting..." : "Connect to Tailwatch"}
                 onClick={handleActivateLicense}
                 disabled={connecting}
                 bgColor="bg-gradient-to-r from-[#007980] to-[#00a0aa]"
@@ -173,8 +213,18 @@ const LockCard = ({
 
           {/* Footer text */}
           <p className=" text-center text-[10px] sm:text-xs text-gray-500 px-2">
-            {isLocked
-              ? "Need help? Contact support for assistance with activation."
+            {needsProPlugin
+              ? "Tailwatch Pro is a separate plugin that adds this feature."
+              : isLocked
+              ? (
+                <>
+                  Need help?{" "}
+                  <a href={contactUrl} target="_blank" rel="noopener noreferrer" className="text-[#007980] underline">
+                    Contact support
+                  </a>
+                  .
+                </>
+              )
               : "You can modify these settings at any time."}
           </p>
         </div>

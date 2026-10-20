@@ -1,3 +1,4 @@
+import { readFeatureGate } from '../../../Components/Utils/featureGate';
 import axios from "axios";
 import { toast } from "react-toastify";
 /* global tailwatch_ajax */
@@ -13,6 +14,10 @@ export const getIpDetails = async ({ setLoading, setIpDetailsData, page = 1, lim
         const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
+        // A reply the gate let through is proof both switches are on. Read from every
+        // response, not only refusals, so these flags cannot latch to false and stay there.
+        readFeatureGate(response, setFeatureEnable, setParentEnable);
+
         if (response.data.data.code === 200) {
             setIpDetailsData(response.data.data.activities);
             if (setPagination && response.data.data.pagination) {
@@ -26,7 +31,7 @@ export const getIpDetails = async ({ setLoading, setIpDetailsData, page = 1, lim
             console.error('Failed to get IP Details', response.data.data.message);
         }
     } catch (error) {
-        if (error.response.data.data.code === 403) {
+        if (error.response?.data?.data?.code === 403) {
             setIsLicenseConnect(true);
         } else {
             console.error('Failed to get IP Details :', error);

@@ -3,6 +3,13 @@ import { SkeletonStatus } from '../../../Components/Skeleton/LoaderSkeleton';
 import InfoBar from '../../../Components/InfoBar/InfoBar';
 import { fetchBackupDetails } from '../BackupServices/BackupServices';
 import { useEffect } from 'react';
+
+// Backups made while more of them were kept, which the lower number kept now does not delete.
+const heldMessage = (count) =>
+    count === 1
+        ? '1 older backup is kept on purpose: it was made while you kept more backups, so your current setting does not remove it. Delete it from the list below when you no longer need it.'
+        : `${count} older backups are kept on purpose: they were made while you kept more backups, so your current setting does not remove them. Delete them from the list below when you no longer need them.`;
+
 const BackupDetails = ({ fetchTrigger, featureEnable, parentEnable,setFeatureEnable,setParentEnable }) => {
     const [loading,setLoading] = useState(true);
     const [backupDetails, setBackupDetails] = useState(null);
@@ -22,7 +29,9 @@ const BackupDetails = ({ fetchTrigger, featureEnable, parentEnable,setFeatureEna
         }
 
         if (backupDetails) {
+            const held = Number(backupDetails.backupsHeld) || 0;
             return (
+                <>
                 <InfoBar type="info"
                     message={`Last Scheduled: ${backupDetails.started_time || 'N/A'} 
                             Next Run: ${backupDetails.next_run || 'N/A'}                             
@@ -31,6 +40,12 @@ const BackupDetails = ({ fetchTrigger, featureEnable, parentEnable,setFeatureEna
                             Time Interval: ${backupDetails.time_interval || 'N/A'}
                         `}
                 />
+                {held > 0 && (
+                    <div className="mt-2">
+                        <InfoBar type="info" message={heldMessage(held)} />
+                    </div>
+                )}
+                </>
             );
         }
 

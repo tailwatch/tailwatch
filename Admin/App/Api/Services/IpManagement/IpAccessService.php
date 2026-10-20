@@ -14,7 +14,6 @@ use Tailwatch\Admin\App\Api\Services\GeoIp2\GeoIPService;
 use Tailwatch\Admin\App\Api\Models\LoginDefender\IpActivityModel;
 use Tailwatch\Admin\App\Api\Models\IpManagement\WhitelistModel;
 use Tailwatch\Admin\App\Api\Models\IpManagement\RuleModel;
-// IpProtectionController import removed — tailwatch_login_defender_settings() now uses $this->settings.
 use Tailwatch\Admin\App\Api\Controllers\IpManagement\IpManagementController;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -68,9 +67,8 @@ class IpAccessService {
 	}
 
 	private function tailwatch_login_defender_settings() {
-		// Use the settings already injected via the constructor.
-		// Previously this created a new IpProtectionController which itself
-		// instantiated another IpAccessService — a wasteful circular chain.
+		// Use the settings already injected via the constructor; building them here
+		// would create an IpProtectionController, which creates another IpAccessService.
 		return $this->settings;
 	}
 
@@ -107,7 +105,7 @@ class IpAccessService {
 			$whitelist_check = $this->whitelist->is_ip_whitelisted( $ip );
 			$is_whitelisted  = (bool) $whitelist_check;
 			if ( ! $is_whitelisted && $country && 'Unknown' !== $country ) {
-				$is_whitelisted = (bool) $this->whitelist->is_country_whitelisted( $country );
+				$is_whitelisted = (bool) apply_filters( 'tailwatch_is_country_whitelisted', false, $country, $ip );
 			}
 			if ( $is_whitelisted ) {
 				return array(
@@ -296,7 +294,7 @@ class IpAccessService {
 				return false;
 			}
 			$country = $this->geoip->get_country( $ip );
-			if ( $country && 'Unknown' !== $country && $this->whitelist->is_country_whitelisted( $country ) ) {
+			if ( $country && 'Unknown' !== $country && apply_filters( 'tailwatch_is_country_whitelisted', false, $country, $ip ) ) {
 				return false;
 			}
 		}

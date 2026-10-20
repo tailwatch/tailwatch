@@ -20,6 +20,7 @@ export const useSearchReplace = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);    
     const [isLoadingVisible, setIsLoadingVisible] = useState(true);
     const [isCanceled, setIsCanceled] = useState(false);
+    const [isFailed, setIsFailed] = useState(false);
     const [scanState, setScanState] = useState(null);
     const [isScanInProgress, setIsScanInProgress] = useState(false);
     const [isStarting, setIsStarting] = useState(false);
@@ -80,12 +81,22 @@ export const useSearchReplace = () => {
         if (!isStatusChecked) return;
         if ((scanState === "in-progress" || scanState === "reverting_changes" || (scanState === "cancel" && dryRunValue === false)) && !isCompleted) {
             const delayFetchLogs = setTimeout(() => {
-                fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setIsPausing, setIsResuming, setIsPaused, setIsCanceled, setInfoRevertChange, setIsCanceling, setOperationLoading, isLastLogIndex, setIsLastLogIndex);
+                fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setIsPausing, setIsResuming, setIsPaused, setIsCanceled, setInfoRevertChange, setIsCanceling, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setIsFailed);
             }, 4000);
 
             return () => clearTimeout(delayFetchLogs);
         }
     }, [fetchLogs, isCompleted, scanState, isStatusChecked]);
+
+    // A page loaded mid-run starts with verifyStatus false and the run's scanState. Once the
+    // run has failed, both are stale: they would keep "Resume process" (whose modal can cancel)
+    // and a 'reverting_changes' banner on screen, and disable the controls for the next run.
+    useEffect(() => {
+        if (isFailed) {
+            setVerifyStatus(true);
+            setScanState(null);
+        }
+    }, [isFailed]);
 
     useEffect(() => {
         isComponentActive.current = true;
@@ -131,7 +142,7 @@ export const useSearchReplace = () => {
         setScanCompleted(false);
 
         try {
-            const response = await startSearchReplace(payload, setScanCompleted, () => fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setIsPausing, setIsResuming, setIsPaused, setIsCanceled, setInfoRevertChange, setIsCanceling, setOperationLoading, isLastLogIndex, setIsLastLogIndex));
+            const response = await startSearchReplace(payload, setScanCompleted, () => fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setIsPausing, setIsResuming, setIsPaused, setIsCanceled, setInfoRevertChange, setIsCanceling, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setIsFailed));
 
             if (!response) {
                 // Backend rejected the request (e.g. another process is running).
@@ -144,6 +155,7 @@ export const useSearchReplace = () => {
             setIsScanInProgress(true);
             setIsPaused(false);
             setIsCompleted(false);
+            setIsFailed(false);
             setProgress(1);
             setIsLogsVisible(true);
             updateLocalStorage('Search&Replace', { dryRun: dryRun });
@@ -177,6 +189,12 @@ export const useSearchReplace = () => {
                     setIsDryRun(isDryRun);
                     return isDryRun;
                 }
+            } else {
+                // null, not false: false is what a cancelled live run returns, and the cancel
+                // handlers answer it by showing the revert.
+                toast.error(response.data?.data?.message || "Search & Replace could not be paused or canceled.");
+                setOperationLoading(false);
+                return null;
             }
             return false;
         } catch (error) {
@@ -188,6 +206,10 @@ export const useSearchReplace = () => {
         setIsCanceling(true);
         setOperationLoading(true);
         const isDryRunValue = await handleSeartchAction("cancel");
+        if (isDryRunValue === null) {
+            setIsCanceling(false);
+            return;
+        }
         if (isDryRunValue === true && dryRunValue === true) {
             setIsScanInProgress(false);
             setIsCanceled(true);
@@ -206,6 +228,10 @@ export const useSearchReplace = () => {
     const handleCancelAfterPause = async () => {
         setIsCanceling(true);
         const isDryRunValue = await handleSeartchAction("cancel");
+        if (isDryRunValue === null) {
+            setIsCanceling(false);
+            return;
+        }
         if (isDryRunValue === true) {
             setIsScanInProgress(false);
             setIsCanceled(true);
@@ -216,14 +242,17 @@ export const useSearchReplace = () => {
             setInfoRevertChange(true);
             setIsResuming(true);
             setIsScanInProgress(true);
-            await fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setIsPausing, setIsResuming, setIsPaused, setIsCanceled, setInfoRevertChange, setIsCanceling, setOperationLoading, isLastLogIndex, setIsLastLogIndex);
+            await fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setIsPausing, setIsResuming, setIsPaused, setIsCanceled, setInfoRevertChange, setIsCanceling, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setIsFailed);
             setRevertMessage("Reverting the changes. Dont stop the process");
         }
     };
 
     const handlePause = async () => {
         setOperationLoading(true);
-        await handleSeartchAction("pause");
+        const pauseResult = await handleSeartchAction("pause");
+        if (pauseResult === null) {
+            return;
+        }
         setIsPausing(true);
         setIsResuming(false);
     };
@@ -232,6 +261,7 @@ export const useSearchReplace = () => {
         setLogs([]);
         setIsCanceled(false);
         setIsCanceling(false);
+        setIsFailed(false);
         setIsCompleted(false);
         setIsLogsVisible(false);
         setIsScanInProgress(false);
@@ -266,6 +296,6 @@ export const useSearchReplace = () => {
         isLoadingVisible,parentEnable, loading, verifyLoading, infoBarVisible, infoMessage, setInfoBarVisible, featureEnable, enableSearchReplace, searchText, setSearchText, isScanInProgress, isStarting, verifyStatus, isPaused, replaceText, setReplaceText, tables,
         selectedTables, setSelectedTables, caseInsensitive, setCaseInsensitive, replaceGuids, setReplaceGuids, dryRun, setDryRun, checkPauseResumeStatus, isCompleted, handleSearchReplace, setIsLogsVisible, isLogsVisible, handleResume, isOperationInProgress, isCanceled, isPausing,
         isCanceling, handleCancel, handlePause, isDisabled, resetAllStates, scanState, handleCancelAfterPause, progress, progressBarColor, infoRevertChange, setInfoRevertChange, logs, setLogs, isModalOpen, setIsModalOpen, fetchLogs, setIsScanInProgress, setIsCompleted, setIsOperationInProgress, isComponentActive,
-        setProgress, setIsResuming, isResuming, setIsPausing, setIsPaused, setIsCanceled, setIsCanceling, setOperationLoading, isOperationLoading, isLastLogIndex, setIsLastLogIndex
+        setProgress, setIsResuming, isResuming, setIsPausing, setIsPaused, setIsCanceled, setIsCanceling, setOperationLoading, isOperationLoading, isLastLogIndex, setIsLastLogIndex, isFailed, setIsFailed
     }
 }

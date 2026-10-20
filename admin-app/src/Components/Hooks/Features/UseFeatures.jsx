@@ -133,7 +133,7 @@ export const useSubOptionsCheck = () => {
           if (databaseOptimizer && databaseOptimizer.value) {
             const databaseValue = JSON.parse(databaseOptimizer.value);
 
-            // Checking if all the sub-options (field_2 to field_10) are false, skipping field_11, field_12, and field_13
+            // True when every sub-option except field_15 and field_16 is switched off.
             const subOptions = databaseValue?.options?.field_1?.sub_options;
             const fieldsToCheck = Object.keys(subOptions || {}).filter(key => !['field_15', 'field_16'].includes(key));           
 
@@ -161,7 +161,7 @@ export const useSubOptionsCheck = () => {
 };
 
 export const useDatabaseFeatureOptions = () => {
-  const [features, setFeatures] = useState(null); // Initialize as null or an empty object
+  const [features, setFeatures] = useState(null);
 
   useEffect(() => {
     const checkLocalStorage = async () => {
@@ -187,7 +187,7 @@ export const useDatabaseFeatureOptions = () => {
         }
       } catch (error) {
         console.error("Error checking localStorage:", error);
-        setFeatures(null); // Or handle error state appropriately
+        setFeatures(null);
       }
     };
 
@@ -236,7 +236,7 @@ export const UseSearchReplace = () => {
 };
 
 export const CheckIntegrityFeature = () => {
-  // Initialize with an object containing default values instead of null
+  // Starts with defaults rather than null so callers can read its fields before the first check.
   const [showFileMonteringLogs, setShowFileMonteringLogs] = useState({
     fileMoniterFeature: false,
     featureId: null,
@@ -384,7 +384,6 @@ export const useHardeningAuditFeature = () => {
       const localStorageData = getLocalStorage('features_data', 'data');
 
       if (localStorageData && Array.isArray(localStorageData)) {
-        // NOTE: option key is a placeholder — adjust once backend ships the actual key.
         const hardeningAuditFeature = localStorageData.find(item => item.option === "default_hardening_audit");
 
         if (hardeningAuditFeature && hardeningAuditFeature.value) {
@@ -459,8 +458,22 @@ export const useMoniteringFeature = () => {
   return { moniteringFeature, refreshMoniteringStatus: checkLocalStorage };
 };
 
+/**
+ * Two-factor, which is the one module with no status call of its own.
+ *
+ * Every other screen asks the site something when it opens — a scan status, a backup
+ * status — and that answer carries feature_enable / parent_enable, so its lock card is a
+ * live reading. The feature list in browser storage is only a snapshot taken when the
+ * dashboard first loaded, and goes stale when 2FA is switched on elsewhere while the tab
+ * stays open.
+ *
+ * So it asks. `fetchFeaturesData` is the network call behind that stored copy, and running
+ * it on mount turns the snapshot back into an answer. Storage is still read first, so the
+ * screen has something to draw before the request returns.
+ */
 export const useTwoFaFeature = () => {
   const [twoFa, setTwoFa] = useState(null);
+  const { fetchFeaturesData } = useFeaturesData();
 
   const checkLocalStorage = useCallback(async () => {
     try {
@@ -491,11 +504,26 @@ export const useTwoFaFeature = () => {
     }
   }, []);
 
-  useEffect(() => {
-    checkLocalStorage();
-  }, [checkLocalStorage]);
+  // Ask the site, then read what that answer wrote. Storage first so the screen is not
+  // blank while the request is in flight, and again afterwards so it ends up showing what
+  // the site actually says rather than what it said when the dashboard was opened.
+  const refresTwoFaStatus = useCallback(async () => {
+    await checkLocalStorage();
+    try {
+      await fetchFeaturesData();
+    } catch (error) {
+      // Unreachable site: keep whatever the stored copy gave us rather than blanking the
+      // screen. A failed request is not proof the feature is off.
+      return;
+    }
+    await checkLocalStorage();
+  }, [checkLocalStorage, fetchFeaturesData]);
 
-  return { twoFa, refresTwoFaStatus: checkLocalStorage };
+  useEffect(() => {
+    refresTwoFaStatus();
+  }, [refresTwoFaStatus]);
+
+  return { twoFa, refresTwoFaStatus };
 };
 
 export const useCronJobFeature = () => {
@@ -554,7 +582,6 @@ export const useFirewallFeature = () => {
           const isFeatureActive = firewallFeature.is_active === "1";
 
           setFirewall({
-            // More descriptive naming
             isEnabled: isFeatureActive && isFirewallEnable,
             isFeatureActive: isFeatureActive,
             isFirewallFeatureEnable: isFirewallEnable,
@@ -563,7 +590,6 @@ export const useFirewallFeature = () => {
             isLocked: firewall.is_locked || null            
           });
         } else {
-          // Feature not found or no value
           setFirewall({ 
             isEnabled: false, 
             isFeatureActive: false,
@@ -574,7 +600,6 @@ export const useFirewallFeature = () => {
           });
         }
       } else {
-        // No data in localStorage
         setFirewall({ 
           isEnabled: false, 
           isFeatureActive: false,
@@ -627,7 +652,6 @@ export const useBruteForceFeature = () => {
           const isFeatureActive = bruteForceFeature.is_active === "1";
 
           setBruteForceRule({
-            // More descriptive naming
             isEnabled: isFeatureActive && isBruteForceEnabled,
             isFeatureActive: isFeatureActive,
             isBruteForceOptionEnabled: isBruteForceEnabled,
@@ -636,7 +660,6 @@ export const useBruteForceFeature = () => {
             isLocked: bruteForce.is_locked || null            
           });
         } else {
-          // Feature not found or no value
           setBruteForceRule({ 
             isEnabled: false, 
             isFeatureActive: false,
@@ -647,7 +670,6 @@ export const useBruteForceFeature = () => {
           });
         }
       } else {
-        // No data in localStorage
         setBruteForceRule({ 
           isEnabled: false, 
           isFeatureActive: false,

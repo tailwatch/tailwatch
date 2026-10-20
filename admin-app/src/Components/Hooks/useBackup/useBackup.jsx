@@ -16,6 +16,9 @@ export const useBackup = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isOperationInProgress, setIsOperationInProgress] = useState(false);
     const [isCanceled, setIsCanceled] = useState(false);
+    // Terminal failure, which is its own outcome and not a quieter kind of cancel: nobody
+    // asked for it, so the screen owes an explanation rather than an acknowledgement.
+    const [isFailed, setIsFailed] = useState(false);
     const [loading, setLoading] = useState(true);
     const [isVerifyLoading, setIsVerifyLoading] = useState(true);
     const [isPausing, setIsPausing] = useState(false);
@@ -28,7 +31,11 @@ export const useBackup = () => {
     const [isScanInProgress, setIsScanInProgress] = useState(false);
     const [isStarting, setIsStarting] = useState(false);
     const [progress, setProgress] = useState(1);
-    const progressBarColor = isScanInProgress ? "linear-gradient(to right, #007980, #85cbcf)" : (isPaused || !verifyStatus) ? "linear-gradient(to right, #616161, #d1d5db)" : "";
+    // Grey covers every way a run can be stopped rather than moving — paused, unverified,
+    // failed. A failed backup keeps its bar at the point it got to, for the same reason a
+    // failed restore does: that number is what says whether there is a partial archive on
+    // disk, and it is the only thing the run has left to report.
+    const progressBarColor = isScanInProgress ? "linear-gradient(to right, #007980, #85cbcf)" : (isPaused || isFailed || !verifyStatus) ? "linear-gradient(to right, #616161, #d1d5db)" : "";
     const [showDetails, setShowDetails] = useState(false);
     const [showErrorAccordion, setShowErrorAccordion] = useState(false);
     const [errorMessages, setErrorMessages] = useState([]);
@@ -85,30 +92,45 @@ export const useBackup = () => {
         }
     }, [errorMessages]);
 
+    // Remote-storage download progress. The service answers null whenever there is nothing
+    // to report — including the case that matters here, where the status flag says a
+    // download is running but the site has no action that would describe it. Every read
+    // below guards for that rather than reaching straight into the result.
     const getBackupDownloadStatus = async () => {
-    const backupStatus = await getBackupFilesDownloadStatus();
-    setBackupStatus(backupStatus.backups);
-    
-    if (backupStatus.process === 'in_progress') {
-        // Start polling if not already started
-        if (!intervalId) {
-            const id = setInterval(async () => {
-                const status = await getBackupFilesDownloadStatus();
-                setBackupStatus(status.backups);
-                
-                if (status.process === 'completed') {
-                    clearInterval(id);
-                    setIntervalId(null);
-                }
-            }, 4000);
-            setIntervalId(id);
+        const downloadStatus = await getBackupFilesDownloadStatus();
+        if (!downloadStatus) {
+            setBackupStatus(null);
+            return;
         }
-    } else if (backupStatus.process === 'completed' && intervalId) {
-        // Clear interval if completed
-        clearInterval(intervalId);
-        setIntervalId(null);
-    }
-};
+
+        setBackupStatus(downloadStatus.backups);
+
+        if (downloadStatus.process === 'in_progress') {
+            if (!intervalId) {
+                const id = setInterval(async () => {
+                    const status = await getBackupFilesDownloadStatus();
+                    if (!status) {
+                        // It stopped answering. Stop asking, rather than polling something
+                        // that is not there every four seconds for the rest of the session.
+                        clearInterval(id);
+                        setIntervalId(null);
+                        return;
+                    }
+
+                    setBackupStatus(status.backups);
+
+                    if (status.process === 'completed') {
+                        clearInterval(id);
+                        setIntervalId(null);
+                    }
+                }, 4000);
+                setIntervalId(id);
+            }
+        } else if (downloadStatus.process === 'completed' && intervalId) {
+            clearInterval(intervalId);
+            setIntervalId(null);
+        }
+    };
 
     useEffect(() => {
         if (scanState === "in-progress") {
@@ -118,6 +140,19 @@ export const useBackup = () => {
             setScanCompleted(false);
             setProgress(1);
             setIsLogsVisible(true);
+            setVerifyStatus(true);
+            setIsFailed(false);
+        }
+        // The other way into the failed state: not watching it happen, but coming back to
+        // the screen afterwards. The site answers this poll with scan_state 'failed' and a
+        // message saying so, and a reload after a failure has to show it rather than a
+        // clean idle page.
+        if (scanState === "failed") {
+            setIsScanInProgress(false);
+            setIsPaused(false);
+            setIsCompleted(false);
+            setScanCompleted(false);
+            setIsFailed(true);
             setVerifyStatus(true);
         }
         if (scanType !== "automatically" || scanType !== "completed") {
@@ -133,9 +168,13 @@ export const useBackup = () => {
             return;
         }
 
-        if (scanState === "in-progress" && !isCompleted) {
+        // 'failed' is fetched once, and once only: the branch that handles it schedules no
+        // follow-up. That single round is what pulls the failed run's log tail back off
+        // disk, which is the entire reason someone reloads this screen after a failure —
+        // to read the last thing the backup managed to say before it stopped.
+        if ((scanState === "in-progress" || scanState === "failed") && !isCompleted) {
             const delayFetchLogs = setTimeout(() => {
-                fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setRenderKey, setRenderBackupDetail, setErrorMessages, setIsPaused, setIsCanceled, setOperationLoading, isLastLogIndex, setIsLastLogIndex);
+                fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setRenderKey, setRenderBackupDetail, setErrorMessages, setIsPaused, setIsCanceled, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setIsFailed);
             }, 4000);
 
             return () => clearTimeout(delayFetchLogs);
@@ -166,7 +205,7 @@ export const useBackup = () => {
         setScanCompleted(false);
 
         try {
-            const scanSuccessful = await instantScanning(setScanCompleted, setErrorMessages, () => fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setRenderKey, setRenderBackupDetail, setErrorMessages, setIsPaused, setIsCanceled, setOperationLoading, isLastLogIndex, setIsLastLogIndex));
+            const scanSuccessful = await instantScanning(setScanCompleted, setErrorMessages, () => fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setRenderKey, setRenderBackupDetail, setErrorMessages, setIsPaused, setIsCanceled, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setIsFailed));
 
             if (!scanSuccessful) {
                 return;
@@ -176,6 +215,7 @@ export const useBackup = () => {
             setIsScanInProgress(true);
             setIsPaused(false);
             setIsCompleted(false);
+            setIsFailed(false);
             setProgress(1);
             setIsLogsVisible(true);
             setRenderKey((prevKey) => prevKey + 1);
@@ -214,7 +254,6 @@ export const useBackup = () => {
         setRenderKey((prevKey) => prevKey + 1);
     };
 
-    // updated CheckBackup Status 
     const verifyStatusBackup = async () => {
         await verifyBackupStatus(setLoading, setVerifyStatus, setProgress, setScanState, setScanType, setErrorMessages, setFeatureEnable, setParentEnable, setBackupDownloadStatus);
     }
@@ -237,6 +276,7 @@ export const useBackup = () => {
         setLogs([]);
         setIsCanceled(false);
         setIsCanceling(false);
+        setIsFailed(false);
         setIsCompleted(false);
         setIsLogsVisible(false);
         setIsScanInProgress(false);
@@ -262,7 +302,7 @@ export const useBackup = () => {
     return {
         isVerifyLoading, loading, setLoading, enableBackup, renderBackupDetails, showErrorAccordion, errorMessages, scanType, isCompleted, scanState, verifyStatus, isScanInProgress, isStarting, isOperationInProgress, isCanceled, isModalOpen, setIsModalOpen, fetchLogs,
         isPaused, isPausing, isCanceling, resetAllStates, checkBackupStatus, progress, progressBarColor, logs, setLogs, showDetails, setIsLogsVisible, isLogsVisible, handleToggleDetails, handleInstantScan, handlePauseBackup, handleCancelBackup, handleResumeBackup, setFeatureEnable, setParentEnable, siteSize, refreshing, backupStatus,
-        setIsScanInProgress, setIsCompleted, setProgress, setIsPaused, setIsCanceled, setIsOperationInProgress, setErrorMessages, isComponentActive, setRenderKey, verifyStatusBackup, setIsFetchingLogs, setRenderBackupDetail, renderKey, featureEnable, parentEnable, setOperationLoading, isOperationLoading, handleRefreshSiteSize, isLastLogIndex, setIsLastLogIndex
+        setIsScanInProgress, setIsCompleted, setProgress, setIsPaused, setIsCanceled, setIsOperationInProgress, setErrorMessages, isComponentActive, setRenderKey, verifyStatusBackup, setIsFetchingLogs, setRenderBackupDetail, renderKey, featureEnable, parentEnable, setOperationLoading, isOperationLoading, handleRefreshSiteSize, isLastLogIndex, setIsLastLogIndex, isFailed, setIsFailed
 
     }
 }

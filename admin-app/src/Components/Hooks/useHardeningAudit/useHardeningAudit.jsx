@@ -18,6 +18,7 @@ export const useHardeningAudit = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isOperationInProgress, setIsOperationInProgress] = useState(false);
     const [isCanceled, setIsCanceled] = useState(false);
+    const [isFailed, setIsFailed] = useState(false);
     const [loading, setLoading] = useState(true);
     const [isPausing, setIsPausing] = useState(false);
     const [isCanceling, setIsCanceling] = useState(false);
@@ -73,7 +74,7 @@ export const useHardeningAudit = () => {
 
         if (scanState === "in-progress" && !isCompleted) {
             const delayFetchLogs = setTimeout(() => {
-                fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setErrorMessages, setIsPaused, setIsCanceled, setRenderKey, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setFeatureEnable, setParentEnable);
+                fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setErrorMessages, setIsPaused, setIsCanceled, setRenderKey, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setFeatureEnable, setParentEnable, setIsFailed);
             }, 4000);
 
             return () => clearTimeout(delayFetchLogs);
@@ -100,7 +101,7 @@ export const useHardeningAudit = () => {
 
         try {
             const fetchLogsWrapper = async () => {
-                return fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setErrorMessages, setIsPaused, setIsCanceled, setRenderKey, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setFeatureEnable, setParentEnable);
+                return fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setErrorMessages, setIsPaused, setIsCanceled, setRenderKey, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setFeatureEnable, setParentEnable, setIsFailed);
             };
             const scanSuccessful = await instantScanning({ setScanCompleted, setErrorMessages, fetchLogs: fetchLogsWrapper });
 
@@ -111,6 +112,7 @@ export const useHardeningAudit = () => {
             setIsScanInProgress(true);
             setIsPaused(false);
             setIsCompleted(false);
+            setIsFailed(false);
             setProgress(1);
             setIsLogsVisible(true);
             setRenderKey((prevKey) => prevKey + 1);
@@ -126,7 +128,12 @@ export const useHardeningAudit = () => {
             setOperationLoading(true);
         }
         setIsCanceling(true);
-        await handleHardeningAuditActions({ scan_state: 'cancel', setIsScanInProgress, setIsPaused, setIsCompleted, setLogs, setIsLogsVisible, setErrorMessages });
+        const accepted = await handleHardeningAuditActions({ scan_state: 'cancel', setIsScanInProgress, setIsPaused, setIsCompleted, setLogs, setIsLogsVisible, setErrorMessages });
+        if (accepted === false) {
+            setOperationLoading(false);
+            setIsCanceling(false);
+            return;
+        }
         setIsCanceled(true);
         setIsLogsVisible(false);
         setIsPaused(false);
@@ -136,7 +143,12 @@ export const useHardeningAudit = () => {
     const handlePause = async () => {
         setOperationLoading(true);
         setIsPausing(true);
-        await handleHardeningAuditActions({ scan_state: 'pause', setIsScanInProgress, setIsPaused, setIsCompleted, setLogs, setIsLogsVisible, setErrorMessages });
+        const accepted = await handleHardeningAuditActions({ scan_state: 'pause', setIsScanInProgress, setIsPaused, setIsCompleted, setLogs, setIsLogsVisible, setErrorMessages });
+        if (accepted === false) {
+            setOperationLoading(false);
+            setIsPausing(false);
+            return;
+        }
         await verifyAuditStatus();
         setVerifyStatus(true);
         setIsPausing(false);
@@ -150,6 +162,7 @@ export const useHardeningAudit = () => {
         setLogs([]);
         setIsCanceled(false);
         setIsCanceling(false);
+        setIsFailed(false);
         setIsCompleted(false);
         setIsLogsVisible(false);
         setIsScanInProgress(false);
@@ -228,5 +241,7 @@ export const useHardeningAudit = () => {
         setIsLastLogIndex,
         enableHardeningAudit,
         refreshHardeningAuditStatus,
+        isFailed,
+        setIsFailed,
     };
 };

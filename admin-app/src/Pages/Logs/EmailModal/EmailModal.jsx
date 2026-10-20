@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import PopUpModal from '../../../Components/Modal/PopUpModal';
 import { FiMail } from 'react-icons/fi';
 import { XCircle, CheckCircle } from 'lucide-react';
-import DOMPurify from 'dompurify';
+import { safeHtml } from '../../../Components/Utils/HelperFunctions/safeHtml';
 import { toast } from 'react-toastify';
 import { sendTestEmail } from '../LogsServices/LogsServices';
 
@@ -61,7 +61,7 @@ export const EmailModal = ({ handleModalClose, currentDetail }) => {
         {currentDetail.message ? (
           <div
             className="text-gray-700 leading-relaxed bg-white rounded-lg p-4"
-            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(currentDetail.message) }}
+            dangerouslySetInnerHTML={{ __html: safeHtml(currentDetail.message) }}
           />
         ) : (
           <div className="text-gray-500 italic bg-gray-50 rounded-lg p-4 text-center">

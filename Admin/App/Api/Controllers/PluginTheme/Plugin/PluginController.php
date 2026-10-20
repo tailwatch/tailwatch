@@ -21,6 +21,7 @@ use Tailwatch\Admin\App\Api\Services\Common\HistoryService;
 use Tailwatch\Admin\App\Api\Controllers\PluginTheme\PluginThemeController;
 use Tailwatch\Admin\App\Api\Controllers\Base\BaseController;
 use Tailwatch\Admin\App\Api\Logging\Log;
+use Tailwatch\Admin\App\Api\Services\ProcessGuard;
 
 /**
  * Class PluginController
@@ -91,10 +92,42 @@ class PluginController extends BaseController {
 		);
 	}
 
+	/**
+	 * On multisite, a change that reaches every site needs the network capability, as on
+	 * core's own screens: a network-wide change, or one to a plugin that runs only
+	 * network-wide or is already active for the whole network. No-op on single site.
+	 *
+	 * @param bool     $network_wide Whether the caller asked for a network-wide change.
+	 * @param string[] $plugins      Plugin files.
+	 * @return array|null
+	 */
+	private function tailwatch_require_network_capability( $network_wide, array $plugins ) {
+		if ( ! is_multisite() ) {
+			return null;
+		}
+		if ( ! function_exists( 'is_network_only_plugin' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+
+		$network = (bool) $network_wide;
+		foreach ( $plugins as $plugin ) {
+			if ( is_network_only_plugin( $plugin ) || is_plugin_active_for_network( $plugin ) ) {
+				$network = true;
+			}
+		}
+
+		return $network ? $this->tailwatch_require_capability( 'manage_network_plugins' ) : null;
+	}
+
 	public function tailwatch_update_plugin( $post_data ) {
 		$denied = $this->tailwatch_require_capability( 'update_plugins' );
 		if ( null !== $denied ) {
 			return $denied;
+		}
+
+		$blocked = ( new ProcessGuard() )->ensure_site_can_change();
+		if ( null !== $blocked ) {
+			return $blocked;
 		}
 
 		$plugin_slug    = null;
@@ -493,6 +526,11 @@ class PluginController extends BaseController {
 			return $denied;
 		}
 
+		$blocked = ( new ProcessGuard() )->ensure_site_can_change();
+		if ( null !== $blocked ) {
+			return $blocked;
+		}
+
 		$plugin_slug = null;
 		$plugin_name = null;
 
@@ -548,6 +586,11 @@ class PluginController extends BaseController {
 					'plugin'  => array(),
 					'code'    => 400,
 				);
+			}
+
+			$denied = $this->tailwatch_require_network_capability( $network_wide, array( $plugin ) );
+			if ( null !== $denied ) {
+				return $denied;
 			}
 
 			// Get plugin name before activation.
@@ -714,6 +757,11 @@ class PluginController extends BaseController {
 			return $denied;
 		}
 
+		$blocked = ( new ProcessGuard() )->ensure_site_can_change();
+		if ( null !== $blocked ) {
+			return $blocked;
+		}
+
 		$plugin_slug = null;
 		$plugin_name = null;
 
@@ -769,6 +817,11 @@ class PluginController extends BaseController {
 					'plugin'  => array(),
 					'code'    => 400,
 				);
+			}
+
+			$denied = $this->tailwatch_require_network_capability( $network_wide, array( $plugin ) );
+			if ( null !== $denied ) {
+				return $denied;
 			}
 
 			// Refuse to deactivate Tailwatch from within Tailwatch. The user can
@@ -952,6 +1005,11 @@ class PluginController extends BaseController {
 		$denied = $this->tailwatch_require_capability( 'delete_plugins' );
 		if ( null !== $denied ) {
 			return $denied;
+		}
+
+		$blocked = ( new ProcessGuard() )->ensure_site_can_change();
+		if ( null !== $blocked ) {
+			return $blocked;
 		}
 
 		$plugin_slug = null;
@@ -1248,6 +1306,11 @@ class PluginController extends BaseController {
 				);
 			}
 
+			$blocked = ( new ProcessGuard() )->ensure_site_can_change();
+			if ( null !== $blocked ) {
+				return $blocked;
+			}
+
 			// Validate all plugin slugs format: must be "folder/file.php".
 			$valid_plugins       = array();
 			$validation_failures = array();
@@ -1306,6 +1369,13 @@ class PluginController extends BaseController {
 					'code'        => 400,
 					'site_health' => true,
 				);
+			}
+
+			if ( in_array( $action, array( 'activate', 'deactivate' ), true ) ) {
+				$denied = $this->tailwatch_require_network_capability( $network_wide, $valid_plugins );
+				if ( null !== $denied ) {
+					return $denied;
+				}
 			}
 
 			// Process only valid plugins.
@@ -1590,6 +1660,11 @@ class PluginController extends BaseController {
 			return $denied;
 		}
 
+		$blocked = ( new ProcessGuard() )->ensure_site_can_change();
+		if ( null !== $blocked ) {
+			return $blocked;
+		}
+
 		$plugin_slug      = null;
 		$plugin_name      = null;
 		$current_version  = null;
@@ -1682,7 +1757,7 @@ class PluginController extends BaseController {
 				);
 			}
 
-			// Extract plugin directory from slug (e.g., "akismet/akismet.php" -> "akismet").
+			// Extract plugin directory from slug (e.g., "my-plugin/my-plugin.php" -> "my-plugin").
 			$plugin_directory = explode( '/', $slug )[0];
 			$plugin_dir_path  = WP_PLUGIN_DIR . '/' . $plugin_directory;
 
@@ -2088,8 +2163,8 @@ class PluginController extends BaseController {
 
 			// Resolve any input shape (file path, folder slug, single-file basename,
 			// or canonical WP.org slug) to an installed plugin file. This is what
-			// makes single-file plugins like Hello Dolly work: input "hello.php"
-			// or "hello" or "hello-dolly" all resolve to the same installed file.
+			// makes single-file plugins work: the file name ("single.php"), its basename
+			// ("single") and a different WP.org slug all resolve to the same installed file.
 			$plugin_file     = PluginManagerService::get_plugin_file_by_slug( $slug );
 			$current_version = '0.0.0';
 
@@ -2106,7 +2181,7 @@ class PluginController extends BaseController {
 
 			// Derive the canonical WP.org slug from the resolved file. WordPress
 			// stores this in the update_plugins transient -- it is not always
-			// derivable from the file path alone (e.g. "hello.php" -> "hello-dolly").
+			// derivable from the file path alone (a single-file plugin's slug can differ from its file name).
 			// If we could not resolve a file, treat the input itself as the API slug.
 			$api_slug = $plugin_file
 				? ( PluginManagerService::get_wporg_slug_by_file( $plugin_file ) ?? $slug )

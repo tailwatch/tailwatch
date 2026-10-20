@@ -1,3 +1,4 @@
+import { readFeatureGate } from '../../../Components/Utils/featureGate';
 import axios from 'axios';
 import { getLocalStorage } from '../../../Components/Utils/HelperFunctions/LocalStorageHelper';
 import { toast } from 'react-toastify';
@@ -8,7 +9,6 @@ export const fetchData = async (key, option, setLoading, setTabData, paginationP
   try {
     const requestData = { key, option };
 
-    // Add pagination parameters if provided
     if (paginationParams) {
       requestData.page = paginationParams.page;
       requestData.limit = paginationParams.limit;
@@ -34,6 +34,10 @@ export const fetchData = async (key, option, setLoading, setTabData, paginationP
     const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }      
     });    
+    // A reply the gate let through is proof both switches are on. Read from every
+    // response, not only refusals, so these flags cannot latch to false and stay there.
+    readFeatureGate(response, setFeatureEnable, setParentEnable);
+
     if (response.data.success) {
       const parsedData = response.data.data.data.map(item => {
         try {

@@ -17,6 +17,7 @@ export const useFileMonitering = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isOperationInProgress, setIsOperationInProgress] = useState(false);
     const [isCanceled, setIsCanceled] = useState(false);
+    const [isFailed, setIsFailed] = useState(false);
     const [isPausing, setIsPausing] = useState(false);
     const [isCanceling, setIsCanceling] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
@@ -79,7 +80,7 @@ export const useFileMonitering = () => {
         }
         if (scanState === "in-progress" && !isCompleted) {
             const delayFetchLogs = setTimeout(() => {
-                fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setIsScanInProgress, setIsLogsVisible, setProgress, setRenderKey, setTrigerMoniteringDetails, setIsPaused, setIsCanceled, setOperationLoading, isLastLogIndex, setIsLastLogIndex);
+                fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setIsScanInProgress, setIsLogsVisible, setProgress, setRenderKey, setTrigerMoniteringDetails, setIsPaused, setIsCanceled, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setIsFailed);
             }, 4000);
 
             return () => clearTimeout(delayFetchLogs);
@@ -97,9 +98,10 @@ export const useFileMonitering = () => {
         setIsStarting(true);
         setScanCompleted(false);
         setScanErrorDismissed(false);
+        setIsFailed(false);
 
         try {
-            const scanSuccessful = await instantScanning(setScanCompleted, setStatusMessage, setIsDisabled, checkMonitoringStatus, () => fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setIsScanInProgress, setIsLogsVisible, setProgress, setRenderKey, setTrigerMoniteringDetails, setIsPaused, setIsCanceled, setOperationLoading, isLastLogIndex, setIsLastLogIndex), setIsMonitoring);
+            const scanSuccessful = await instantScanning(setScanCompleted, setStatusMessage, setIsDisabled, checkMonitoringStatus, () => fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setIsScanInProgress, setIsLogsVisible, setProgress, setRenderKey, setTrigerMoniteringDetails, setIsPaused, setIsCanceled, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setIsFailed), setIsMonitoring);
 
             if (!scanSuccessful) {
                 return;
@@ -154,7 +156,10 @@ export const useFileMonitering = () => {
                     setIsPaused(true);
                     setLogs((prevLogs) => [...prevLogs, "File monitering process paused by user"]);
                 }
+                return true;
             }
+            toast.error(response.data?.data?.message || "The file integrity scan could not be paused or canceled.");
+            return false;
         } catch (error) {
             console.error(`Error during ${scan_state === 'cancel' ? 'cancel' : 'pause'} backup action:`, error);
         }
@@ -165,7 +170,12 @@ export const useFileMonitering = () => {
             setOperationLoading(true);
         }
         setIsCanceling(true);
-        await handleMoniteringAction("cancel");
+        const accepted = await handleMoniteringAction("cancel");
+        if (accepted === false) {
+            setOperationLoading(false);
+            setIsCanceling(false);
+            return;
+        }
         setIsCanceled(true);
         setIsLogsVisible(false);
         setIsPaused(false);
@@ -176,9 +186,13 @@ export const useFileMonitering = () => {
     const handlePause = async () => {
         setOperationLoading(true);
         setIsPausing(true);
-        await handleMoniteringAction("pause");
+        const accepted = await handleMoniteringAction("pause");
+        if (accepted === false) {
+            setOperationLoading(false);
+            setIsPausing(false);
+            return;
+        }
         await checkMonitoringStatus();
-        // setLoading(true);
         setVerifyStatus(true);
         setIsPausing(false);
     };
@@ -233,7 +247,13 @@ export const useFileMonitering = () => {
                     setIsScanInProgress(false);
                 }
 
-                if (scan_state === 'pause' || message === 'File comparison was the pause.') {
+                // A first-time setup that stopped before it finished; Start carries it on.
+                if (scan_state === 'failed') {
+                    setIsScanInProgress(false);
+                    setIsFailed(true);
+                }
+
+                if (scan_state === 'pause' || message === 'File comparison was paused.' || message === 'File comparison was the pause.') {
                     setVerifyStatus(false);
                 } else {
                     setVerifyStatus(true);
@@ -252,7 +272,7 @@ export const useFileMonitering = () => {
                 console.error('Monitoring Details: no data exists');
             }
         } catch (error) {
-            if (error.response.data.data.code === 403) {
+            if (error.response?.data?.data?.code === 403) {
                 setIsLicenseConnect(true);
             } else {
                 console.error('Error fetching Monitoring Details:', error);
@@ -266,8 +286,8 @@ export const useFileMonitering = () => {
     };
 
     const checkIntegrityFileStatus = async () => {
-        if (isChecking.current) return; // Exit if already running
-        isChecking.current = true; // Set flag to true
+        if (isChecking.current) return;
+        isChecking.current = true;
         try {
             await refreshIntegrityStatus();
             setTrigerMoniteringDetails((prevKey) => prevKey + 1);
@@ -277,7 +297,7 @@ export const useFileMonitering = () => {
             setIsLicenseConnect(null);
             await checkMonitoringStatus();
         } finally {
-            isChecking.current = false; // Reset flag when done
+            isChecking.current = false;
         }
     };
 
@@ -285,6 +305,7 @@ export const useFileMonitering = () => {
         setLogs([]);
         setIsCanceled(false);
         setIsCanceling(false);
+        setIsFailed(false);
         setIsCompleted(false);
         setIsLogsVisible(false);
         setIsScanInProgress(false);
@@ -308,11 +329,13 @@ export const useFileMonitering = () => {
         checkMonitoringStatus();
     }, []);
 
+    // Failed is included because an auto-scheduled run keeps its details closed, and its
+    // "in progress" bar (the only way to open them) is hidden once the run has failed.
     useEffect(() => {
-        if (isCompleted) {
+        if (isCompleted || isFailed) {
             setShowDetails(true);
         }
-    }, [isScanInProgress, isCompleted]);
+    }, [isScanInProgress, isCompleted, isFailed]);
 
     return {
         isLoadingVisible, ismonitering, featureEnable, setFeatureEnable, parentEnable, setParentEnable, showFileMonteringLogs, trigerMoniteringDetails, loadingStrip, isCompleted, isCanceled, summaryData, isScannerEnabled, navigate, scanType, scanState, handleToggleDetails,
@@ -320,6 +343,6 @@ export const useFileMonitering = () => {
         isDisabled, resetAllStates, checkIntegrityFileStatus, isModalOpen, fetchLogs, setIsScanInProgress, setLogs, setIsCompleted, setProgress, setIsOperationInProgress, isComponentActive, setIsFetchingLogs,
         checkMonitoringStatus, setRenderKey, renderKey, setTrigerMoniteringDetails, setIsPaused, setIsCanceled, handleSummaryData, progress, progressBarColor, logs, setIsModalOpen, setOperationLoading, isOperationLoading, isLicenseConnect, setIsLicenseConnect, isLastLogIndex, setIsLastLogIndex,
         scanError, setScanError, scanErrorDismissed, setScanErrorDismissed,
-        scanProgress
+        scanProgress, isFailed, setIsFailed
     }
 }

@@ -18,7 +18,8 @@ use Tailwatch\Admin\App\Api\Traits\ContextAuthorizationTrait;
  * `current_user_can('manage_options')` before dispatch.
  *
  * Each public method also calls `is_authorized_request()` (provided by
- * ContextAuthorizationTrait) as defense in depth, re-verifying `manage_options`.
+ * ContextAuthorizationTrait) as defense in depth, re-verifying the capability the
+ * action needs (`delete_users` or `list_users`).
  */
 class UserDeletionController {
 
@@ -31,7 +32,7 @@ class UserDeletionController {
 	 */
 	public function tailwatch_delete_user( $post_data ) {
 		try {
-			if ( ! $this->is_authorized_request() ) {
+			if ( ! $this->is_authorized_request( 'delete_users' ) ) {
 				return $this->unauthorized_response();
 			}
 
@@ -40,7 +41,6 @@ class UserDeletionController {
 				require_once ABSPATH . 'wp-admin/includes/user.php';
 			}
 
-			// Parse and sanitize input
 			$json_data = isset( $post_data ) ? wp_unslash( $post_data ) : '';
 			$data      = json_decode( $json_data, true );
 
@@ -62,7 +62,6 @@ class UserDeletionController {
 				);
 			}
 
-			// Validate user_id
 			$user_id = isset( $data['user_id'] ) ? absint( $data['user_id'] ) : 0;
 
 			if ( empty( $user_id ) || $user_id <= 0 ) {
@@ -83,7 +82,6 @@ class UserDeletionController {
 				);
 			}
 
-			// Get user object to verify existence
 			$user = get_userdata( $user_id );
 
 			if ( ! $user ) {
@@ -329,7 +327,7 @@ class UserDeletionController {
 	 */
 	public function tailwatch_bulk_delete_users( $post_data ) {
 		try {
-			if ( ! $this->is_authorized_request() ) {
+			if ( ! $this->is_authorized_request( 'delete_users' ) ) {
 				return $this->unauthorized_response();
 			}
 
@@ -549,7 +547,7 @@ class UserDeletionController {
 	 */
 	public function tailwatch_get_user_content_summary( $post_data ) {
 		try {
-			if ( ! $this->is_authorized_request() ) {
+			if ( ! $this->is_authorized_request( 'list_users' ) ) {
 				return $this->unauthorized_response();
 			}
 

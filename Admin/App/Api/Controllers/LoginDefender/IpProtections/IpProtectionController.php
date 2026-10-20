@@ -214,18 +214,9 @@ class IpProtectionController extends BaseController {
 
 		$ip = GetIpServices::tailwatch_get_client_ip();
 
-		// This is for fix stop consider failed attempt on page reload
-		$method              = isset( $_SERVER['REQUEST_METHOD'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) : 'GET';
-		$request_uri         = isset( $_SERVER['REQUEST_URI'] ) ? esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
-		$reauth              = isset( $_GET['reauth'] ) && $_GET['reauth'] == 1; // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.NonceVerification.Recommended
-		$is_login_form       = strpos( $request_uri, 'wp-login.php' ) !== false;
-		$has_form_submission = ( $method === 'POST' ) && ( isset( $_POST['log'] ) || isset( $_POST['pwd'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.NonceVerification.Recommended
-
-		if ( $method !== 'POST' || ! $is_login_form || $reauth || ! $has_form_submission ) {
-			return;
-		}
-
-		if ( $this->is_logout_request() || $this->has_logged_attempt( $ip ) ) {
+		// wp-login.php, XML-RPC and custom login forms all fail through wp_login_failed;
+		// each request from a real client address is counted once.
+		if ( ! $this->is_client_ip( $ip ) || $this->has_logged_attempt( $ip ) ) {
 			return;
 		}
 
@@ -241,8 +232,14 @@ class IpProtectionController extends BaseController {
 			return;
 		}
 
+		// A failure that sent no username guessed no password: core reports a login page
+		// opened with an expired session cookie this way.
+		if ( '' === trim( (string) $username ) ) {
+			return;
+		}
+
 		// Count the attempt when IP is allowed via ip_activity check OR when IP management
-		// features are disabled (method='none'). Previously method='none' silently dropped attempts.
+		// features are disabled (method='none'), so a failed login is counted either way.
 		if ( in_array( $ip_blocked['method'], array( 'ip_activity', 'none' ), true ) ) {
 			$result = $this->log_failed_attempt( $ip, $username );
 			if ( $result && ! $result['is_blocked'] ) {
@@ -378,11 +375,7 @@ class IpProtectionController extends BaseController {
 	public function handle_authentication( $user, $username, $password ) {
 		$ip = GetIpServices::tailwatch_get_client_ip();
 
-		if ( ! filter_var( $ip, FILTER_VALIDATE_IP ) ) {
-			return $user;
-		}
-
-		if ( $this->is_logout_request() ) {
+		if ( ! $this->is_client_ip( $ip ) ) {
 			return $user;
 		}
 
@@ -409,10 +402,6 @@ class IpProtectionController extends BaseController {
 		// IP Management rules (blacklist, country) for logged-in admin users,
 		// even when brute-force protection is disabled. IpAccessService::check_access()
 		// handles the separation internally.
-
-		if ( $this->is_logout_request() ) {
-			return;
-		}
 
 		$ip         = GetIpServices::tailwatch_get_client_ip();
 		$ip_blocked = $this->is_blocked( $ip );
@@ -802,17 +791,16 @@ class IpProtectionController extends BaseController {
 		}
 	}
 
-	private function is_logout_request() {
-		$is_logout = (
-			( isset( $_GET['action'] ) && $_GET['action'] === 'logout' ) || // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.NonceVerification.Recommended
-			( isset( $_GET['loggedout'] ) && $_GET['loggedout'] == true ) || // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.NonceVerification.Recommended
-			( isset( $_POST['action'] ) && $_POST['action'] === 'logout' ) || // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.NonceVerification.Recommended
-			( isset( $_REQUEST['action'] ) && $_REQUEST['action'] === 'logout' ) || // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.NonceVerification.Recommended
-			false !== strpos( isset( $_SERVER['REQUEST_URI'] ) ? esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '', 'wp-login.php?action=logout' ) ||
-			false !== strpos( isset( $_SERVER['REQUEST_URI'] ) ? esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '', 'action=logout' )
-		);
-
-		return $is_logout;
+	/**
+	 * Whether an address is a real client. The IP helper answers 0.0.0.0 when a request has
+	 * no client address (the command line, cron); counting or blocking that would lock every such
+	 * request out together.
+	 *
+	 * @param string $ip Address.
+	 * @return bool
+	 */
+	private function is_client_ip( $ip ) {
+		return (bool) filter_var( $ip, FILTER_VALIDATE_IP ) && ! in_array( $ip, array( '0.0.0.0', '::' ), true );
 	}
 
 	private function has_logged_attempt( $ip ) {

@@ -20,12 +20,12 @@ const IpBasedProtection = ({ widget = false, limit = 10 }) => {
 
     return (
         <div>
-            {(parentEnable === false || isLicenseConnect === true) && (
+            {parentEnable === false && (
                 <LockCard
                     featureName="Login Defender"
-                    featureDescription="Protect your site from brute-force attacks with customizable rules based on usernames, IP addresses, and login behavior. Configure limits, block durations, and lockout scopes while maintaining full control over every login attempt."
+                    featureDescription="Protect your site from brute-force attacks by limiting failed logins from each IP address. Configure attempt limits and block durations while keeping full control over every login attempt."
                     featureId={bruteForceRule?.featureId}
-                    isLocked={bruteForceRule?.isLocked || isLicenseConnect === true}
+                    isLocked={bruteForceRule?.isLocked}
                     isActive={bruteForceRule?.isActiveState}
                     afterToggleCallback={checkBruteForceStatus}
                 />
@@ -40,7 +40,7 @@ const IpBasedProtection = ({ widget = false, limit = 10 }) => {
                 <LoaderSkeleton count="0" />
             ) : (
                 <>
-                {(featureEnable === false || parentEnable === false || isLicenseConnect === true) && (<InfoBar type="info" message={isLicenseConnect ? "License not connected. Please connect your license to use this feature." : "Please Configure your Settings First"}/>)}
+                {(featureEnable === false || parentEnable === false || isLicenseConnect === true) && (<InfoBar type="info" message={isLicenseConnect ? "You don't have permission to change these settings." : "Please Configure your Settings First"}/>)}
                     <GeoLicenseNotice isGeoLicense={isGeoLicense} />
 
                     <Table columns={columns} data={filteredData} renderRow={renderRow} noDataMessage={searchTerm ? `No IP details found matching "${searchTerm}"` : "No IP details available"} />

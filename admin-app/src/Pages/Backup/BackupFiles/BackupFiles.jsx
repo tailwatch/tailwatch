@@ -2,11 +2,14 @@ import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import LoaderSkeleton from "../../../Components/Skeleton/LoaderSkeleton.jsx";
 import BackupContent from "./BackupContent/BackupContent.jsx";
-import { deleteBackupFolder, fetchBackupFiles } from '../../Backup/BackupServices/BackupServices.jsx';
+import { BACKUP_LIST_STALE_EVENT, deleteBackupFolder, fetchBackupFiles } from '../../Backup/BackupServices/BackupServices.jsx';
 import Pagination from "../../../Components/Pagination/Pagination.jsx";
 /* global tailwatch_ajax */
 
-const BackupFiles = ({ setErrorMessages,backupStatus}) => {    
+// `checkBackupStatus` is handed down rather than used here: the settings panel that the
+// table can open belongs to the same feature the whole module reads, so closing it has to
+// refresh the module and not just the table.
+const BackupFiles = ({ setErrorMessages, backupStatus, checkBackupStatus }) => {
   const [activeTab, setActiveTab] = useState("Files");
   const [backupFiles, setBackupFiles] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);  
@@ -29,6 +32,18 @@ const BackupFiles = ({ setErrorMessages,backupStatus}) => {
   useEffect(() => {    
       loadBackupFiles();    
   }, [activeTab, currentPage, pageSize]);
+
+  // A cancel happens on the other screen and takes a folder out from under this one. It is
+  // listened for rather than polled, because it fires on the one action that invalidates
+  // the list.
+  useEffect(() => {
+    const reload = () => {
+      loadBackupFiles();
+    };
+    window.addEventListener(BACKUP_LIST_STALE_EVENT, reload);
+    return () => window.removeEventListener(BACKUP_LIST_STALE_EVENT, reload);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, pageSize]);
 
   const loadBackupFiles = async () => {
     setLoading(true);
@@ -69,7 +84,7 @@ const BackupFiles = ({ setErrorMessages,backupStatus}) => {
   const renderTabContent = () => {
     return (
       <div>        
-        <BackupContent activeTab={activeTab} backupStatus={backupStatus} currentPageData={backupFiles} handleDelete={handleDelete} deletingFileId={deletingFileId} />
+        <BackupContent activeTab={activeTab} backupStatus={backupStatus} currentPageData={backupFiles} handleDelete={handleDelete} deletingFileId={deletingFileId} onRestoreFinished={loadBackupFiles} checkBackupStatus={checkBackupStatus} />
       </div>
     );
   };

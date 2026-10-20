@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import Header from "../../Components/Header/Header";
 import TableTabs from "../../Components/TableTabs/TableTabs.jsx";
-import LicenseTab from "./LicenseTab/LicenseTab.jsx";
 import SystemSettings from "./SystemSettings/SystemSettings.jsx";
 import { useNavigate, useLocation } from "react-router-dom";
 import LoadingBar from 'react-top-loading-bar';
@@ -35,10 +34,7 @@ const Settings = () => {
   useEffect(() => {
     const currentPath = location.pathname.split('/').pop();
 
-    if (currentPath === "license" && activeTab !== "license") {
-      setActiveTab("license");
-    }
-    else if (currentPath === "general" && activeTab !== "general") {
+    if (currentPath === "general" && activeTab !== "general") {
       setActiveTab("general");
     }
     else if (currentPath === "system" && activeTab !== "system") {
@@ -47,7 +43,7 @@ const Settings = () => {
     else if (currentPath === "integration" && activeTab !== "integration") {
       setActiveTab("integration");
     }
-    else if (currentPath !== "general" && currentPath !== "license" && currentPath !== "system" && currentPath !== "integration") {
+    else if (currentPath !== "general" && currentPath !== "system" && currentPath !== "integration") {
       setActiveTab("general");
       navigate("/dashboard/settings/general", { replace: true });
     }
@@ -68,7 +64,6 @@ const Settings = () => {
 
   const tabs = [
     { key: 'general', label: 'General Settings' },
-    { key: 'license', label: 'License' },
     { key: 'integration', label: 'Integrations' },
     { key: 'system', label: 'System Settings' },
   ];
@@ -81,9 +76,6 @@ const Settings = () => {
         <div>
           {activeTab === 'general' && (
             <GeneralTab activeTab={activeTab} isRunning={isRunning} setIsRunning={setIsRunning} setIsInitializing={setIsInitializing} />
-          )}
-          {activeTab === "license" && (
-            <LicenseTab activeTab={activeTab} loading={loading} setLoading={setLoading} />
           )}
           {activeTab === "integration" && (
             <IntegrationTab />

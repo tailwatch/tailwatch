@@ -1,3 +1,4 @@
+import { readFeatureGate } from '../../../Components/Utils/featureGate';
 import axios from "axios";
 import { toast } from 'react-toastify';
 import { alertService } from "../../../Components/AlertService/AlertService";
@@ -15,6 +16,10 @@ export const getCronJobLists = async ({ setCronJobData, setLoading, page = 1, li
         const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
+        // A reply the gate let through is proof both switches are on. Read from every
+        // response, not only refusals, so these flags cannot latch to false and stay there.
+        readFeatureGate(response, setFeatureEnable, setParentEnable);
+
 
         if (response.data.data.code === 200) {
             setCronJobData(response.data.data.data);
@@ -50,6 +55,10 @@ export const getSheduleCron = async ({ setScheduleCronData, setLoading, page = 1
         const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
+        // A reply the gate let through is proof both switches are on. Read from every
+        // response, not only refusals, so these flags cannot latch to false and stay there.
+        readFeatureGate(response, setFeatureEnable, setParentEnable);
+
         if (response.data.data.code === 200) {
             setScheduleCronData(response.data.data.data);
             if (setPagination && response.data.data.pagination) {
@@ -334,6 +343,10 @@ export const fetchLogsCron = async ({ setLoading, setLogsData, page = 1, limit =
     const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
+    // A reply the gate let through is proof both switches are on. Read from every
+    // response, not only refusals, so these flags cannot latch to false and stay there.
+    readFeatureGate(response, setFeatureEnable, setParentEnable);
+
     if (response.data.success) {
       const parsedData = response.data.data.data.map(item => {
         try {

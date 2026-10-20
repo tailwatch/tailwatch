@@ -6,6 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use Tailwatch\Admin\App\Api\Logging\Log;
+use Tailwatch\Admin\App\Api\Services\Login\PasswordlessAccountGuard;
 use Tailwatch\Admin\App\Api\Traits\ContextAuthorizationTrait;
 
 /**
@@ -18,7 +19,8 @@ use Tailwatch\Admin\App\Api\Traits\ContextAuthorizationTrait;
  * `current_user_can('manage_options')` before dispatch.
  *
  * Each public method also calls `is_authorized_request()` (provided by
- * ContextAuthorizationTrait) as defense in depth, re-verifying `manage_options`.
+ * ContextAuthorizationTrait) as defense in depth, re-verifying the capability the
+ * action needs (`create_users`, `edit_users` or `promote_users`).
  */
 class UserModificationController {
 
@@ -75,7 +77,7 @@ class UserModificationController {
 	 */
 	public function tailwatch_create_user( $post_data ) {
 		try {
-			if ( ! $this->is_authorized_request() ) {
+			if ( ! $this->is_authorized_request( 'create_users' ) ) {
 				return $this->unauthorized_response();
 			}
 
@@ -84,7 +86,6 @@ class UserModificationController {
 				return $this->unauthorized_response();
 			}
 
-			// Parse and sanitize input
 			$json_data = isset( $post_data ) ? wp_unslash( $post_data ) : '';
 			$data      = json_decode( $json_data, true );
 
@@ -106,11 +107,10 @@ class UserModificationController {
 				);
 			}
 
-			// Validate required fields
 			$username = isset( $data['username'] ) ? sanitize_user( $data['username'] ) : '';
 			$email    = isset( $data['email'] ) ? sanitize_email( $data['email'] ) : '';
 			$password = isset( $data['password'] ) ? $data['password'] : '';
-			$role     = isset( $data['role'] ) ? sanitize_text_field( wp_unslash( $data['role'] ) ) : 'subscriber';
+			$role     = isset( $data['role'] ) ? sanitize_text_field( wp_unslash( $data['role'] ) ) : (string) get_option( 'default_role', 'subscriber' );
 
 			// Validation checks
 			if ( empty( $username ) ) {
@@ -137,7 +137,6 @@ class UserModificationController {
 				);
 			}
 
-			// Validate email format
 			if ( ! is_email( $email ) ) {
 				Log::error(
 					'User creation failed: Invalid email format.',
@@ -156,7 +155,6 @@ class UserModificationController {
 				);
 			}
 
-			// Check if username already exists
 			if ( username_exists( $username ) ) {
 				Log::error(
 					'User creation failed: Username already exists.',
@@ -175,7 +173,6 @@ class UserModificationController {
 				);
 			}
 
-			// Check if email already exists
 			if ( email_exists( $email ) ) {
 				Log::error(
 					'User creation failed: Email already exists.',
@@ -195,11 +192,17 @@ class UserModificationController {
 			}
 
 			// get_editable_roles() respects the editable_roles filter (multisite admin-hiding)
-			// and constrains which roles may be assigned. The request is already behind the
-			// router's manage_options gate, so role assignment is validated against
-			// get_editable_roles() below rather than a separate promote_users check.
+			// and constrains which roles may be assigned. As on core's New User screen, only
+			// a user who may promote users chooses a role other than the site default.
 			if ( ! function_exists( 'get_editable_roles' ) ) {
 				require_once ABSPATH . 'wp-admin/includes/user.php';
+			}
+			if ( get_option( 'default_role' ) !== $role && ! current_user_can( 'promote_users' ) ) {
+				return array(
+					'success' => false,
+					'code'    => 403,
+					'message' => __( 'You are not allowed to give users this role.', 'tailwatch' ),
+				);
 			}
 			$editable_roles = get_editable_roles();
 			if ( ! array_key_exists( $role, $editable_roles ) ) {
@@ -220,7 +223,6 @@ class UserModificationController {
 				);
 			}
 
-			// Prepare user data.
 			$userdata = array(
 				'user_login' => $username,
 				'user_email' => $email,
@@ -255,7 +257,6 @@ class UserModificationController {
 
 			$user_id = wp_insert_user( $userdata );
 
-			// Check for errors
 			if ( is_wp_error( $user_id ) ) {
 				Log::error(
 					'User creation failed: ' . $user_id->get_error_message(),
@@ -278,7 +279,6 @@ class UserModificationController {
 				);
 			}
 
-			// Handle user meta if provided.
 			$this->apply_safe_user_meta( $user_id, $data['meta'] ?? null );
 
 			Log::info(
@@ -338,11 +338,10 @@ class UserModificationController {
 	 */
 	public function tailwatch_update_user( $post_data ) {
 		try {
-			if ( ! $this->is_authorized_request() ) {
+			if ( ! $this->is_authorized_request( 'edit_users' ) ) {
 				return $this->unauthorized_response();
 			}
 
-			// Parse and sanitize input
 			$json_data = isset( $post_data ) ? wp_unslash( $post_data ) : '';
 			$data      = json_decode( $json_data, true );
 
@@ -364,7 +363,6 @@ class UserModificationController {
 				);
 			}
 
-			// Validate user_id.
 			$user_id = isset( $data['user_id'] ) ? absint( $data['user_id'] ) : 0;
 
 			if ( empty( $user_id ) || $user_id <= 0 ) {
@@ -409,7 +407,6 @@ class UserModificationController {
 			$userdata     = array( 'ID' => $user_id );
 			$updates_made = array();
 
-			// Update email if provided.
 			if ( isset( $data['email'] ) ) {
 				$new_email = sanitize_email( $data['email'] );
 
@@ -530,7 +527,6 @@ class UserModificationController {
 				);
 			}
 
-			// Update user meta if provided.
 			$applied_meta_keys = $this->apply_safe_user_meta( $user_id, $data['meta'] ?? null );
 			foreach ( $applied_meta_keys as $applied_key ) {
 				$updates_made[] = sprintf(
@@ -588,7 +584,7 @@ class UserModificationController {
 	 */
 	public function tailwatch_change_user_role( $post_data ) {
 		try {
-			if ( ! $this->is_authorized_request() ) {
+			if ( ! $this->is_authorized_request( 'promote_users' ) ) {
 				return $this->unauthorized_response();
 			}
 
@@ -685,6 +681,35 @@ class UserModificationController {
 	}
 
 	/**
+	 * How many administrators can sign in with a password: temporary logins carry the
+	 * administrator role but expire and sign in only through their link.
+	 *
+	 * @return int
+	 */
+	private function tailwatch_real_admin_count() {
+		return count(
+			get_users(
+				array(
+					'role'       => 'administrator',
+					'fields'     => 'ID',
+					'meta_query' => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Admin-only action; bounded result set.
+						'relation' => 'OR',
+						array(
+							'key'     => '_tailwatch_user_status',
+							'compare' => 'NOT EXISTS',
+						),
+						array(
+							'key'     => '_tailwatch_user_status',
+							'value'   => 'without_password',
+							'compare' => '!=',
+						),
+					),
+				)
+			)
+		);
+	}
+
+	/**
 	 * Update user status (e.g. without_password)
 	 *
 	 * @param string $post_data JSON string containing user_id and status
@@ -692,8 +717,17 @@ class UserModificationController {
 	 */
 	public function tailwatch_update_user_status( $post_data ) {
 		try {
-			if ( ! $this->is_authorized_request() ) {
+			if ( ! $this->is_authorized_request( 'edit_users' ) ) {
 				return $this->unauthorized_response();
+			}
+
+			// A temporary login may not change how anyone else signs in.
+			if ( PasswordlessAccountGuard::is_passwordless( get_current_user_id() ) ) {
+				return array(
+					'success' => false,
+					'code'    => 403,
+					'message' => __( 'A temporary login cannot change account status.', 'tailwatch' ),
+				);
 			}
 
 			$json_data = isset( $post_data ) ? wp_unslash( $post_data ) : '';
@@ -756,6 +790,19 @@ class UserModificationController {
 				);
 			}
 
+			// A passwordless account signs in only through a temporary-login link, so the site
+			// must keep at least one administrator who can sign in with a password.
+			if ( 'without_password' === $status
+				&& in_array( 'administrator', (array) get_userdata( $user_id )->roles, true )
+				&& ! PasswordlessAccountGuard::is_passwordless( $user_id )
+				&& $this->tailwatch_real_admin_count() <= 1 ) {
+				return array(
+					'success' => false,
+					'code'    => 403,
+					'message' => __( 'This would leave no administrator able to sign in.', 'tailwatch' ),
+				);
+			}
+
 			if ( ! empty( $status ) ) {
 				update_user_meta( $user_id, '_tailwatch_user_status', $status );
 			} else {
@@ -807,6 +854,21 @@ class UserModificationController {
 	 * @return true|array True on success, error response array on failure.
 	 */
 	private function validate_role_change( $user, $new_role ) {
+		$current_roles = (array) $user->roles;
+		// "No change" = the user already has exactly this single role. Mirrors WP core behavior:
+		// the user-edit screen hides the role dropdown for self, but wp_update_user() doesn't
+		// reject a no-op role payload — only an actual change to your own role is blocked.
+		$is_no_op = ( 1 === count( $current_roles ) ) && in_array( $new_role, $current_roles, true );
+
+		// Changing a role is promoting, which core checks separately from editing.
+		if ( ! $is_no_op && ! current_user_can( 'promote_user', $user->ID ) ) {
+			return array(
+				'success' => false,
+				'code'    => 403,
+				'message' => __( 'You are not allowed to change this user\'s role.', 'tailwatch' ),
+			);
+		}
+
 		// get_editable_roles() respects the editable_roles filter (multisite admin-hiding).
 		if ( ! function_exists( 'get_editable_roles' ) ) {
 			require_once ABSPATH . 'wp-admin/includes/user.php';
@@ -819,12 +881,6 @@ class UserModificationController {
 				'message' => __( 'Invalid role.', 'tailwatch' ),
 			);
 		}
-
-		$current_roles = (array) $user->roles;
-		// "No change" = the user already has exactly this single role. Mirrors WP core behavior:
-		// the user-edit screen hides the role dropdown for self, but wp_update_user() doesn't
-		// reject a no-op role payload — only an actual change to your own role is blocked.
-		$is_no_op = ( 1 === count( $current_roles ) ) && in_array( $new_role, $current_roles, true );
 
 		// Self-role-change guard. get_current_user_id() returns 0 when there is no logged-in
 		// user (e.g. a cron/CLI context) — comparing against a positive $user->ID is

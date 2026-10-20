@@ -36,7 +36,7 @@ const BlackListContent = ({inActive, refreshTrigger, widget = false, limit = 10,
                 <div className='space-y-4'>
                     {/* Existing Info Bar */}
                     {(featureEnable === false || parentEnable === false || inActive) && (
-                        <InfoBar type="info" message={isLicenseConnect ? "License not connected. Please connect your license to use this feature." : "Please Configure your Settings First"} />
+                        <InfoBar type="info" message={isLicenseConnect ? "You don't have permission to change these settings." : "Please Configure your Settings First"} />
                     )}
 
                     <GeoLicenseNotice isGeoLicense={isGeoLicense} />

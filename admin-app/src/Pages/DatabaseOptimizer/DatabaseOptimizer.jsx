@@ -20,7 +20,7 @@ const DatabaseOptimizer = () => {
     setIsLogsVisible, isLogsVisible, isScanInProgress, isStarting, isOperationInProgress, handleResumeOptimize, handleCancelOptimize, handlePauseOptimize, isPaused, isPausing, verifyStatus, isCanceling, resetAllStates, processType,
     checkDatabaseStatus, setIsScanInProgress, setLogs, setIsCompleted, setProgress, setIsOperationInProgress, isComponentActive, fetchLogs, setRenderKey, setIsFetchingLogs, verifyDatabaseStatus,
     progress, progressBarColor, parentEnable, setParentEnable, setFeatureEnable, logs, setIsModalOpen, setIsPaused, setIsCanceled, renderKey, isModalOpen, setIsPausing, featureEnable, setOperationLoading, isOperationLoading, checkTableStatus, isLastLogIndex, setIsLastLogIndex,
-    optimizerStatus, optimizerStatusLoading
+    optimizerStatus, optimizerStatusLoading, isFailed, setIsFailed
   } = useDatabaseOptimizer();
 
   const loadingBarRef = useRef(null);
@@ -56,7 +56,7 @@ const DatabaseOptimizer = () => {
             <SkeletonButton />
           ) : (
             <>
-              {scanType === "automatically" && !isCompleted && scanState !== "pause" && !isCanceled && (
+              {scanType === "automatically" && !isCompleted && !isFailed && scanState !== "pause" && !isCanceled && (
                 <InfoBar type="progress"
                   message={<> Database Optimization is in progress by ' Auto Schedule '. <button onClick={handleToggleDetails} className="text-blue-500 underline ml-2"> {showDetails ? "Hide" : "View "} </button> &nbsp; you can also View, Cancel, and Pause the process by clicking on the View Link. </>}
                 />
@@ -69,10 +69,10 @@ const DatabaseOptimizer = () => {
                 <>
                   <DatabaseActions checkTableStatus={checkTableStatus} handleInstantScan={handleInstantScan} featureEnable={featureEnable} isPaused={isPaused} isCompleted={isCompleted} toggleLogs={() => setIsLogsVisible(!isLogsVisible)} isLogsVisible={isLogsVisible}
                     isScanInProgress={isScanInProgress} isStarting={isStarting} isOperationInProgress={isOperationInProgress} isCanceled={isCanceled} handleResumeOptimize={handleResumeOptimize} handleCancelOptimize={handleCancelOptimize}
-                    handlePauseOptimize={handlePauseOptimize} isPausing={isPausing} verifyStatus={verifyStatus} isCanceling={isCanceling} resetAllStates={resetAllStates} processType={processType} checkDatabaseStatus={checkDatabaseStatus}
+                    handlePauseOptimize={handlePauseOptimize} isPausing={isPausing} verifyStatus={verifyStatus} isCanceling={isCanceling} resetAllStates={resetAllStates} processType={processType} checkDatabaseStatus={checkDatabaseStatus} isFailed={isFailed}
                   />
                   {(isScanInProgress || isPaused || !verifyStatus) && !isCanceled && scanType !== "automatically" && processType !== 'db_backup' && (<ProgresBar progress={progress} bgColor={progressBarColor} />)}
-                  <LogsScreen isCanceled={isCanceled} logs={logs} setLogs={setLogs} isPaused={isPaused} isLogsVisible={isLogsVisible} isCompleted={isCompleted} cancelMessage="The database optimization process has been canceled." successMessage="Database Optimized completed successfully!" />
+                  <LogsScreen isCanceled={isCanceled || isFailed} logs={logs} setLogs={setLogs} isPaused={isPaused} isLogsVisible={isLogsVisible} isCompleted={isCompleted} cancelMessage={isFailed ? "Database optimization stopped because of an error before it finished." : "The database optimization process has been canceled."} successMessage="Database Optimized completed successfully!" />
                 </>
               )}
             </>
@@ -80,11 +80,11 @@ const DatabaseOptimizer = () => {
         </div>
         <ResumeModal isLastLogIndex={isLastLogIndex} setIsLastLogIndex={setIsLastLogIndex} isOpen={isModalOpen} setOperationLoading={setOperationLoading} onClose={() => setIsModalOpen(false)} fetchLogs={fetchLogs} setIsScanInProgress={setIsScanInProgress} setLogs={setLogs} setIsCompleted={setIsCompleted} setProgress={setProgress}
           handleCancelOptimize={handleCancelOptimize} setIsOperationInProgress={setIsOperationInProgress} isComponentActive={isComponentActive} isCanceled={isCanceled} setIsLogsVisible={setIsLogsVisible} setRenderKey={setRenderKey}
-          setIsFetchingLogs={setIsFetchingLogs} verifyDatabaseOptimizeStatus={verifyDatabaseStatus} setIsPausing={setIsPausing} setIsPaused={setIsPaused} setIsCanceled={setIsCanceled}
+          setIsFetchingLogs={setIsFetchingLogs} verifyDatabaseOptimizeStatus={verifyDatabaseStatus} setIsPausing={setIsPausing} setIsPaused={setIsPaused} setIsCanceled={setIsCanceled} setIsFailed={setIsFailed}
         />
         {parentEnable === false && (<LockCard
           featureName="Database Optimizer"
-          featureDescription="Easily change your WordPress database table prefix in seconds to prevent automated SQL injection attacks."
+          featureDescription="Remove unnecessary data such as orphaned metadata, trashed items, expired transients and log entries, on a schedule."
           featureId={enableDatabase?.featureId} isActive={enableDatabase?.isActiveState} afterToggleCallback={checkDatabaseStatus} />)}
         <div>
           <DatabaseTables checkTableStatus={checkTableStatus} key={renderKey} steps={optimizerStatus?.steps} licenseConnected={optimizerStatus?.licenseConnected} proPluginActive={optimizerStatus?.proPluginActive} currentPlan={optimizerStatus?.currentPlan} loading={optimizerStatusLoading} />

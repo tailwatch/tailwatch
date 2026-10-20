@@ -68,7 +68,7 @@ const UserRestrictionModal = ({ show, handleClose, user, onSave, fetchUserDataSe
                 fetchUserDataSet();
                 success = true;
             } else {
-                toast.error(response.message || "Failed to update user restrictions.");
+                toast.error(response?.data?.message || response?.message || "Failed to update user restrictions.");
             }
             setLoading(false);
         } catch (error) {
@@ -171,7 +171,7 @@ const UserRestrictionModal = ({ show, handleClose, user, onSave, fetchUserDataSe
                     <div>
                     <label className="flex items-center mb-1 text-sm font-medium text-gray-700">
                     <UserX className="mr-1.5 w-4 h-4 text-gray-500" />Max Login Limit</label>
-                    <InputField label="Enter Max Login Limit" id="max_login_limit" type="number" disabled={!loginEnable} inputProps={{...register("max_login_limit", { required: "Maximum login limit is required", min: { value: 1, message: "Must be at least 1" }, max: { value: 1000, message: "Cannot exceed 100" }, valueAsNumber: true, })}} className={`!w-full !border !rounded-lg !p-2 !mt-1 ${errors.user_last_name ? "border-red-500" : "border-gray-300"}`}  />                                                            
+                    <InputField label="Enter Max Login Limit" id="max_login_limit" type="number" disabled={!loginEnable} inputProps={{...register("max_login_limit", { required: "Maximum login limit is required", min: { value: 1, message: "Must be at least 1" }, max: { value: 1000, message: "Cannot exceed 1000" }, valueAsNumber: true, })}} className={`!w-full !border !rounded-lg !p-2 !mt-1 ${errors.user_last_name ? "border-red-500" : "border-gray-300"}`}  />                                                            
                     {errors.max_login_limit && (
                         <p className="text-red-500 text-sm">{errors.max_login_limit.message}</p>
                     )}

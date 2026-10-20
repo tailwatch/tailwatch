@@ -9,8 +9,9 @@
  *
  *   - the action -> controller/method map (get_route_for_action),
  *   - the type-aware request-payload sanitizer (sanitize_request_payload),
- *   - the execution pipeline: pro plan-gate filter -> route -> pro-route
- *     fallback filter -> feature-enabled check -> controller call.
+ *   - the execution pipeline: route -> (for an action it does not route) the
+ *     add-on's refusal filter and route fallback -> feature-enabled check ->
+ *     controller call.
  *
  * dispatch() returns a neutral { success, payload } result so each caller can
  * format it in its own envelope (wp_send_json_* for AJAX, WP_REST_Response for
@@ -27,8 +28,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use Tailwatch\Admin\App\Api\Controllers\Logs\DeleteLogs;
+use Tailwatch\Admin\App\Api\Services\NetworkActionGate;
 use Tailwatch\Admin\App\Api\Controllers\Logs\GetLogs;
 use Tailwatch\Admin\App\Api\Controllers\Dashboard\DashboardController;
+use Tailwatch\Admin\App\Api\Controllers\Dashboard\DashboardBannerController;
 use Tailwatch\Admin\App\Api\Controllers\Features\FeaturesController;
 use Tailwatch\Admin\App\Api\Controllers\Visit\VisitController;
 use Tailwatch\Admin\App\Api\Controllers\Visit\RecommendedFeaturesController;
@@ -53,6 +56,8 @@ use Tailwatch\Admin\App\Api\Controllers\Settings\Reset\ResetByFeatureOptionContr
 use Tailwatch\Admin\App\Api\Controllers\Settings\Reset\ResetAllFeatureController;
 use Tailwatch\Admin\App\Api\Controllers\Settings\SettingsController;
 use Tailwatch\Admin\App\Api\Controllers\Backup\BackupController;
+use Tailwatch\Admin\App\Api\Controllers\Migration\MigrationManualController;
+use Tailwatch\Admin\App\Api\Controllers\Restore\RestoreController;
 use Tailwatch\Admin\App\Api\Controllers\Backup\BackupMaintainController;
 use Tailwatch\Admin\App\Api\Controllers\Database\DBOptimizer\DatabaseOptimizerController;
 use Tailwatch\Admin\App\Api\Controllers\Database\DBOptimizer\GetTablesOptimizerController;
@@ -76,7 +81,6 @@ use Tailwatch\Admin\App\Api\Controllers\Features\BulkFeatureActivationController
 use Tailwatch\Admin\App\Api\Controllers\IpManagement\BlackList\IpBlackListController;
 use Tailwatch\Admin\App\Api\Controllers\IpManagement\IpManagementController;
 use Tailwatch\Admin\App\Api\Controllers\IpManagement\WhiteList\IpWhiteListController;
-use Tailwatch\Admin\App\Api\Controllers\IpManagement\WhiteList\CountryWhiteListController;
 use Tailwatch\Admin\App\Api\Controllers\LoginDefender\IpProtections\IpProtectionController;
 use Tailwatch\Admin\App\Api\Controllers\Logs\FeatureCounts\IpManagementLogCount;
 use Tailwatch\Admin\App\Api\Controllers\Logs\FeatureCounts\LoginDefenderLogCount;
@@ -100,47 +104,38 @@ class ActionDispatcher {
 	 * @return array{success:bool,payload:mixed}
 	 */
 	public function dispatch( $action_type, $post_data ) {
-		// Allow the pro plugin to verify plan access before executing any route.
-		// Pro plugin hooks in via LicenseFeatureController and uses CallAccessVerifyController.
-		// Default null = allow. Array with status => false = deny with 402.
-		$access_check = apply_filters( 'tailwatch_verify_ajax_action', null, $action_type );
-		if ( is_array( $access_check ) && false === ( $access_check['status'] ?? true ) ) {
-			// Derive the suggested frontend action from the specific reason
-			// code returned by the access check. Suspended licenses must NOT
-			// show "Upgrade your plan" — the user already has the plan, they
-			// need to reactivate. Plan-insufficient still maps to upgrade.
-			// Missing license maps to connect. Default keeps backward compat
-			// for any future code we don't recognise here.
-			$reason_code = $access_check['code'] ?? '';
-			switch ( $reason_code ) {
-				case 'license_suspended':
-					$frontend_action = 'reactivate_required';
-					break;
-				case 'license_required':
-					$frontend_action = 'connect_license';
-					break;
-				case 'insufficient_plan':
-				default:
-					$frontend_action = 'upgrade_required';
-					break;
-			}
-
+		// An action that acts on the whole network needs a network administrator, and that
+		// has to be decided HERE — this method is where both front doors meet. A check in
+		// the AJAX handler alone would miss the connect plane, where a token bound to a
+		// subsite administrator (`manage_options` is per-site, and every subsite
+		// administrator holds it) could run the install-wide actions the same person is
+		// refused in wp-admin. The AJAX handler keeps its own check so a refusal there
+		// still reads in that plane's own vocabulary.
+		if ( ! NetworkActionGate::allows( $action_type ) ) {
 			return array(
 				'success' => false,
 				'payload' => array(
-					'code'    => 402,
-					'message' => $access_check['message'] ?? __( 'Access denied.', 'tailwatch' ),
-					'role'    => $access_check['role'] ?? null,
-					'reason'  => $reason_code,
-					'action'  => $frontend_action,
+					'code'    => 403,
+					'message' => __( 'This action affects the whole network and requires a network administrator.', 'tailwatch' ),
 				),
 			);
 		}
 
-		// Get controller and method based on action type.
+		// An admin API request gets the memory an admin page gets. Core raises the limit
+		// for wp-admin/admin.php and wp-cron.php and for nothing else, so without this every
+		// AJAX and REST request - every status and log poll, every start - would run at the
+		// raw limit. A limit saved lower than this is raised too; a higher one stands.
+		( new PerformanceOptimizerController() )->tailwatch_raise_memory_limit( 'admin' );
+
 		$route = $this->get_route_for_action( $action_type );
 
 		if ( null === $route ) {
+			// An action this plugin does not route belongs to an add-on, which may refuse it.
+			$refusal = $this->addon_refusal( $action_type );
+			if ( null !== $refusal ) {
+				return $refusal;
+			}
+
 			// Allow the premium plugin to handle routes it owns before returning an error.
 			$premium_response = apply_filters( 'tailwatch_handle_premium_ajax_routes', null, $action_type, $post_data );
 
@@ -179,7 +174,6 @@ class ActionDispatcher {
 		$controller = $route['controller'];
 		$method     = $route['method'];
 
-		// Ensure the method exists.
 		if ( ! method_exists( $controller, $method ) ) {
 			return array(
 				'success' => false,
@@ -204,13 +198,52 @@ class ActionDispatcher {
 			}
 		}
 
-		// Call the method and pass the data.
 		$response = $controller->$method( $post_data );
 
 		$success = isset( $response['code'] ) && 200 === $response['code'];
 		return array(
 			'success' => $success,
 			'payload' => $response,
+		);
+	}
+
+	/**
+	 * An add-on's refusal of one of its own actions, carried as a 402, or null to go on.
+	 *
+	 * The screen offers the step that fits the add-on's reason: reactivate, connect or
+	 * upgrade.
+	 *
+	 * @param string $action_type Action identifier this plugin does not route.
+	 * @return array|null
+	 */
+	private function addon_refusal( $action_type ) {
+		$access_check = apply_filters( 'tailwatch_verify_ajax_action', null, $action_type );
+		if ( ! is_array( $access_check ) || false !== ( $access_check['status'] ?? true ) ) {
+			return null;
+		}
+
+		$reason_code = $access_check['code'] ?? '';
+		switch ( $reason_code ) {
+			case 'license_suspended':
+				$frontend_action = 'reactivate_required';
+				break;
+			case 'license_required':
+				$frontend_action = 'connect_license';
+				break;
+			default:
+				$frontend_action = 'upgrade_required';
+				break;
+		}
+
+		return array(
+			'success' => false,
+			'payload' => array(
+				'code'    => 402,
+				'message' => $access_check['message'] ?? __( 'Access denied.', 'tailwatch' ),
+				'role'    => $access_check['role'] ?? null,
+				'reason'  => $reason_code,
+				'action'  => $frontend_action,
+			),
 		);
 	}
 
@@ -333,7 +366,6 @@ class ActionDispatcher {
 	 * @return array|null Array with 'controller' and 'method' keys, or null if not found.
 	 */
 	private function get_route_for_action( $action_type ) {
-		// Define all routes in a structured way.
 		$routes = array(
 			// Features Controller.
 			'tailwatch_get_feature'                          => array(
@@ -626,6 +658,10 @@ class ActionDispatcher {
 				'controller' => new DashboardController(),
 				'method'     => 'tailwatch_dashboard_logs_count',
 			),
+			'tailwatch_dismiss_connect_banner'            => array(
+				'controller' => new DashboardBannerController(),
+				'method'     => 'tailwatch_dismiss_connect_banner',
+			),
 			'tailwatch_dashboard_features'                   => array(
 				'controller' => new DashboardController(),
 				'method'     => 'tailwatch_dashboard_features',
@@ -692,6 +728,71 @@ class ActionDispatcher {
 			'tailwatch_verify_import_and_reset_status'       => array(
 				'controller' => new SettingsController(),
 				'method'     => 'tailwatch_verify_import_and_reset_status',
+			),
+
+			// Restore. Destructive: see RemoteActionAllowlist::DESTRUCTIVE_ACTIONS.
+			'tailwatch_start_restore'                        => array(
+				'controller' => new RestoreController(),
+				'method'     => 'tailwatch_start_restore',
+			),
+			'tailwatch_restore_status'                       => array(
+				'controller' => new RestoreController(),
+				'method'     => 'tailwatch_restore_status',
+			),
+
+			// The running commentary. Read-only, and reachable while the feature is off
+			// for the same reason status is: watching a restore is how you get out of one.
+			'tailwatch_restore_logs'                         => array(
+				'controller' => new RestoreController(),
+				'method'     => 'tailwatch_restore_logs',
+			),
+			'tailwatch_resume_restore_if_stalled'            => array(
+				'controller' => new RestoreController(),
+				'method'     => 'tailwatch_resume_restore_if_stalled',
+			),
+			// Manual migration: export a packing list here, carry the parts by hand, and
+			// upload them on the other site. The only route that works when the two sites
+			// cannot reach each other.
+			'tailwatch_export_migration_manifest'            => array(
+				'controller' => new MigrationManualController(),
+				'method'     => 'tailwatch_export_migration_manifest',
+			),
+			'tailwatch_begin_manual_import'                  => array(
+				'controller' => new MigrationManualController(),
+				'method'     => 'tailwatch_begin_manual_import',
+			),
+			'tailwatch_upload_migration_chunk'               => array(
+				'controller' => new MigrationManualController(),
+				'method'     => 'tailwatch_upload_migration_chunk',
+			),
+			// Read-only, and reachable while migration is switched off: watching a
+			// half-finished import is how an operator decides what to do about it.
+			'tailwatch_migration_logs'                       => array(
+				'controller' => new MigrationManualController(),
+				'method'     => 'tailwatch_migration_logs',
+			),
+
+			'tailwatch_manual_import_status'                 => array(
+				'controller' => new MigrationManualController(),
+				'method'     => 'tailwatch_manual_import_status',
+			),
+			// Parts an operator put in the backup folder themselves, by FTP or a file
+			// manager. The browser is the weakest link in the by-hand route; this is the
+			// way round it.
+			'tailwatch_scan_for_parts'                       => array(
+				'controller' => new MigrationManualController(),
+				'method'     => 'tailwatch_scan_for_parts',
+			),
+			'tailwatch_cancel_manual_import'                 => array(
+				'controller' => new MigrationManualController(),
+				'method'     => 'tailwatch_cancel_manual_import',
+			),
+			// Minting a download link. The bytes travel over the streaming route, which the
+			// grant authorises; deciding who may ask for one belongs on this plane, where
+			// the dashboard and the app can reach it like every other decision.
+			'tailwatch_issue_backup_download'                => array(
+				'controller' => new MigrationManualController(),
+				'method'     => 'tailwatch_issue_backup_download',
 			),
 
 			// Backup.
@@ -1103,22 +1204,6 @@ class ActionDispatcher {
 			'tailwatch_handle_delete_ip_whitelist'           => array(
 				'controller' => new IpWhiteListController(),
 				'method'     => 'tailwatch_handle_delete_ip_whitelist',
-			),
-			'tailwatch_handle_update_country_whitelist'      => array(
-				'controller' => new CountryWhiteListController(),
-				'method'     => 'tailwatch_handle_update_country_whitelist',
-			),
-			'tailwatch_handle_add_country_whitelist'         => array(
-				'controller' => new CountryWhiteListController(),
-				'method'     => 'tailwatch_handle_add_country_whitelist',
-			),
-			'tailwatch_handle_delete_country_whitelist'      => array(
-				'controller' => new CountryWhiteListController(),
-				'method'     => 'tailwatch_handle_delete_country_whitelist',
-			),
-			'tailwatch_handle_get_country_whitelists'        => array(
-				'controller' => new CountryWhiteListController(),
-				'method'     => 'tailwatch_handle_get_country_whitelists',
 			),
 
 			// Login Defender (IP Protection)

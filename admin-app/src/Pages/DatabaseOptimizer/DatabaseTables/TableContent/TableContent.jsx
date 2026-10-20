@@ -23,8 +23,8 @@ const TableContent = ({ steps = {}, licenseConnected = false, proPluginActive = 
   const getLockStatus = (step) => {
     const requiredPlan = step?.required_plan;
     if (!requiredPlan) return { isProLocked: false };
-    if (!licenseConnected) return { isProLocked: true, badge: 'Connect to Tailwach', accessible: false };
-    if (!proPluginActive) return { isProLocked: true, badge: 'Upgrade to pro', accessible: false };
+    if (!proPluginActive) return { isProLocked: true, badge: 'Tailwatch Pro', accessible: false };
+    if (!licenseConnected) return { isProLocked: true, badge: 'Connect your license', accessible: false };
     return { isProLocked: true, badge: requiredPlan, accessible: true, planMatched: currentPlan === requiredPlan };
   };
 

@@ -18,7 +18,7 @@ const NewBackup = () => {
 
     const { loading, setLoading, enableBackup, renderBackupDetails, showErrorAccordion, errorMessages, scanType, isCompleted, scanState, verifyStatus, isScanInProgress, isStarting, isOperationInProgress, isCanceled, isModalOpen, setIsModalOpen, fetchLogs,
         isPaused, isPausing, isCanceling, resetAllStates, checkBackupStatus, progress, progressBarColor, logs, setLogs, showDetails, setIsLogsVisible, isLogsVisible, handleToggleDetails, handleInstantScan, handlePauseBackup, handleCancelBackup, handleResumeBackup, setFeatureEnable, setParentEnable, siteSize, refreshing, handleRefreshSiteSize, backupStatus,
-        setIsScanInProgress, setIsCompleted, setProgress, setIsPaused, setIsCanceled, setIsOperationInProgress, setErrorMessages, isComponentActive, setRenderKey, verifyStatusBackup, setIsFetchingLogs, setRenderBackupDetail, renderKey, featureEnable, parentEnable, setOperationLoading, isOperationLoading, isLastLogIndex, setIsLastLogIndex } = useBackup();
+        setIsScanInProgress, setIsCompleted, setProgress, setIsPaused, setIsCanceled, setIsOperationInProgress, setErrorMessages, isComponentActive, setRenderKey, verifyStatusBackup, setIsFetchingLogs, setRenderBackupDetail, renderKey, featureEnable, parentEnable, setOperationLoading, isOperationLoading, isLastLogIndex, setIsLastLogIndex, isFailed, setIsFailed } = useBackup();
    
     const loadingBarRef = useRef(null);
     useEffect(() => {
@@ -49,7 +49,13 @@ const NewBackup = () => {
                         <SkeletonButton />
                     ) : (
                         <>
-                            {scanType === "automatically" && !isCompleted && scanState !== "completed" && scanState !== "pause" && !isCanceled && (
+                            {isFailed && (
+                                <InfoBar type="danger"
+                                    message="The last backup stopped before it finished and was marked as failed. Your previous backups are untouched — start a new one when you are ready, and check the log below for where it stopped."
+                                />
+                            )}
+
+                            {scanType === "automatically" && !isCompleted && !isFailed && scanState !== "completed" && scanState !== "pause" && !isCanceled && (
                                 <InfoBar type="progress"
                                     message={<> Backup is in progress by ' Auto Schedule '. <button onClick={handleToggleDetails} className="text-blue-500 underline ml-2" > {showDetails ? "Hide" : "View "} </button> &nbsp; you can also View, Cancel, and Pause the process by clicking on the View Link. </>}
                                 />
@@ -63,11 +69,14 @@ const NewBackup = () => {
                             {showDetails && (
                                 <>
                                     <div className="">
-                                        <BackupActions refreshing={refreshing} siteSize={siteSize} handleRefreshSiteSize={handleRefreshSiteSize} parentEnable={parentEnable} featureEnable={featureEnable} isPaused={isPaused} isCompleted={isCompleted} handleInstantScan={handleInstantScan} handlePauseBackup={handlePauseBackup} handleCancelBackup={handleCancelBackup} handleResumeBackup={handleResumeBackup} toggleLogs={() => setIsLogsVisible(!isLogsVisible)} isLogsVisible={isLogsVisible} verifyStatus={verifyStatus} isScanInProgress={isScanInProgress} isStarting={isStarting} isOperationInProgress={isOperationInProgress} isCanceled={isCanceled} IsEnableBackup={enableBackup?.backupFeature} isPausing={isPausing} isCanceling={isCanceling} featureId={enableBackup.featureId} resetAllStates={resetAllStates} checkBackupStatus={checkBackupStatus} />
+                                        <BackupActions refreshing={refreshing} siteSize={siteSize} handleRefreshSiteSize={handleRefreshSiteSize} parentEnable={parentEnable} featureEnable={featureEnable} isPaused={isPaused} isCompleted={isCompleted} handleInstantScan={handleInstantScan} handlePauseBackup={handlePauseBackup} handleCancelBackup={handleCancelBackup} handleResumeBackup={handleResumeBackup} toggleLogs={() => setIsLogsVisible(!isLogsVisible)} isLogsVisible={isLogsVisible} verifyStatus={verifyStatus} isScanInProgress={isScanInProgress} isStarting={isStarting} isOperationInProgress={isOperationInProgress} isCanceled={isCanceled} IsEnableBackup={enableBackup?.backupFeature} isPausing={isPausing} isCanceling={isCanceling} featureId={enableBackup.featureId} resetAllStates={resetAllStates} checkBackupStatus={checkBackupStatus} isFailed={isFailed} />
                                     </div>
 
-                                    {(isScanInProgress || isPaused || !verifyStatus) && !isCanceled && scanType !== "automatically" && (<ProgresBar progress={progress} bgColor={progressBarColor} />)}
-                                    <LogsScreen logs={logs} setLogs={setLogs} isPaused={isPaused} isCanceled={isCanceled} isLogsVisible={isLogsVisible} isCompleted={isCompleted} cancelMessage="Backup is canceled!" successMessage="Backup is Completed successfully!" />
+                                    {(isScanInProgress || isPaused || isFailed || !verifyStatus) && !isCanceled && scanType !== "automatically" && (<ProgresBar progress={progress} bgColor={progressBarColor} />)}
+                                    {/* A failure ends the run the way a cancel does, so it takes the same terminal
+                                        banner — in its own words, because "canceled" would credit the operator with
+                                        a decision they never made. */}
+                                    <LogsScreen logs={logs} setLogs={setLogs} isPaused={isPaused} isCanceled={isCanceled || isFailed} isLogsVisible={isLogsVisible} isCompleted={isCompleted} cancelMessage={isFailed ? "Backup failed — it stopped before it finished." : "Backup is canceled!"} successMessage="Backup is Completed successfully!" />
                                 </>
                             )}
                         </>
@@ -75,8 +84,8 @@ const NewBackup = () => {
                 </div>
             </div>
             <ResumeModal isLastLogIndex={isLastLogIndex} setIsLastLogIndex={setIsLastLogIndex} setOperationLoading={setOperationLoading} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} fetchLogs={fetchLogs} setIsScanInProgress={setIsScanInProgress} setLogs={setLogs} setIsCompleted={setIsCompleted} setProgress={setProgress} setIsOperationInProgress={setIsOperationInProgress} isComponentActive={isComponentActive} setIsLogsVisible={setIsLogsVisible} setRenderKey={setRenderKey} checkBackupStatus={verifyStatusBackup} setIsFetchingLogs={setIsFetchingLogs}
-                setRenderBackupDetail={setRenderBackupDetail} setErrorMessages={setErrorMessages} setIsPaused={setIsPaused} setIsCanceled={setIsCanceled} handleInstantScan={handleInstantScan} />
-            {parentEnable === false && <LockCard featureName="Backup Vault" featureDescription="Easily back up your full website files, database, or both, with scheduled backups to cloud " featureId={enableBackup.featureId} isActive={enableBackup.isActiveState} afterToggleCallback={checkBackupStatus} />}
+                setRenderBackupDetail={setRenderBackupDetail} setErrorMessages={setErrorMessages} setIsPaused={setIsPaused} setIsCanceled={setIsCanceled} setIsFailed={setIsFailed} handleInstantScan={handleInstantScan} />
+            {parentEnable === false && <LockCard featureName="Backup Vault" featureDescription="Back up your whole website, files and database together, on a schedule." featureId={enableBackup.featureId} isActive={enableBackup.isActiveState} afterToggleCallback={checkBackupStatus} />}
             <div className='px-4'>
                 <BackupFiles key={renderKey} setErrorMessages={setErrorMessages} checkBackupStatus={checkBackupStatus} backupStatus={backupStatus} />
             </div>

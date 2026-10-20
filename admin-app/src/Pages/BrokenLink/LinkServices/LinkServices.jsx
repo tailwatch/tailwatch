@@ -1,3 +1,4 @@
+import { readFeatureGate } from '../../../Components/Utils/featureGate';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { CronHealer } from '../../../Components/CroneHealer/CronHealer';
@@ -96,7 +97,7 @@ const checkCronExecution = async (message, cron_running) => {
     }
 };
 
-export const fetchLogs = async (setLogs, setIsCompleted, isFirstExecution = true, isComponentActiveRef, setProgress, setIsScanInProgress, setIsLogsVisible, setErrorMessages, setIsPaused, setIsCanceled, setRenderKey, setOperationLoading, isLastLogIndex, setIsLastLogIndex) => {
+export const fetchLogs = async (setLogs, setIsCompleted, isFirstExecution = true, isComponentActiveRef, setProgress, setIsScanInProgress, setIsLogsVisible, setErrorMessages, setIsPaused, setIsCanceled, setRenderKey, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setIsFailed) => {
 
     try {
         const formData = new FormData();
@@ -130,6 +131,20 @@ export const fetchLogs = async (setLogs, setIsCompleted, isFirstExecution = true
             }
         }
 
+        // Returns before the retry timer at the bottom: the site has given up on this scan,
+        // so asking it to restart the cron would only be refused.
+        if (scan_state === "failed") {
+            setIsScanInProgress(false);
+            setIsPaused(false);
+            setOperationLoading(false);
+            setIsLogsVisible(true);
+            if (typeof setIsFailed === "function") {
+                setIsFailed(true);
+            }
+            setLogs((prevLogs) => [...prevLogs, "The broken link scan stopped because of an error before it finished. The log above shows how far it got."]);
+            return;
+        }
+
         if (is_completed && scan_state === "completed") {
             setIsCompleted(true);
             setRenderKey((prevKey) => prevKey + 1);
@@ -161,7 +176,7 @@ export const fetchLogs = async (setLogs, setIsCompleted, isFirstExecution = true
         else if (scan_state === "in-progress") {
             if (isComponentActiveRef.current) {
                 setTimeout(() => {
-                    fetchLogs(setLogs, setIsCompleted, false, isComponentActiveRef, setProgress, setIsScanInProgress, setIsLogsVisible, setErrorMessages, setIsPaused, setIsCanceled, setRenderKey, setOperationLoading, last_log_index, setIsLastLogIndex);
+                    fetchLogs(setLogs, setIsCompleted, false, isComponentActiveRef, setProgress, setIsScanInProgress, setIsLogsVisible, setErrorMessages, setIsPaused, setIsCanceled, setRenderKey, setOperationLoading, last_log_index, setIsLastLogIndex, setIsFailed);
                 }, 4000);
             } else {
 
@@ -205,7 +220,10 @@ export const handleBrokenLinkActions = async ({ scan_state, setIsScanInProgress,
                 setIsPaused(true);
                 setLogs((prevLogs) => [...prevLogs, "Scan Broken Link paused by user"]);
             }
+            return true;
         }
+        toast.error(response.data?.data?.message || "The broken link scan could not be paused or canceled.");
+        return false;
     } catch (error) {
         setErrorMessages((prevErrors) => [...prevErrors, "error while cancel or pause scan broken link"]);
         console.error(`Error during ${scan_state === 'cancel' ? 'cancel' : 'pause'} scan broken link action:`, error);
@@ -224,6 +242,10 @@ export const verifyBrokenLinkStatus = async (setLoading, setVerifyStatus, setPro
         const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
+        // A reply the gate let through is proof both switches are on. Read from every
+        // response, not only refusals, so these flags cannot latch to false and stay there.
+        readFeatureGate(response, setFeatureEnable, setParentEnable);
+
         if (response.data.success === true) {
             const { is_completed, progress, scan_state, scan_type } = response.data.data;
             setProgress(progress);
@@ -241,7 +263,7 @@ export const verifyBrokenLinkStatus = async (setLoading, setVerifyStatus, setPro
             setParentEnable(parent_enable);
         }
     } catch (error) {
-        if (error.response.data.data.code === 403) {
+        if (error.response?.data?.data?.code === 403) {
             setIsLicenseConnect(true);
         } else {
             setErrorMessages((prevErrors) => [...prevErrors, "Error Verify Scan Link Status"]);
@@ -264,6 +286,10 @@ export const getBrokenLinkLogs = async ({ setLinkLogs, setLoading, page = 1, lim
         const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
+        // A reply the gate let through is proof both switches are on. Read from every
+        // response, not only refusals, so these flags cannot latch to false and stay there.
+        readFeatureGate(response, setFeatureEnable, setParentEnable);
+
 
         if (response.data.data.code === 200) {
             setLinkLogs(response.data.data.data);
@@ -281,7 +307,7 @@ export const getBrokenLinkLogs = async ({ setLinkLogs, setLoading, page = 1, lim
             setLinkLogs([]);
         }
     } catch (error) {
-        if (error.response.data.data.code === 403) {
+        if (error.response?.data?.data?.code === 403) {
             setIsLicenseConnect(true);
         } else {
             console.error("Error verifying Scan Link status:", error);

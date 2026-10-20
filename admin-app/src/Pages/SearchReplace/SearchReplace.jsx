@@ -18,7 +18,7 @@ const SearchReplace = () => {
     const { isLoadingVisible, parentEnable, loading, verifyLoading, infoBarVisible, infoMessage, setInfoBarVisible, featureEnable, enableSearchReplace, searchText, setSearchText, isScanInProgress, isStarting, verifyStatus, isPaused, replaceText, setReplaceText, tables,
         selectedTables, setSelectedTables, caseInsensitive, setCaseInsensitive, replaceGuids, setReplaceGuids, dryRun, setDryRun, checkPauseResumeStatus, isCompleted, handleSearchReplace, setIsLogsVisible, isLogsVisible, handleResume, isOperationInProgress, isCanceled, isPausing,
         isCanceling, handleCancel, handlePause, isDisabled, resetAllStates, scanState, handleCancelAfterPause, progress, progressBarColor, infoRevertChange, setInfoRevertChange, logs, setLogs, isModalOpen, setIsModalOpen, fetchLogs, setIsScanInProgress, setIsCompleted, setIsOperationInProgress, isComponentActive,
-        setProgress, setIsResuming, isResuming, setIsPausing, setIsPaused, setIsCanceled, setIsCanceling, setOperationLoading, isOperationLoading, isLastLogIndex, setIsLastLogIndex } = useSearchReplace();
+        setProgress, setIsResuming, isResuming, setIsPausing, setIsPaused, setIsCanceled, setIsCanceling, setOperationLoading, isOperationLoading, isLastLogIndex, setIsLastLogIndex, isFailed, setIsFailed } = useSearchReplace();
 
     const loadingBarRef = useRef(null);
     useEffect(() => {
@@ -39,10 +39,6 @@ const SearchReplace = () => {
             <LoadingBar ref={loadingBarRef} height={3} color="#ec5023" />
             <Header title="Search & Replace" />
             <div className='p-4 bg-white/95'>
-                {/* <div className="bg-gradient-to-br from-blue-50 to-[#85cbcf] rounded-md mb-4 px-8 py-6 relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-cyan-500/20 animate-pulse"></div>
-                    <p className="text-gray-600 mt-1 relative z-10">Advanced tool for database content management</p>
-                </div> */}
                 {infoBarVisible && (
                     <div className='pt-4'>
                         <InfoBar type="danger" message={infoMessage} showCloseButton={true} onClose={() => setInfoBarVisible(false)} />
@@ -94,24 +90,24 @@ const SearchReplace = () => {
                                 <SearchReplaceActions featureEnable={featureEnable} isPaused={isPaused} isCompleted={isCompleted} handleSearchReplace={handleSearchReplace} toggleLogs={() => setIsLogsVisible(!isLogsVisible)} isLogsVisible={isLogsVisible} verifyStatus={verifyStatus} handleResume={handleResume}
                                     isScanInProgress={isScanInProgress} isStarting={isStarting} isOperationInProgress={isOperationInProgress} isCanceled={isCanceled} isPausing={isPausing} isCanceling={isCanceling}
                                     handleCancel={handleCancel} handlePause={handlePause} isDisabled={isDisabled} resetAllStates={resetAllStates} scanState={scanState} handleCancelAfterPause={handleCancelAfterPause}
-                                    verifyLoading={verifyLoading} checkPauseResumeStatus={checkPauseResumeStatus} isSearchReplaceEnable={enableSearchReplace?.searchReplaceFeature} featureId={enableSearchReplace.featureId}
+                                    verifyLoading={verifyLoading} checkPauseResumeStatus={checkPauseResumeStatus} isSearchReplaceEnable={enableSearchReplace?.searchReplaceFeature} featureId={enableSearchReplace.featureId} isFailed={isFailed}
                                 />
                             </div>
                             <div className=' mb-4'>
                                 {(isScanInProgress || isPaused || !verifyStatus) && !isCanceled && (<ProgresBar progress={progress} bgColor={progressBarColor} />)}
-                                {(infoRevertChange || scanState === "reverting_changes") && !isCompleted && (
+                                {(infoRevertChange || scanState === "reverting_changes") && !isCompleted && !isFailed && (
                                     <div className='pt-4'>
                                         <InfoBar type="danger" message="Reverting the changes. Dont stop the process" showCloseButton={true} onClose={() => setInfoRevertChange(false)} />
                                     </div>
                                 )}
-                                <LogsScreen logs={logs} setLogs={setLogs} isPaused={isPaused} isCanceled={isCanceled} isLogsVisible={isLogsVisible} isCompleted={isCompleted} cancelMessage="Search&Replace process is cancel." successMessage="Search&Replace is Completed successfully!" />
+                                <LogsScreen logs={logs} setLogs={setLogs} isPaused={isPaused} isCanceled={isCanceled || isFailed} isLogsVisible={isLogsVisible} isCompleted={isCompleted} cancelMessage={isFailed ? "Search & Replace stopped because of an error before it finished." : "Search&Replace process is cancel."} successMessage="Search&Replace is Completed successfully!" />
                             </div>
                         </>
                     )}
                 </div>
                 <ResumeModal isLastLogIndex={isLastLogIndex} setIsLastLogIndex={setIsLastLogIndex} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} fetchLogs={fetchLogs} setIsScanInProgress={setIsScanInProgress} setLogs={setLogs} setIsCompleted={setIsCompleted} setIsOperationInProgress={setIsOperationInProgress} isComponentActive={isComponentActive}
                     isCanceled={isCanceled} setProgress={setProgress} setIsLogsVisible={setIsLogsVisible} setIsResuming={setIsResuming} isResuming={isResuming} handleCancelAfterPause={handleCancelAfterPause} setIsPausing={setIsPausing}
-                    setIsPaused={setIsPaused} setIsCanceled={setIsCanceled} setInfoRevertChange={setInfoRevertChange} setIsCanceling={setIsCanceling} setOperationLoading={setOperationLoading}
+                    setIsPaused={setIsPaused} setIsCanceled={setIsCanceled} setInfoRevertChange={setInfoRevertChange} setIsCanceling={setIsCanceling} setOperationLoading={setOperationLoading} setIsFailed={setIsFailed}
                 />
             </div>
         </div>

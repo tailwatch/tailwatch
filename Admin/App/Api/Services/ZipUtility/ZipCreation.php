@@ -73,7 +73,6 @@ class ZipCreation {
 				return false;
 			}
 
-			// Validate path_prefix.
 			if ( ! is_string( $path_prefix ) ) {
 				Log::error(
 					'Invalid path_prefix (expected string)',
@@ -126,13 +125,18 @@ class ZipCreation {
 					foreach ( $files as $index => $file ) {
 						$file_path = $is_directory ? ( $file instanceof \SplFileInfo ? $file->getRealPath() : $file ) : $file;
 
-						// Validate file path.
 						if ( ! is_string( $file_path ) || ! $file_path || ! $this->filesystem->exists( $file_path ) || ! $this->filesystem->is_readable( $file_path ) ) {
 							continue;
 						}
 
-						$file_rel_path = $is_directory ? str_replace( $source . DIRECTORY_SEPARATOR, '', $file->getPathname() ) : basename( $file );
-						$relative_path = empty( $path_prefix ) ? $file_rel_path : $path_prefix . ( empty( $file_rel_path ) ? '' : DIRECTORY_SEPARATOR . $file_rel_path );
+						// Zip entry names use "/" on every platform. The backslash DIRECTORY_SEPARATOR
+						// gives on Windows is not a separator inside an archive — it is part of the
+						// file name, so the entry would restore as one long file name instead of into
+						// its folder.
+						$file_rel_path = $is_directory
+							? ltrim( str_replace( chr( 92 ), '/', str_replace( $source . DIRECTORY_SEPARATOR, '', $file->getPathname() ) ), '/' )
+							: wp_basename( (string) $file );
+						$relative_path = empty( $path_prefix ) ? $file_rel_path : $path_prefix . ( empty( $file_rel_path ) ? '' : '/' . $file_rel_path );
 
 						// Skip excluded paths.
 						foreach ( $exclude as $excluded_path ) {
@@ -281,7 +285,6 @@ class ZipCreation {
 						return false;
 					}
 
-					// Create the zip with file list.
 					$result = ! empty( $path_prefix ) ?
 						$archive->create( $filtered_file_list, PCLZIP_OPT_ADD_PATH, $path_prefix ) :
 						$archive->create( $filtered_file_list );
@@ -295,7 +298,6 @@ class ZipCreation {
 					foreach ( $directory_iterator as $index => $file ) {
 						$file_path = $file->getRealPath();
 
-						// Validate file path.
 						if ( ! is_string( $file_path ) || ! $file_path || ! $this->filesystem->exists( $file_path ) || ! $this->filesystem->is_readable( $file_path ) ) {
 							continue;
 						}
@@ -335,7 +337,6 @@ class ZipCreation {
 						return false;
 					}
 
-					// Create the zip with directory.
 					$result = ! empty( $path_prefix ) ?
 						$archive->create( $file_list, PCLZIP_OPT_REMOVE_PATH, realpath( $source ), PCLZIP_OPT_ADD_PATH, $path_prefix ) :
 						$archive->create( $file_list, PCLZIP_OPT_REMOVE_PATH, realpath( $source ) );
@@ -350,7 +351,6 @@ class ZipCreation {
 
 					$total_size += $file_size;
 
-					// Check size range.
 					if ( $total_size < $start_size || ( null !== $end_size && $total_size > $end_size ) ) {
 						return false;
 					}
@@ -362,7 +362,6 @@ class ZipCreation {
 						}
 					}
 
-					// Create the zip with single file.
 					$result = ! empty( $path_prefix ) ?
 						$archive->create( $source, PCLZIP_OPT_REMOVE_PATH, dirname( $source ), PCLZIP_OPT_ADD_PATH, $path_prefix ) :
 						$archive->create( $source, PCLZIP_OPT_REMOVE_PATH, dirname( $source ) );
@@ -436,7 +435,6 @@ class ZipCreation {
 			'message'       => '',
 		);
 
-		// Check PHP version.
 		if ( version_compare( PHP_VERSION, '5.6.0', '<' ) ) {
 			$status['is_compatible'] = false;
 			$status['message']       = 'PHP 5.6 or higher is required for ZIP functionality.';

@@ -13,7 +13,7 @@ const MobileConnectCTA = ({ devices, planName, mobileFeatures, loading }) => {
     return (
       <div className="px-4 mb-3">
         <div
-          onClick={() => navigate("/dashboard/settings/license")}
+          onClick={() => navigate("/dashboard/account")}
           className="flex items-center gap-2 px-3 py-2 rounded-xl cursor-pointer"
           style={{
             background: "rgba(20,184,166,0.08)",
@@ -33,7 +33,7 @@ const MobileConnectCTA = ({ devices, planName, mobileFeatures, loading }) => {
       <div
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        onClick={() => navigate("/dashboard/settings/license")}
+        onClick={() => navigate("/dashboard/account")}
         className="rounded-xl cursor-pointer overflow-hidden transition-all duration-300"
         style={{
           background: hovered ? "rgba(251,146,60,0.08)" : "rgba(251,146,60,0.05)",

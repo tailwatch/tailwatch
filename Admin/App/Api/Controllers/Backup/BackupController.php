@@ -20,8 +20,14 @@ use Tailwatch\Admin\App\Api\Controllers\Visit\RecommendedFeaturesController;
 use Tailwatch\Admin\App\Api\Controllers\Features\FeaturesController;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\CronJobManager;
 use Tailwatch\Admin\App\Api\Services\Cron\CronHealthService;
+use Tailwatch\Admin\App\Api\Services\Cron\CronKick;
 use Tailwatch\Admin\App\Api\Controllers\Logs\LiveLogs\LiveLogsController;
 use Tailwatch\Admin\App\Api\Services\ZipUtility\ZipCreation;
+use Tailwatch\Admin\App\Api\Services\ZipUtility\ArchiveReader;
+use Tailwatch\Admin\App\Api\Services\Backup\BackupManifest;
+use Tailwatch\Admin\App\Api\Services\Backup\BackupReconciler;
+use Tailwatch\Admin\App\Api\Services\Backup\RetentionHold;
+use Tailwatch\Admin\App\Api\Traits\BackupStateTrait;
 use Tailwatch\Admin\App\Api\Services\Common\FilesystemService;
 use Tailwatch\Admin\App\Api\Services\Common\SecureDirectoryService;
 use Tailwatch\Admin\App\Api\Models\DBModel;
@@ -31,8 +37,10 @@ use Tailwatch\Admin\App\Api\Controllers\Hooks\HookControllers;
 use Tailwatch\Admin\App\Api\Controllers\Disk\DiskSpaceController;
 use Tailwatch\Admin\App\Api\Controllers\Base\BaseController;
 use Tailwatch\Admin\App\Api\Services\ProcessManager;
+use Tailwatch\Admin\App\Api\Services\TickBudget;
 use Tailwatch\Admin\App\Api\Services\ProcessStatusService;
 use Tailwatch\Admin\App\Api\Services\ProcessGuard;
+use Tailwatch\Admin\App\Api\Services\ProcessStartClaim;
 use Tailwatch\Admin\App\Api\Controllers\LimitIncrease\PerformanceOptimizerController;
 
 /**
@@ -42,6 +50,8 @@ use Tailwatch\Admin\App\Api\Controllers\LimitIncrease\PerformanceOptimizerContro
  *
  */
 class BackupController extends BaseController {
+
+	use BackupStateTrait;
 
 	/**
 	 * Feature keys exempt from feature check for backup flows.
@@ -73,11 +83,271 @@ class BackupController extends BaseController {
 	private $process_manager;
 	/** @since 1.0.0 @var int|null */
 	private $current_process_id;
+	/**
+	 * Value this request wrote into the worker lock, while it holds it.
+	 *
+	 * @var int|null
+	 */
+	private $worker_lock_stamp;
+
 
 	/**
-	 * Constructor. Registers cron hooks and instantiates BackupDbController.
+	 * Seconds reserved at the end of a tick for closing the part being written.
 	 *
+	 * The packer stops adding files at (tick deadline - this), because closing a zip is
+	 * itself real work — compressing and writing the central directory — and being killed
+	 * during close leaves a corrupt part rather than a short one.
 	 */
+	const PART_CLOSE_RESERVE = 5;
+
+	/**
+	 * Part sizes an owner can choose, in MB, and the one used when nothing is chosen.
+	 *
+	 * Every part has to be carried by hand for a manual migration, and a browser drops
+	 * downloads without telling anyone, so fewer, larger parts are better. The streaming
+	 * writer makes that possible: a part is written as it is read, pauses on the tick
+	 * deadline and continues in the next one, so it reaches its full size whatever the
+	 * host's speed. 500MB is chosen rather than 1GB because the file count barely differs
+	 * on a normal site - the seven area archives dominate - while the cost of a failed
+	 * transfer halves, browser-side checking stays quick, and 500MB clears every practical
+	 * FTP, filesystem and cloud-storage limit with room to spare.
+	 *
+	 * The smaller choices stay valid, so a site that saved 50 or 100 keeps exactly the
+	 * behaviour it chose.
+	 */
+	const PART_SIZE_CHOICES_MB = array( 50, 100, 200, 400, 500 );
+	const PART_SIZE_DEFAULT_MB = 500;
+
+	/**
+	 * Entries allowed in one part, whatever its size.
+	 *
+	 * ZIP records the entry count in a 16-bit field, so an archive past 65,535 entries
+	 * needs Zip64 - which ZipArchive reads, but older unzip tools, some FTP stacks and some
+	 * filesystems do not. Capping well below that means every part we write opens anywhere.
+	 *
+	 * It also bounds restore memory: opening an archive reads its central directory, which
+	 * costs roughly 150-250 bytes per entry. 50,000 is about 10MB; a whole uploads folder in
+	 * one archive would be nearer 40MB, on hosts that have the least to spare.
+	 */
+	const PART_ENTRY_LIMIT = 50000;
+
+	/**
+	 * The size scan backups always use, and the fallback for a run whose state records no
+	 * part size. The pro scanner uploads scan parts, so their size is not the owner's to raise.
+	 */
+	const FIXED_PART_SIZE = 52428800;
+
+	/**
+	 * Smallest size the automatic step-down goes to before a stalled folder is given up on.
+	 */
+	const PART_SIZE_FLOOR = 26214400;
+
+	/**
+	 * A file over this is archived on its own, whatever the part size.
+	 *
+	 * Tied to the part size, a 300 MB video would share a 400 MB part, and a host too slow to
+	 * close that part would step the size down to the floor and fail the whole backup. Archived
+	 * alone it gets its own attempts, and a file that still cannot be written is the only
+	 * thing the backup loses.
+	 */
+	const LARGE_FILE_SIZE = 52428800;
+
+	/**
+	 * Disk space a backup never takes: left free for the site itself.
+	 *
+	 * A backup that fills the disk takes the site down with it — the database cannot write,
+	 * uploads and sessions fail — so it stops before it reaches this line rather than at zero.
+	 */
+	const DISK_RESERVE = 268435456;
+
+	/**
+	 * Option holding the most recently cancelled run until another backup starts.
+	 */
+	const LAST_CANCEL_OPTION = 'tailwatch_backup_last_cancel';
+
+	/**
+	 * Fraction of the host's execution limit a single tick is allowed to consume.
+	 *
+	 * Leaves headroom for closing the archive, flushing state, and scheduling the next
+	 * tick — all of which happen after the budget is spent.
+	 */
+	const TICK_BUDGET_FRACTION = 0.6;
+
+	/**
+	 * Floor for a tick budget, so a hostile limit still makes forward progress.
+	 */
+	const TICK_BUDGET_MIN = 5;
+
+	/**
+	 * Seconds before a re-armed tick fires after a fatal.
+	 */
+	const REARM_DELAY = 3;
+
+	/**
+	 * Seconds the single-worker lock lasts unless its worker renews it.
+	 */
+	const WORKER_LOCK_TTL = 600;
+
+	/**
+	 * Seconds before a tick that found another worker mid-tick is tried again.
+	 */
+	const WORKER_LOCK_RETRY = 10;
+
+	/**
+	 * Seconds between check-ins while a folder's file list is built.
+	 *
+	 * Listing a large folder on a cold disk can take many minutes and cannot be split across
+	 * ticks. Without a heartbeat in that time the process monitor reads the run as stuck, and
+	 * without a renewed lock a second worker can start on the same folder.
+	 */
+	const LISTING_BEAT_INTERVAL = 20;
+
+	/**
+	 * Seconds between "still listing" lines in the live log.
+	 */
+	const LISTING_LOG_INTERVAL = 60;
+
+	/**
+	 * What the folder step returns when its file list stopped because the run was stopped or is gone.
+	 */
+	const LISTING_STOPPED = 'listing_stopped';
+
+	/**
+	 * Guards against arming more than one fatal re-arm per request.
+	 *
+	 * @var array<string,bool>
+	 */
+	private static $rearm_registered = array();
+
+	/**
+	 * Re-arm a backup cron hook when the request is dying on an uncatchable fatal.
+	 *
+	 * An OOM or max_execution_time kill is an E_ERROR, so no try/catch can reach it and
+	 * the tick never gets to schedule its successor. Without this, recovery waits for the
+	 * 3-minute process-recovery watchdog, which is a long stall on a job that ticks every
+	 * few seconds. Re-arming here restarts within REARM_DELAY instead.
+	 *
+	 * Deliberately narrow:
+	 * - only on a genuine fatal, so a normal tick end is untouched (it schedules its own
+	 *   successor already, and double-scheduling would run two workers)
+	 * - never when a successor is already scheduled
+	 * - never for a backup that is finished or deliberately stopped
+	 *
+	 * Everything is wrapped: this runs after a fatal, where a further failure would be
+	 * silent and confusing, and the failure caps (pack_fail_attempts, stuck_ticks) still
+	 * bound how many times a genuinely broken backup can come back.
+	 *
+	 * @param string        $hook    Cron hook to re-arm.
+	 * @param callable|null $is_live Answers "is this job still meant to be running".
+	 *                               Defaults to the backup's own state row.
+	 * @return bool True when a tick was scheduled.
+	 */
+	public static function tailwatch_rearm_on_fatal( $hook, $is_live = null ) {
+		$error = error_get_last();
+		if ( null === $error || ! isset( $error['type'] ) ) {
+			return false;
+		}
+		if ( ! in_array( $error['type'], array( E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR ), true ) ) {
+			return false;
+		}
+
+		try {
+			// A caller that is not the backup passes its own liveness test. Deciding every
+			// caller's successor by the BACKUP's state row would stop a restore from ever
+			// re-arming (a restore cannot start while a backup runs, so the row never says
+			// in-progress), and would let a stale backup row schedule a tick for an
+			// unrelated job.
+			if ( is_callable( $is_live ) ) {
+				if ( ! call_user_func( $is_live ) ) {
+					return false;
+				}
+			} else {
+				// Only resume a backup that is still meant to be running. Read the write
+				// buffer directly rather than through the instance getter: constructing a
+				// BackupController here would re-register its action hooks and build a
+				// BackupDbController, inside a shutdown handler, after a fatal.
+				$state = null !== self::$pending_backup_data
+					? self::$pending_backup_data[0]
+					: ( new DBModel() )->get_recent_data( 'scan_backp', 'default_backup_scan' );
+
+				if ( ! is_array( $state ) || empty( $state['scan_state'] ) ) {
+					return false;
+				}
+				// The buffered state is the dying tick's own run; once another run has replaced
+				// it, the hook is that run's to schedule.
+				if ( null !== self::$pending_backup_data && ! empty( $state['folderDate'] ) ) {
+					$newest = ( new DBModel() )->get_recent_data_by_id( 'backup_cancel_pause', 'default_backup_scan' );
+					if ( ! is_array( $newest ) || (string) ( $newest['folderDate'] ?? '' ) !== (string) $state['folderDate'] ) {
+						return false;
+					}
+					// The copy was read before a stop that may have come in since; the status row has it.
+					if ( 'in-progress' !== ( $newest['scan_state'] ?? '' ) ) {
+						return false;
+					}
+				}
+				if ( 'in-progress' !== $state['scan_state'] || ! empty( $state['completed'] ) ) {
+					return false;
+				}
+			}
+
+			if ( wp_next_scheduled( $hook ) ) {
+				return false;
+			}
+
+			wp_schedule_single_event( time() + self::REARM_DELAY, $hook );
+			return true;
+		} catch ( \Throwable $e ) {
+			return false;
+		}
+	}
+
+	/**
+	 * Register a one-per-request shutdown hook that re-arms $hook after a fatal.
+	 *
+	 * @param string $hook Cron hook to re-arm.
+	 * @return void
+	 */
+	public static function tailwatch_arm_fatal_rearm( $hook, $is_live = null ) {
+		if ( isset( self::$rearm_registered[ $hook ] ) ) {
+			return;
+		}
+		self::$rearm_registered[ $hook ] = true;
+
+		register_shutdown_function(
+			static function () use ( $hook, $is_live ) {
+				self::tailwatch_rearm_on_fatal( $hook, $is_live );
+			}
+		);
+	}
+
+	/**
+	 * Seconds of work to attempt in one tick, bounded by the host's real limit.
+	 *
+	 * A fixed deadline ignores what the host actually allows. On a box with
+	 * max_execution_time=10 that ignores ini_set — common on cheap shared hosting — a tick
+	 * planning for 25s is killed at 10s, the cursor never advances far, and the
+	 * no-progress guard eventually aborts the backup.
+	 *
+	 * Call AFTER tailwatch_boost_for_scanning() so the raised limit is what gets read.
+	 *
+	 * Note this is deliberately conservative on Linux, where max_execution_time counts
+	 * CPU time rather than wall time and file I/O therefore does not count against it;
+	 * erring short costs an extra tick, erring long costs a killed process.
+	 *
+	 * @param int $preferred Budget to use when the host imposes no meaningful limit.
+	 * @return int Seconds.
+	 */
+	public static function tailwatch_tick_budget( $preferred, $process_type = 'backup' ) {
+		// ini_get() is only one of the three things that can end a tick, and on many hosts
+		// it is not the binding one — see TickBudget for why. Take the smallest of the
+		// caller's preference, what PHP admits to, and what this host has actually been
+		// observed to allow.
+		$budget = TickBudget::budget_for( $process_type, (int) $preferred );
+
+		return (int) max( self::TICK_BUDGET_MIN, min( (int) $preferred, $budget ) );
+	}
+
+
 	public function __construct() {
 		$this->process_manager = new ProcessManager();
 		$this->register_process_monitoring();
@@ -155,7 +425,8 @@ class BackupController extends BaseController {
 		$next_daily     = wp_next_scheduled( 'tailwatch_backup_daily_scan' );
 		$next_recurring = wp_next_scheduled( 'tailwatch_backup_schedule_run' );
 		if ( ! $next_daily && ! $next_recurring ) {
-			wp_schedule_single_event( time() + 5, 'tailwatch_backup_daily_scan' );
+			wp_schedule_single_event( time(), 'tailwatch_backup_daily_scan' );
+			CronKick::accelerate();
 		}
 	}
 
@@ -173,6 +444,16 @@ class BackupController extends BaseController {
 				return null;
 			}
 
+			// No status row means no run of this site's own to revive. The newest catalogue row can
+			// be a migrated backup, and the database step scheduled below would write into it.
+			if ( ! is_array( $cancel_pause ) ) {
+				return array(
+					'code'    => 409,
+					'data'    => array(),
+					'message' => __( 'There is no run to restart.', 'tailwatch' ),
+				);
+			}
+
 			// Only an in-progress run whose cron actually died may be revived here. This recovery
 			// keys off cron_running=false — but a user pause/cancel and a failed/completed run ALSO
 			// leave cron_running=false, so without gating those out the poll-driven recovery would
@@ -187,7 +468,20 @@ class BackupController extends BaseController {
 				);
 			}
 
-			if ( false === $cancel_pause['cron_running'] ) {
+			// cron_running is set true at the start of a tick and cleared on the way out, so
+			// only a tick that RETURNS clears it. The failures this recovery exists for — an
+			// out-of-memory kill, the OOM killer, a proxy cutting the request — are exactly
+			// the ones that never reach the way out, and they leave the flag set to true
+			// forever. Gating on it alone would leave the watchdog blind to its own use case.
+			//
+			// The heartbeat can't be falsified the same way: a dead worker stops writing it.
+			// ProcessStatusService already reads it, treats a stuck row as not running, and
+			// reaps an orphaned one — and it stays true while a slow-but-live tick is working,
+			// which is what keeps this from scheduling a second worker alongside the first.
+			// Every branch below is additionally guarded by wp_next_scheduled().
+			$worker_alive = ( new ProcessStatusService() )->is_running( 'backup' );
+
+			if ( false === ( $cancel_pause['cron_running'] ?? null ) || ! $worker_alive ) {
 				$get_backup_type = $get_backup_data['backupType'];
 				$cron_scheduled  = false;
 
@@ -228,7 +522,7 @@ class BackupController extends BaseController {
 						if ( ! isset( $get_backup_data['tables'] ) ) {
 							$database_backup = wp_next_scheduled( 'tailwatch_scan_db_tables_cron' );
 							if ( ! $database_backup ) {
-								$cron_scheduled = wp_schedule_single_event( time() + 5, 'tailwatch_scan_db_tables_cron' );
+								$cron_scheduled = wp_schedule_single_event( time(), 'tailwatch_scan_db_tables_cron' );
 							} else {
 								Log::info(
 									'Complete backup DB scan cron already running',
@@ -246,7 +540,7 @@ class BackupController extends BaseController {
 						} else {
 							$database_backup = wp_next_scheduled( 'tailwatch_create_db_backup_cron' );
 							if ( ! $database_backup ) {
-								$cron_scheduled = wp_schedule_single_event( time() + 5, 'tailwatch_create_db_backup_cron' );
+								$cron_scheduled = wp_schedule_single_event( time(), 'tailwatch_create_db_backup_cron' );
 							} else {
 								Log::info(
 									'Complete backup DB creation cron already running',
@@ -415,113 +709,6 @@ class BackupController extends BaseController {
 		return $result;
 	}
 
-	/**
-	 * Gets the current scan/backup state from the database.
-	 *
-	 * @return array Scan backup data.
-	 */
-	public function tailwatch_get_scan_backup_data() {
-		$feature_controller = new DBModel();
-		$tailwatch_key           = 'default_backup_scan';
-		$option             = 'scan_backp';
-		$get_data           = $feature_controller->get_recent_data( $option, $tailwatch_key );
-		return $get_data;
-	}
-
-	/**
-	 * Keep an already-set stop-state (pause/cancel/failed) from being reverted by a stale write.
-	 *
-	 * The file + DB crons persist state repeatedly across a ~20s loop from a copy captured at tick
-	 * start; a pause/cancel/failure set mid-tick by a separate request is otherwise lost when that
-	 * stale copy is written back (proven: the run keeps going and verify keeps reporting
-	 * in-progress). When the payload carries a NON-terminal scan_state but the row already holds an
-	 * active stop-state, re-read and keep the stop-state. Terminal writes (pause/cancel/failed/
-	 * completed) and deliberate resumes ($allow_state_change) pass through untouched.
-	 *
-	 * @param array  $options            Payload about to be written.
-	 * @param bool   $allow_state_change Resume opt-in: write scan_state verbatim.
-	 * @param string $option             'scan_backp' or 'backup_cancel_pause'.
-	 * @return array Payload, with scan_state coerced back to the active stop-state when applicable.
-	 */
-	private function tailwatch_guard_stop_state( array $options, $allow_state_change, $option ) {
-		if ( $allow_state_change || ! isset( $options['scan_state'] )
-			|| in_array( $options['scan_state'], array( 'pause', 'cancel', 'failed', 'completed' ), true ) ) {
-			return $options;
-		}
-		$current = ( 'scan_backp' === $option ) ? $this->tailwatch_get_scan_backup_data() : $this->tailwatch_backup_cancel_pause_data();
-		if ( isset( $current['scan_state'] )
-			&& in_array( $current['scan_state'], array( 'pause', 'cancel', 'failed' ), true ) ) {
-			$options['scan_state'] = $current['scan_state'];
-		}
-		return $options;
-	}
-
-	/**
-	 * Updates the stored backup scan data (e.g. progress, state).
-	 *
-	 * @param array $options            Data to store (will be JSON-encoded).
-	 * @param bool  $allow_state_change Pass true only for a deliberate resume (see tailwatch_guard_stop_state).
-	 */
-	public function update_backup_data( array $options, $allow_state_change = false ) {
-		$options  = $this->tailwatch_guard_stop_state( $options, $allow_state_change, 'scan_backp' );
-		$db_model = new DBModel();
-		$tailwatch_key = 'default_backup_scan';
-		$option   = 'scan_backp';
-
-		$db_data = array(
-			'value' => wp_json_encode( $options ),
-		);
-
-		$db_model->update_recent_row( $db_data, $tailwatch_key, $option );
-	}
-
-	/**
-	 * Updates the backup scan state (e.g. in-progress, cancel, pause, completed).
-	 *
-	 * @param string $scan_state         New state value.
-	 * @param bool   $allow_state_change Pass true only for a deliberate resume (see tailwatch_guard_stop_state).
-	 */
-	public function update_backup_scan_state( $scan_state, $allow_state_change = false ) {
-		$backup_data = $this->tailwatch_get_scan_backup_data();
-		if ( empty( $backup_data ) || ! is_array( $backup_data ) ) {
-			return;
-		}
-		if ( ! isset( $backup_data['scan_state'] ) || $backup_data['scan_state'] !== $scan_state ) {
-			$backup_data['scan_state'] = $scan_state;
-			$this->update_backup_data( $backup_data, $allow_state_change );
-		}
-	}
-
-	/**
-	 * Gets cancel/pause and progress data for the current backup.
-	 *
-	 * @return array Cancel/pause and progress data.
-	 */
-	public function tailwatch_backup_cancel_pause_data() {
-		$feature_controller = new DBModel();
-		$tailwatch_key           = 'default_backup_scan';
-		$option             = 'backup_cancel_pause';
-		return $feature_controller->get_recent_data( $option, $tailwatch_key );
-	}
-
-	/**
-	 * Updates the backup cancel/pause and progress record.
-	 *
-	 * @param array $options            Data to store (will be JSON-encoded).
-	 * @param bool  $allow_state_change Pass true only for a deliberate resume (see tailwatch_guard_stop_state).
-	 */
-	public function update_backup_cancel_pause( array $options, $allow_state_change = false ) {
-		$options  = $this->tailwatch_guard_stop_state( $options, $allow_state_change, 'backup_cancel_pause' );
-		$db_model = new DBModel();
-		$tailwatch_key = 'default_backup_scan';
-		$option   = 'backup_cancel_pause';
-
-		$db_data = array(
-			'value' => wp_json_encode( $options ),
-		);
-
-		$db_model->update_recent_row( $db_data, $tailwatch_key, $option );
-	}
 
 	/**
 	 * Calculates folder sizes and starts the backup process (creates initial scan data and schedules cron).
@@ -535,8 +722,6 @@ class BackupController extends BaseController {
 	 */
 	public function tailwatch_calculate_folder_sizes( $user_name = null, $user_role = null, $scan_type = null, $process_run = 'backup', $database_optimize = false, $backup_type = null ) {
 		try {
-			$this->tailwatch_delete_files_entry_with_cron();
-
 			$db_model = new DBModel();
 
 			$get_backup_option = new BackupMaintainController();
@@ -565,6 +750,31 @@ class BackupController extends BaseController {
 				throw new \Exception( 'Invalid backup type: ' . $get_backup_type );
 			}
 
+			// Checked before the unfinished backup below is discarded, so a start refused for
+			// space does not also cost the owner a paused backup they could have resumed. The
+			// space that backup occupies is counted as available, because starting frees it.
+			$part_size = self::tailwatch_part_size_for_run( $process_run, $backup_data['partSizeMb'] ?? null );
+			$site_size = $this->tailwatch_estimation_site_size( $get_backup_type );
+			$free      = self::tailwatch_backup_free_space();
+			$disk      = self::tailwatch_disk_verdict(
+				false === $free ? false : $free + $this->tailwatch_incomplete_backup_bytes(),
+				$site_size,
+				$part_size
+			);
+			if ( 'refuse' === $disk['verdict'] ) {
+				return $this->tailwatch_refuse_start_for_disk( $disk, $get_backup_type );
+			}
+
+			// Asked again under the claim: the estimate above can take seconds, and a backup,
+			// restore or migration started meanwhile by another request has its process running
+			// by now. A scan that backs the site up first is the run this backup belongs to.
+			$start_lock = ( new ProcessGuard() )->claim_start( 'backup', self::tailwatch_runs_inside_of( $process_run ) );
+			if ( is_array( $start_lock ) ) {
+				return $start_lock;
+			}
+
+			$this->tailwatch_delete_files_entry_with_cron();
+
 			$sizes = array(
 				'completed'          => false,
 				'userData'           => array(
@@ -573,7 +783,7 @@ class BackupController extends BaseController {
 					'scanType' => ! empty( $scan_type ) ? $scan_type : 'Automatically',
 				),
 				'zipId'              => time(),
-				'folderDate'         => current_time( 'Y-m-d_H-i-s' ),
+				'folderDate'         => $this->generate_backup_folder_name(),
 				'scan_state'         => 'in-progress',
 				'site_url'           => site_url(),
 				'started_time'       => time(),
@@ -581,6 +791,8 @@ class BackupController extends BaseController {
 				'process_run'        => $process_run,
 				'database_optimize'  => $database_optimize,
 				'optimize_completed' => false,
+				// Fixed for the whole run, so changing the setting mid-backup cannot mix sizes.
+				'part_size'          => $part_size,
 			);
 
 			$data_value = wp_json_encode( $sizes );
@@ -597,7 +809,7 @@ class BackupController extends BaseController {
 				'folderDate'   => $sizes['folderDate'],
 				'started_time' => $sizes['started_time'],
 				'backup_type'  => $sizes['backupType'],
-				'site_size'    => $this->tailwatch_estimation_site_size( $sizes['backupType'] ),
+				'site_size'    => $site_size,
 			);
 
 			$process_id               = $this->process_manager->get_or_create_process(
@@ -666,12 +878,16 @@ class BackupController extends BaseController {
 				}
 			}
 
+			ProcessStartClaim::release( $start_lock );
+
 			$db_optimizer = new DatabaseOptimizerController();
 
 			if ( $result ) {
+				delete_option( self::LAST_CANCEL_OPTION );
 				$message   = 'Backup process started.';
 				$live_logs = new LiveLogsController();
 				$live_logs->insert_live_logs_records( $message, $this->log_directory, $this->tailwatch_get_log_file_path() );
+				$this->tailwatch_log_disk_verdict( $disk );
 
 				try {
 					// Allow premium plugin to handle premium backup execution.
@@ -714,7 +930,7 @@ class BackupController extends BaseController {
 							} else {
 								$database_backup = wp_next_scheduled( 'tailwatch_scan_db_tables_cron' );
 								if ( ! $database_backup ) {
-									wp_schedule_single_event( time() + 5, 'tailwatch_scan_db_tables_cron' );
+									wp_schedule_single_event( time(), 'tailwatch_scan_db_tables_cron' );
 								}
 							}
 							break;
@@ -754,6 +970,7 @@ class BackupController extends BaseController {
 				throw new \Exception( 'Failed to initialize backup process' );
 			}
 		} catch ( \Throwable $e ) {
+			ProcessStartClaim::release( isset( $start_lock ) ? $start_lock : '' );
 			$backup_type_label = isset( $get_backup_type ) ? $get_backup_type : 'website';
 			$start_fail_impact = 'Your previous backup is still safe in the Vault. You can try again, or restore from the last successful backup if you need to.';
 			Log::error(
@@ -782,20 +999,245 @@ class BackupController extends BaseController {
 	 * Estimates total site size for backup type (files + DB minus tailwatch-backup folder).
 	 *
 	 * @param string $backup_type Backup type (e.g. Complete Backup).
-	 * @return int|float Total size in bytes.
+	 * @return int|float|null Total size in bytes, or null when the files could not all be
+	 *                        measured in time.
 	 */
 	public function tailwatch_estimation_site_size( $backup_type ) {
 		$disk_space_controller = new DiskSpaceController();
-		if ( 'Complete Backup' === $backup_type ) {
-			$file_size   = $disk_space_controller->calculate_directory_sizes();
-			$db_size     = $disk_space_controller->get_database_info();
-			$tailwatch_backup = DiskSpaceController::calculate_folder_size( TAILWATCH_BACKUP_DIR );
-			$total_size  = $file_size['files_size'] - $tailwatch_backup;
-			$total_size += $db_size['db_size'];
-		} else {
-			$total_size = 0;
+		$total_size            = 0;
+
+		// A type holds the files, the database or both. One nothing describes is estimated
+		// as the whole site, the larger and so the safer guess.
+		$parts = self::tailwatch_backup_type_parts( $backup_type );
+		if ( null === $parts || $parts['files'] ) {
+			$file_size = $disk_space_controller->calculate_directory_sizes();
+
+			// A walk that ran out of time leaves most of the site uncounted. Passed on as the
+			// size, that figure would skip the disk warning and hold the time-left estimate
+			// far too low for the whole run.
+			if ( ! empty( $file_size['partial'] ) ) {
+				return null;
+			}
+
+			$total_size += max( 0, (int) $file_size['files_size'] - (int) DiskSpaceController::calculate_folder_size( TAILWATCH_BACKUP_DIR ) );
 		}
+		if ( null === $parts || $parts['database'] ) {
+			$db_size     = $disk_space_controller->get_database_info();
+			$total_size += (int) $db_size['db_size'];
+		}
+
 		return $total_size;
+	}
+
+	/**
+	 * Free space on the disk that holds the backups, in bytes, or false when it cannot be read.
+	 *
+	 * @return int|false
+	 */
+	public static function tailwatch_backup_free_space() {
+		// disk_free_space() needs a directory that exists; before the first backup the backup
+		// root may not, so measure the nearest ancestor that does.
+		$path = TAILWATCH_BACKUP_DIR;
+		while ( '' !== $path && ! is_dir( $path ) && dirname( $path ) !== $path ) {
+			$path = dirname( $path );
+		}
+
+		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- disabled or restricted on some hosts; a false return is handled below.
+		$free = function_exists( 'disk_free_space' ) ? @disk_free_space( $path ) : false;
+
+		/**
+		 * Filter the free space a backup measures, in bytes, or false when unknown.
+		 *
+		 * For hosts where the account quota is smaller than the disk's free space, which is
+		 * the number disk_free_space() reports.
+		 *
+		 * @param int|false $free Bytes free, or false.
+		 */
+		$free = apply_filters( 'tailwatch_backup_free_disk_space', ( false === $free || null === $free ) ? false : (int) $free );
+
+		return ( false === $free || null === $free ) ? false : (int) $free;
+	}
+
+	/**
+	 * Whether a backup has room to start.
+	 *
+	 * Refused only when it could not write even one part without eating into the reserve —
+	 * the estimate is the site before compression, and a refusal on it would stop backups
+	 * that would have fitted. Below the estimate the backup starts with a warning, and the
+	 * guard stops it before the reserve is reached if it really does not fit.
+	 *
+	 * With no estimate the refusal still stands, since it never used one, and the rest is
+	 * 'unmeasured' rather than a comparison against a number nobody measured.
+	 *
+	 * @param int|false $free      Bytes free, or false when unknown.
+	 * @param int|null  $estimate  The site's size before compression, in bytes, or null when
+	 *                             the site could not be measured.
+	 * @param int       $part_size The run's archive part size, in bytes.
+	 * @return array{verdict:string,free:int|false,estimate:int|null,floor:int,wanted:int|null}
+	 */
+	public static function tailwatch_disk_verdict( $free, $estimate, $part_size ) {
+		$floor  = self::DISK_RESERVE + (int) $part_size;
+		$wanted = null === $estimate ? null : self::DISK_RESERVE + (int) $estimate + (int) $part_size;
+
+		if ( false === $free ) {
+			$verdict = 'unknown';
+		} elseif ( (int) $free < $floor ) {
+			$verdict = 'refuse';
+		} elseif ( null === $wanted ) {
+			$verdict = 'unmeasured';
+		} elseif ( (int) $free < $wanted ) {
+			$verdict = 'warn';
+		} else {
+			$verdict = 'ok';
+		}
+
+		return array(
+			'verdict'  => $verdict,
+			'free'     => false === $free ? false : (int) $free,
+			'estimate' => null === $estimate ? null : (int) $estimate,
+			'floor'    => $floor,
+			'wanted'   => $wanted,
+		);
+	}
+
+	/**
+	 * Space held by an unfinished backup that starting a new one discards.
+	 *
+	 * The same condition tailwatch_delete_files_entry_with_cron() acts on.
+	 *
+	 * @return int Bytes.
+	 */
+	private function tailwatch_incomplete_backup_bytes() {
+		$existing = $this->tailwatch_get_scan_backup_data();
+		$progress = $this->tailwatch_backup_cancel_pause_data();
+
+		if ( empty( $existing ) || ! is_array( $progress ) || ! isset( $progress['scan_state'] )
+			|| ! in_array( $progress['scan_state'], array( 'in-progress', 'pause', 'cancel' ), true )
+			|| false !== ( $existing['completed'] ?? null )
+			|| ! isset( $progress['folderDate'], $existing['folderDate'] )
+			|| $existing['folderDate'] !== $progress['folderDate'] ) {
+			return 0;
+		}
+
+		$bytes = 0;
+		foreach ( array( $this->backup_directory, $this->db_directory ) as $root ) {
+			$folder = $root . $existing['folderDate'];
+			if ( is_dir( $folder ) ) {
+				$bytes += (int) DiskSpaceController::calculate_folder_size( $folder );
+			}
+		}
+
+		return $bytes;
+	}
+
+	/**
+	 * Refuse to start, and say why in every place the owner might be looking.
+	 *
+	 * @param array  $disk        The verdict.
+	 * @param string $backup_type Backup type.
+	 * @return array Response with code 507.
+	 */
+	private function tailwatch_refuse_start_for_disk( array $disk, $backup_type ) {
+		$message = sprintf(
+			/* translators: 1: free disk space, 2: space needed to start, 3: space kept free for the site. */
+			__( 'Not enough free disk space to start the backup: %1$s free, and at least %2$s is needed — %3$s stays free for your site, plus room to write one archive part. Free up space or choose a smaller archive part size, then try again.', 'tailwatch' ),
+			size_format( (int) $disk['free'], 1 ),
+			size_format( (int) $disk['floor'], 1 ),
+			size_format( self::DISK_RESERVE )
+		);
+
+		Log::error(
+			$message,
+			array(
+				'feature'   => 'backup',
+				'action'    => 'backup_process_failed',
+				'title'     => 'Backup did not start',
+				'meta_data' => array(
+					'feature'     => 'Backup Vault',
+					'event'       => 'Failed',
+					'impact'      => __( 'Your previous backups are still safe.', 'tailwatch' ),
+					'backup_type' => (string) $backup_type,
+					'phase'       => 'start',
+					'reason'      => 'disk_space',
+				),
+			)
+		);
+
+		return array(
+			'code'    => 507,
+			'message' => $message,
+			'refused' => 'disk_space',
+			'free'    => (int) $disk['free'],
+			'needed'  => (int) $disk['floor'],
+		);
+	}
+
+	/**
+	 * Say in the backup's own log how much room it has.
+	 *
+	 * @param array $disk The verdict.
+	 * @return void
+	 */
+	private function tailwatch_log_disk_verdict( array $disk ) {
+		if ( 'unknown' === $disk['verdict'] ) {
+			$this->update_logs_records( 'Free disk space could not be read on this server, so the backup cannot check whether it will fit', 'WARNING' );
+			return;
+		}
+
+		if ( 'unmeasured' === $disk['verdict'] ) {
+			$this->update_logs_records(
+				sprintf(
+					'Free disk space is %1$s. The site could not be measured in time, so the backup cannot check whether it will fit; if space runs low it stops, keeping %2$s free for your site',
+					size_format( (int) $disk['free'], 1 ),
+					size_format( self::DISK_RESERVE )
+				),
+				'WARNING'
+			);
+			return;
+		}
+
+		if ( 'warn' === $disk['verdict'] ) {
+			$this->update_logs_records(
+				sprintf(
+					'Free disk space is %1$s, and this backup could need up to %2$s before compression. It may not fit; if space runs low it stops, keeping %3$s free for your site',
+					size_format( (int) $disk['free'], 1 ),
+					size_format( (int) $disk['estimate'], 1 ),
+					size_format( self::DISK_RESERVE )
+				),
+				'WARNING'
+			);
+			return;
+		}
+
+		$this->update_logs_records( 'Free disk space: ' . size_format( (int) $disk['free'], 1 ) );
+	}
+
+	/**
+	 * Stop the backup before its next write would eat into the space the site needs.
+	 *
+	 * @param int    $next_write Bytes the next write may take.
+	 * @param string $what       What that write is, for the log.
+	 * @return bool True to carry on; false when the backup was stopped.
+	 */
+	public function tailwatch_disk_guard( $next_write, $what ) {
+		$free = self::tailwatch_backup_free_space();
+		if ( false === $free || $free >= self::DISK_RESERVE + (int) $next_write ) {
+			return true;
+		}
+
+		$this->update_logs_records(
+			sprintf(
+				'Stopped before writing %1$s: %2$s is free, it may need up to %3$s, and %4$s stays free so your site keeps running. Free up space or choose a smaller archive part size, then run the backup again',
+				$what,
+				size_format( $free, 1 ),
+				size_format( (int) $next_write, 1 ),
+				size_format( self::DISK_RESERVE )
+			),
+			'ERROR'
+		);
+		$this->tailwatch_mark_backup_failed( 'disk_space_low' );
+
+		return false;
 	}
 
 	/**
@@ -850,7 +1292,7 @@ class BackupController extends BaseController {
 	 * @return array Map of folder key to path for verified folders.
 	 */
 	public function tailwatch_verify_required_folders() {
-		// Use WP_CONTENT_DIR basename so Bedrock-style layouts (/app) snapshot under the real folder name.
+		// Use WP_CONTENT_DIR basename so a renamed content directory (e.g. /app) snapshots under the real folder name.
 		$candidate_basename = wp_basename( WP_CONTENT_DIR );
 		$content_basename   = is_string( $candidate_basename )
 			&& '' !== $candidate_basename
@@ -901,26 +1343,117 @@ class BackupController extends BaseController {
 	}
 
 	/**
+	 * Where a folder's backup stands, compared before and after a pass to tell whether it moved.
+	 *
+	 * Failure counters are deliberately left out: a pass that only failed again has not moved
+	 * the folder on, and retrying it at once would spend the tick repeating the failure.
+	 *
+	 * @param array  $existing_data Backup state.
+	 * @param string $key           Folder key.
+	 * @return string
+	 */
+	public static function tailwatch_area_progress( array $existing_data, $key ) {
+		$area = ( isset( $existing_data[ $key ] ) && is_array( $existing_data[ $key ] ) ) ? $existing_data[ $key ] : array();
+
+		return implode(
+			'|',
+			array(
+				empty( $area['manifest_built'] ) ? 0 : 1,
+				isset( $area['current_large_file'] ) ? (int) $area['current_large_file'] : 0,
+				isset( $area['manifest_offset'] ) ? (int) $area['manifest_offset'] : 0,
+				isset( $area['current_zip'] ) ? (int) $area['current_zip'] : 0,
+				empty( $area['manifest_eof'] ) ? 0 : 1,
+				empty( $area['completed'] ) ? 0 : 1,
+			)
+		);
+	}
+
+	/**
+	 * Whether another pass on a folder fits in what is left of the tick.
+	 *
+	 * Building a folder's file list and archiving one large file cannot stop part way, so they
+	 * start only with at least half the tick left. Packing parts stops at its own deadline and
+	 * needs only the minimum budget.
+	 *
+	 * @param array  $existing_data Backup state.
+	 * @param string $key           Folder key.
+	 * @param int    $deadline      Tick deadline.
+	 * @param int    $budget        The tick's whole budget, in seconds.
+	 * @return bool
+	 */
+	public static function tailwatch_pass_fits( array $existing_data, $key, $deadline, $budget ) {
+		$area      = ( isset( $existing_data[ $key ] ) && is_array( $existing_data[ $key ] ) ) ? $existing_data[ $key ] : array();
+		$large     = isset( $area['large_files'] ) ? count( (array) $area['large_files'] ) : 0;
+		$unbounded = empty( $area['manifest_built'] ) || ( isset( $area['current_large_file'] ) ? (int) $area['current_large_file'] : 0 ) < $large;
+		$needed    = $unbounded ? (int) ceil( (int) $budget / 2 ) : self::TICK_BUDGET_MIN;
+
+		return ( (int) $deadline - time() ) >= $needed && ! TickBudget::memory_exceeded();
+	}
+
+	/**
+	 * Whether every folder of the run is backed up.
+	 *
+	 * @param array $existing_data Backup state.
+	 * @param array $keys          Folder keys of the run.
+	 * @return bool
+	 */
+	private static function tailwatch_all_areas_done( array $existing_data, array $keys ) {
+		foreach ( $keys as $key ) {
+			if ( empty( $existing_data[ $key ]['completed'] ) ) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
 	 * Main backup cron callback (hook 'tailwatch_backup_daily_scan'). Thin wrapper that
 	 * holds a single-worker lock around the real tick so the verify-hook and the
 	 * recovery watchdog cannot run a SECOND worker on the same scan_backp row — two
 	 * concurrent workers do interleaved read-modify-write and clobber progress.
 	 */
 	public function tailwatch_run_backup_cron() {
+		self::tailwatch_forget_cached_schedule();
 		if ( ! $this->tailwatch_acquire_worker_lock() ) {
-			return; // Another worker is mid-tick — skip this injected run.
+			// Another worker is mid-tick, maybe a cancelled run's last pass: retried shortly.
+			if ( ! wp_next_scheduled( 'tailwatch_backup_daily_scan' ) ) {
+				wp_schedule_single_event( time() + self::WORKER_LOCK_RETRY, 'tailwatch_backup_daily_scan' );
+			}
+			return;
 		}
 		try {
 			$this->tailwatch_run_backup_cron_worker();
 		} finally {
+			self::tailwatch_clear_run_owner();
 			$this->tailwatch_release_worker_lock();
+			self::tailwatch_forget_cached_schedule();
+		}
+
+		if ( wp_next_scheduled( 'tailwatch_backup_daily_scan' ) ) {
+			CronKick::accelerate();
 		}
 	}
 
 	/**
-	 * Acquire the single-worker lock. TTL = the PHP max_execution_time, so it
-	 * never expires mid-legitimate-tick (the tick dies by then and the shutdown hook
-	 * releases it). The finally releases on every normal/exception return; the
+	 * Read the cron schedule afresh on the next look.
+	 *
+	 * WordPress keeps the schedule in the request's options cache and writes all of it back
+	 * whenever anything is scheduled or unscheduled. A backup step takes most of a tick, and
+	 * the cron runner that called it then reschedules its other due events from that copy:
+	 * events other requests removed meanwhile come back (a cancelled run's files tick), and
+	 * events they added are lost (the next run's database step). Called as a step starts and
+	 * as it ends.
+	 *
+	 * @return void
+	 */
+	public static function tailwatch_forget_cached_schedule() {
+		wp_cache_delete( 'alloptions', 'options' );
+		wp_cache_delete( 'cron', 'options' );
+	}
+
+	/**
+	 * Acquire the single-worker lock. It lasts WORKER_LOCK_TTL, and a long file-list build
+	 * renews it while it walks. The finally releases on every normal/exception return; the
 	 * shutdown hook releases on a timeout/fatal that bypasses finally; the TTL is the
 	 * last-resort backstop for a hard SIGKILL where even shutdown does not run.
 	 * Sequential +3s ticks never block each other — each releases on return.
@@ -931,8 +1464,14 @@ class BackupController extends BaseController {
 		if ( get_transient( 'tailwatch_backup_worker_lock' ) ) {
 			return false;
 		}
-		set_transient( 'tailwatch_backup_worker_lock', time(), 600 );
+		$this->worker_lock_stamp = time();
+		set_transient( 'tailwatch_backup_worker_lock', $this->worker_lock_stamp, self::WORKER_LOCK_TTL );
 		register_shutdown_function( array( $this, 'tailwatch_release_worker_lock' ) );
+
+		// Relaunch the file phase if this tick dies on an OOM / time-limit kill, instead
+		// of waiting up to 3 minutes for the process-recovery watchdog.
+		self::tailwatch_arm_fatal_rearm( 'tailwatch_backup_daily_scan' );
+
 		return true;
 	}
 
@@ -944,6 +1483,86 @@ class BackupController extends BaseController {
 	 */
 	public function tailwatch_release_worker_lock() {
 		delete_transient( 'tailwatch_backup_worker_lock' );
+		$this->worker_lock_stamp = null;
+	}
+
+	/**
+	 * Extend the single-worker lock, unless the stamp this request sees in it is not its own.
+	 *
+	 * @return void
+	 */
+	private function tailwatch_renew_worker_lock() {
+		if ( null === $this->worker_lock_stamp ) {
+			return;
+		}
+		if ( (int) get_transient( 'tailwatch_backup_worker_lock' ) !== $this->worker_lock_stamp ) {
+			return;
+		}
+		set_transient( 'tailwatch_backup_worker_lock', $this->worker_lock_stamp, self::WORKER_LOCK_TTL );
+	}
+
+	/**
+	 * Whether the status row no longer describes the run a tick started on.
+	 *
+	 * A cancelled run's rows are deleted a few seconds after the click, and a new run may already
+	 * have taken their place, so the newest row is then another run's or there is none.
+	 *
+	 * @param mixed  $cancel_pause Newest backup status row.
+	 * @param string $folder_date  The run's folder name.
+	 * @return bool
+	 */
+	private static function tailwatch_run_is_gone( $cancel_pause, $folder_date ) {
+		if ( ! is_array( $cancel_pause ) || empty( $cancel_pause ) ) {
+			return true;
+		}
+
+		return '' !== (string) $folder_date
+			&& isset( $cancel_pause['folderDate'] )
+			&& (string) $cancel_pause['folderDate'] !== (string) $folder_date;
+	}
+
+	/**
+	 * What a folder's file-list build calls while it walks.
+	 *
+	 * Every LISTING_BEAT_INTERVAL seconds it stops the walk when the run was paused, cancelled or
+	 * is gone, and otherwise writes the heartbeat and renews the worker lock; every
+	 * LISTING_LOG_INTERVAL seconds it also adds a line to the live log.
+	 *
+	 * @param string $key         Folder key.
+	 * @param string $process_id  Backup process id, '' when unknown.
+	 * @param string $folder_date The run's folder name.
+	 * @return callable Takes the files found so far and, optionally, the current time; returns
+	 *                  false to stop the walk.
+	 */
+	private function tailwatch_listing_keep_alive( $key, $process_id, $folder_date ) {
+		$last_beat = time();
+		$last_line = $last_beat;
+
+		return function ( $files_so_far, $now = null ) use ( $key, $process_id, $folder_date, &$last_beat, &$last_line ) {
+			$now = null === $now ? time() : (int) $now;
+			if ( $now - $last_beat < self::LISTING_BEAT_INTERVAL ) {
+				return true;
+			}
+			$last_beat = $now;
+
+			$cancel_pause = $this->tailwatch_backup_cancel_pause_data();
+			if ( self::tailwatch_run_is_gone( $cancel_pause, $folder_date )
+				|| in_array( $cancel_pause['scan_state'] ?? '', array( 'cancel', 'pause', 'failed', 'completed' ), true ) ) {
+				return false;
+			}
+
+			if ( '' !== (string) $process_id ) {
+				$this->process_manager->heart_beat( $process_id );
+			}
+			$this->tailwatch_renew_worker_lock();
+
+			if ( $now - $last_line >= self::LISTING_LOG_INTERVAL ) {
+				$last_line = $now;
+				$this->update_logs_records( sprintf( 'Still listing %s: %s so far', self::tailwatch_area_label( $key ), self::tailwatch_count( $files_so_far, 'file' ) ) );
+			}
+
+			return true;
+		};
 	}
 
 	/**
@@ -962,24 +1581,46 @@ class BackupController extends BaseController {
 		$backup_maintain = new BackupMaintainController();
 		$backup_maintain->maintain_backups( $tailwatch_key, $option );
 
-		$get_data      = $feature_controller->get_recent_data( $option, $tailwatch_key );
-		$existing_data = $get_data;
+		// Asked for THIS site's run, not merely for the newest row under this key. See
+		// tailwatch_backup_run_state(): a migration leaves a catalogue row here that is not
+		// a job, and running it is an endless backup that overwrites its own parts.
+		$existing_data = $this->tailwatch_backup_run_state();
 
 		if ( empty( $existing_data ) || ! is_array( $existing_data ) ) {
-			return;
-		}
-
-		$cancel_pause = $this->tailwatch_backup_cancel_pause_data();
-
-		// This prevents recovery/watchdog from re-running a paused, cancelled, or
-		// hard-failed process. 'failed' is terminal — bail without doing work or
-		// rescheduling so a marked-failed backup can't be revived into a loop.
-		if ( 'cancel' === $cancel_pause['scan_state'] || 'pause' === $cancel_pause['scan_state'] || 'failed' === $cancel_pause['scan_state'] ) {
+			// Nothing here to work on. The schedule goes with it, otherwise the tick is
+			// re-entered every few seconds against the same unusable row - which is the
+			// loop this exists to end, only quieter.
 			$timestamp = wp_next_scheduled( 'tailwatch_backup_daily_scan' );
 			if ( $timestamp ) {
 				wp_unschedule_event( $timestamp, 'tailwatch_backup_daily_scan' );
 			}
-			$this->update_backup_scan_state( $cancel_pause['scan_state'] );
+			return;
+		}
+
+		self::tailwatch_set_run_owner( $existing_data['folderDate'] ?? '' );
+		$cancel_pause = $this->tailwatch_backup_cancel_pause_data();
+
+		// The newest status row is another run's: the schedule is that run's too.
+		if ( 'gone' === $cancel_pause['scan_state'] ) {
+			return;
+		}
+
+		// This prevents recovery/watchdog from re-running a paused, cancelled, hard-failed or
+		// finished process. 'failed' is terminal — bail without doing work or
+		// rescheduling so a marked-failed backup can't be revived into a loop. A tick can
+		// also arrive after the finaliser (a database tick that was already queued schedules
+		// one), and running it would put the process back to in_progress and finalise the
+		// backup a second time.
+		$stop_state = $cancel_pause['scan_state'];
+		if ( in_array( $stop_state, array( 'cancel', 'pause', 'failed', 'completed' ), true ) ) {
+			$timestamp = wp_next_scheduled( 'tailwatch_backup_daily_scan' );
+			if ( $timestamp ) {
+				wp_unschedule_event( $timestamp, 'tailwatch_backup_daily_scan' );
+			}
+			// A finished run's rows already say so; there is nothing to mirror.
+			if ( 'completed' !== $stop_state ) {
+				$this->update_backup_scan_state( $stop_state );
+			}
 			return;
 		}
 
@@ -1037,40 +1678,92 @@ class BackupController extends BaseController {
 			$exclude_root_folders = $this->get_root_folders_name();
 		}
 
+		// A tick keeps working while its budget lasts. A folder takes several passes (its file
+		// list, its large files, its parts); a pass that moves it on hands straight to the next,
+		// and a finished folder to the next folder, rather than ending the tick and waiting for
+		// WP-Cron to be triggered again.
+		$budget   = self::tailwatch_tick_budget( 25 );
+		$deadline = time() + $budget;
+		$passes   = 0;
+
 		try {
 			foreach ( $folders as $key => $folder_path ) {
-				if ( isset( $existing_data[ $key ] ) && isset( $existing_data[ $key ]['completed'] ) && $existing_data[ $key ]['completed'] ) {
-					continue; // Skip if already completed
+				while ( empty( $existing_data[ $key ]['completed'] ) ) {
+					if ( $passes > 0 && ! self::tailwatch_pass_fits( $existing_data, $key, $deadline, $budget ) ) {
+						break 2;
+					}
+					++$passes;
+
+					$before = self::tailwatch_area_progress( $existing_data, $key );
+
+					$pass_result = $this->process_folder_backup( $key, $folder_path, $existing_data, $feature_controller, $tailwatch_key, $option, $exclude_wp_content_folders, $exclude_root_folders, $deadline, $this->tailwatch_listing_keep_alive( $key, (string) $process_id, (string) ( $existing_data['folderDate'] ?? '' ) ) );
+
+					// Check again in case scan_state changed during execution: user cancel/pause,
+					// OR a hard failure (manifest build / part packing hit its cap) marked the run
+					// 'failed'. In all three we stop WITHOUT rescheduling the next tick.
+					$cancel_pause = $this->tailwatch_backup_cancel_pause_data();
+
+					// The run was replaced by another since this tick began: the rows and the schedule
+					// below are the other run's.
+					if ( 'gone' === $cancel_pause['scan_state'] ) {
+						self::$pending_backup_data = null;
+						return;
+					}
+
+					// A file list stopped because its run is gone: the rows and the schedule below now
+					// belong to another run, or to nothing. So does the newest row the buffered state
+					// would be flushed onto at shutdown.
+					if ( self::LISTING_STOPPED === $pass_result && self::tailwatch_run_is_gone( $cancel_pause, $existing_data['folderDate'] ?? '' ) ) {
+						self::$pending_backup_data = null;
+						return;
+					}
+
+					if ( 'cancel' === $cancel_pause['scan_state'] || 'pause' === $cancel_pause['scan_state'] || 'failed' === $cancel_pause['scan_state'] ) {
+						$timestamp = wp_next_scheduled( 'tailwatch_backup_daily_scan' );
+						if ( $timestamp ) {
+							wp_unschedule_event( $timestamp, 'tailwatch_backup_daily_scan' );
+						}
+
+						$timestamp_backup_status = wp_next_scheduled( 'tailwatch_verify_backup_cron_hook' );
+						if ( $timestamp_backup_status ) {
+							wp_unschedule_event( $timestamp_backup_status, 'tailwatch_verify_backup_cron_hook' );
+						}
+
+						if ( true === $cancel_pause['cron_running'] ) {
+							$cancel_pause['cron_running'] = false;
+							$this->update_backup_cancel_pause( $cancel_pause );
+						}
+						$this->update_backup_scan_state( $cancel_pause['scan_state'] );
+						$this->tailwatch_backup_function_complete();
+						$this->process_manager->heart_beat( $process_id );
+						return;
+					}
+
+					$this->process_manager->heart_beat( $process_id );
+
+					if ( self::tailwatch_area_progress( $existing_data, $key ) === $before ) {
+						// Nothing moved, so repeating the pass now would only repeat what stopped it.
+						break 2;
+					}
 				}
+			}
 
-				$this->process_folder_backup( $key, $folder_path, $existing_data, $feature_controller, $tailwatch_key, $option, $exclude_wp_content_folders, $exclude_root_folders );
-
-				// Check again in case scan_state changed during execution: user cancel/pause,
-				// OR a hard failure (manifest build / part packing hit its cap) marked the run
-				// 'failed'. In all three we stop WITHOUT rescheduling the next tick.
-				$cancel_pause = $this->tailwatch_backup_cancel_pause_data();
-				if ( 'cancel' === $cancel_pause['scan_state'] || 'pause' === $cancel_pause['scan_state'] || 'failed' === $cancel_pause['scan_state'] ) {
-					$timestamp = wp_next_scheduled( 'tailwatch_backup_daily_scan' );
-					if ( $timestamp ) {
-						wp_unschedule_event( $timestamp, 'tailwatch_backup_daily_scan' );
-					}
-
-					$timestamp_backup_status = wp_next_scheduled( 'tailwatch_verify_backup_cron_hook' );
-					if ( $timestamp_backup_status ) {
-						wp_unschedule_event( $timestamp_backup_status, 'tailwatch_verify_backup_cron_hook' );
-					}
-
-					if ( true === $cancel_pause['cron_running'] ) {
-						$cancel_pause['cron_running'] = false;
-						$this->update_backup_cancel_pause( $cancel_pause );
-					}
-					$this->update_backup_scan_state( $cancel_pause['scan_state'] );
-				} else {
-					wp_schedule_single_event( time() + 3, 'tailwatch_backup_daily_scan' );
-				}
-				$this->tailwatch_backup_function_complete();
-				$this->process_manager->heart_beat( $process_id );
+			if ( ! $this->tailwatch_run_is_current() ) {
+				self::$pending_backup_data = null;
 				return;
+			}
+
+			if ( ! self::tailwatch_all_areas_done( $existing_data, array_keys( $folders ) ) ) {
+				wp_schedule_single_event( time(), 'tailwatch_backup_daily_scan' );
+				$this->tailwatch_backup_function_complete();
+				return;
+			}
+
+			// A folder's last pass scheduled a tick for whatever came next, and this tick got there
+			// itself. Left scheduled, that tick would find every folder done and finalize again.
+			$pending = wp_next_scheduled( 'tailwatch_backup_daily_scan' );
+			if ( $pending ) {
+				wp_unschedule_event( $pending, 'tailwatch_backup_daily_scan' );
 			}
 
 			// Finalize the backup process after all folders are processed.
@@ -1125,317 +1818,89 @@ class BackupController extends BaseController {
 	}
 
 	/**
-	 * Tier-1 engine: walk a folder ONCE and stream an ordered manifest of the files to
-	 * back up, replacing the O(N^2) approach (old planner walk + large-file walk + a
-	 * full re-walk per part). Two newline-delimited sidecars are written atomically:
-	 *  - $manifest_file: "relPath\tsize" for each file <= the size limit, in iteration
-	 *    order. Read back by byte offset across ticks (resume cursor) and packed into
-	 *    parts greedily — so num_parts here EQUALS the writer's part count by
-	 *    construction (no planner/writer mismatch).
-	 *  - $large_file_manifest: "relPath\tsize" for each file > the limit (zipped
-	 *    one-per-tick on the existing single-file path).
-	 * relPath is forward-slashed and relative to $folder_path; the writer prepends the
-	 * key's path_prefix to form the in-zip path the restore expects.
+	 * @see BackupManifest::tailwatch_build_backup_manifest()
 	 *
-	 * @param string $folder_path         Folder root to walk.
-	 * @param array  $exclude             Absolute paths to exclude (realpath prefix match).
-	 * @param string $manifest_file       Destination for the <=limit file list.
-	 * @param string $large_file_manifest Destination for the >limit file list.
-	 * @param int    $zip_size_limit      Per-part byte limit (default 50MB).
-	 * @param int    $scan_max_size       If >0, skip any file larger than this entirely (the
-	 *                                    scan-backup cap for malware/integrity). 0 = no cap.
-	 *                                    Sourced from a filter at the call site → future option.
-	 * @return array|false { files, large, total_size, num_parts, skipped_oversize } or false on failure.
+	 * @param string        $folder_path         Folder to walk.
+	 * @param array         $exclude             Absolute paths to prune.
+	 * @param string        $manifest_file       Manifest sidecar to write.
+	 * @param string        $large_file_manifest Oversize-file sidecar to write.
+	 * @param int           $zip_size_limit      Per-part byte limit.
+	 * @param int           $scan_max_size       Drop files over this size (0 = no cap).
+	 * @param int           $large_file_limit    Files over this are archived on their own (0 = the part limit).
+	 * @param callable|null $on_progress         Walk progress callback; false from it stops the walk.
+	 * @return array|false
 	 */
-	private function tailwatch_build_backup_manifest( $folder_path, array $exclude, $manifest_file, $large_file_manifest, $zip_size_limit = 52428800, $scan_max_size = 0 ) {
-		$exclude = array_filter( array_map( 'realpath', $exclude ) );
-
-		$tmp  = $manifest_file . '.tmp';
-		$ltmp = $large_file_manifest . '.tmp';
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen, WordPress.PHP.NoSilencedErrors.Discouraged -- streamed write of a large cursor file; WP_Filesystem has no append/stream API; @ suppresses transient host warnings, false-check follows.
-		$handle = @fopen( $tmp, 'wb' );
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen, WordPress.PHP.NoSilencedErrors.Discouraged -- streamed write; see above.
-		$lhandle = @fopen( $ltmp, 'wb' );
-		if ( false === $handle || false === $lhandle ) {
-			if ( false !== $handle ) {
-				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- closing the streamed cursor-file handle opened with fopen above; WP_Filesystem has no stream API.
-				fclose( $handle );
-			}
-			if ( false !== $lhandle ) {
-				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- closing the streamed cursor-file handle opened with fopen above; WP_Filesystem has no stream API.
-				fclose( $lhandle );
-			}
-			return false;
-		}
-
-		$stats     = array( 'files' => 0, 'large' => 0, 'total_size' => 0, 'num_parts' => 0, 'skipped_oversize' => 0 );
-		$part_size = 0;
-		$root_len  = strlen( rtrim( str_replace( '\\', '/', $folder_path ), '/' ) ) + 1;
-
-		try {
-			$dir_iterator = new \RecursiveDirectoryIterator( $folder_path, \RecursiveDirectoryIterator::SKIP_DOTS );
-
-			// Prune excluded directories BEFORE descending so we never enumerate the contents
-			// of plugins/themes/uploads (each backed up under its own key) while walking their
-			// parent. Returning false for an excluded dir skips its whole subtree — far cheaper
-			// than visiting then skipping every file inside it. The per-file boundary check in
-			// the loop stays as a safety net (e.g. an exclude that resolves to a file/symlink).
-			if ( ! empty( $exclude ) ) {
-				$dir_iterator = new \RecursiveCallbackFilterIterator(
-					$dir_iterator,
-					static function ( $current ) use ( $exclude ) {
-						if ( ! $current->isDir() ) {
-							return true; // files are handled (and boundary-checked) in the loop.
-						}
-						$dir_real = $current->getRealPath();
-						if ( false === $dir_real ) {
-							return true;
-						}
-						return ! in_array( $dir_real, $exclude, true ); // false → prune this subtree.
-					}
-				);
-			}
-
-			$iterator = new \RecursiveIteratorIterator(
-				$dir_iterator,
-				\RecursiveIteratorIterator::SELF_FIRST
-			);
-
-			foreach ( $iterator as $file ) {
-				if ( ! $file->isFile() ) {
-					continue; // intermediate dirs are recreated on extract from each file's path.
-				}
-				$abs = $file->getRealPath();
-				if ( false === $abs ) {
-					continue;
-				}
-				foreach ( $exclude as $skip_folder ) {
-					// Match on a directory boundary, NOT a bare prefix: without the trailing
-					// separator a sibling like "uploads-old" matches the excluded "uploads"
-					// and gets silently dropped from the backup (data loss). $abs is always a
-					// file under $folder_path, so it can never equal $skip_folder itself.
-					if ( 0 === strpos( $abs, $skip_folder . DIRECTORY_SEPARATOR ) ) {
-						continue 2;
-					}
-				}
-
-				$size = (int) $file->getSize();
-
-				// Scan-backup cap: drop oversize files entirely (not written to EITHER
-				// manifest) so they never enter a backup part / upload / scan / restore —
-				// every stage stays in lockstep. 0 = no cap (regular full backup). The cap
-				// comes from a filter at the call site, so a future user-selectable option
-				// can change or disable it without touching this method.
-				if ( $scan_max_size > 0 && $size > $scan_max_size ) {
-					++$stats['skipped_oversize'];
-					continue;
-				}
-
-				$rel  = ltrim( substr( str_replace( '\\', '/', $file->getPathname() ), $root_len ), '/' );
-				$line = $rel . "\t" . $size . "\n";
-
-				if ( $size > $zip_size_limit ) {
-					// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- streamed write; see fopen above.
-					fwrite( $lhandle, $line );
-					++$stats['large'];
-					continue;
-				}
-
-				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- streamed write; see fopen above.
-				fwrite( $handle, $line );
-				++$stats['files'];
-				$stats['total_size'] += $size;
-
-				// Greedy bin count — MUST match the writer's packing so num_parts is exact.
-				if ( $part_size > 0 && ( $part_size + $size ) > $zip_size_limit ) {
-					++$stats['num_parts'];
-					$part_size = 0;
-				}
-				$part_size += $size;
-			}
-
-			if ( $part_size > 0 ) {
-				++$stats['num_parts'];
-			}
-		} catch ( \Throwable $e ) {
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- stream close.
-			fclose( $handle );
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- stream close.
-			fclose( $lhandle );
-			wp_delete_file( $tmp );
-			wp_delete_file( $ltmp );
-			return false;
-		}
-
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- stream close.
-		fclose( $handle );
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- stream close.
-		fclose( $lhandle );
-
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename, WordPress.PHP.NoSilencedErrors.Discouraged -- atomic publish of the manifest; @ swallows host warnings, false return is checked.
-		if ( ! @rename( $tmp, $manifest_file ) ) {
-			wp_delete_file( $tmp );
-			wp_delete_file( $ltmp );
-			return false;
-		}
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename, WordPress.PHP.NoSilencedErrors.Discouraged -- atomic publish of the large-file manifest; @ swallows host warnings, false return is checked.
-		if ( ! @rename( $ltmp, $large_file_manifest ) ) {
-			wp_delete_file( $ltmp );
-			return false;
-		}
-
-		return $stats;
+	private function tailwatch_build_backup_manifest( $folder_path, array $exclude, $manifest_file, $large_file_manifest, $zip_size_limit = 52428800, $scan_max_size = 0, $large_file_limit = 0, $on_progress = null ) {
+		return BackupManifest::tailwatch_build_backup_manifest( $folder_path, $exclude, $manifest_file, $large_file_manifest, $zip_size_limit, $scan_max_size, $large_file_limit, $on_progress );
 	}
 
 	/**
-	 * Tier-1 engine: pack ONE zip part from the manifest, resuming at a byte offset
-	 * instead of re-walking the tree (the O(N^2) cost). Reads files greedily from
-	 * $offset until the next would overflow the size limit (matching the manifest's
-	 * bin boundaries), adds each as $path_prefix + '/' + relPath (the in-zip layout
-	 * restore expects), closes, and returns the cursor for the next part. A file that
-	 * vanished since the manifest was built is skipped but its size is still counted,
-	 * so part boundaries stay aligned with the manifest's bin count.
+	 * @see BackupManifest::tailwatch_pack_part_from_manifest()
 	 *
-	 * @param string $manifest_file  Manifest sidecar (relPath\tsize lines).
+	 * @param string $manifest_file  Manifest sidecar (relPath	size lines).
 	 * @param int    $offset         Byte offset to resume from (0 = first part).
 	 * @param string $folder_path    Folder root the rel paths are under.
-	 * @param string $path_prefix    In-zip prefix for this key (e.g. 'wp-content/plugins', '' for root).
+	 * @param string $path_prefix    In-zip prefix for this key.
 	 * @param string $destination    Zip file to (over)write for this part.
 	 * @param int    $zip_size_limit Per-part byte limit (default 50MB).
-	 * @return array|false { next_offset, added, part_size, eof, closed } or false on open failure.
+	 * @param int    $deadline       Unix timestamp to stop filling at (0 = no limit).
+	 * @return array|false
 	 */
-	private function tailwatch_pack_part_from_manifest( $manifest_file, $offset, $folder_path, $path_prefix, $destination, $zip_size_limit = 52428800 ) {
-		if ( ! file_exists( $manifest_file ) ) {
-			return false;
-		}
-		// Prefer ZipArchive (the zip extension); fall back to WordPress-bundled PclZip
-		// (pure PHP, needs only zlib) when the zip extension is disabled, so backups still
-		// complete. Both write a standard .zip that our restore already reads.
-		$use_ziparchive = class_exists( 'ZipArchive' );
-		if ( ! $use_ziparchive ) {
-			if ( ! class_exists( 'PclZip' ) && file_exists( ABSPATH . 'wp-admin/includes/class-pclzip.php' ) ) {
-				require_once ABSPATH . 'wp-admin/includes/class-pclzip.php';
-			}
-			if ( ! class_exists( 'PclZip' ) ) {
-				return false;
-			}
-		}
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen, WordPress.PHP.NoSilencedErrors.Discouraged -- partial sequential read of a large cursor file; WP_Filesystem cannot seek; @ swallows host warnings, false-check follows.
-		$handle = @fopen( $manifest_file, 'rb' );
-		if ( false === $handle ) {
-			return false;
-		}
-		if ( $offset > 0 ) {
-			fseek( $handle, $offset );
-		}
-
-		$zip = null;
-		if ( $use_ziparchive ) {
-			$zip = new \ZipArchive();
-			if ( true !== $zip->open( $destination, \ZipArchive::CREATE | \ZipArchive::OVERWRITE ) ) {
-				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- stream close.
-				fclose( $handle );
-				return false;
-			}
-		}
-
-		$folder_root = rtrim( str_replace( '\\', '/', $folder_path ), '/' );
-		$prefix      = '' === $path_prefix ? '' : rtrim( $path_prefix, '/' ) . '/';
-		$part_size   = 0;
-		$added       = 0;
-		$eof         = false;
-		$pcl_groups  = array(); // PclZip only: [source_dir][in_zip_dir][] = abs path.
-
-		while ( true ) {
-			$line_pos = ftell( $handle );
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fgets -- streaming read; see fopen above.
-			$line = fgets( $handle );
-			if ( false === $line ) {
-				$eof = true;
-				break;
-			}
-			$line = rtrim( $line, "\r\n" );
-			if ( '' === $line ) {
-				continue;
-			}
-			$tab = strrpos( $line, "\t" );
-			if ( false === $tab ) {
-				continue;
-			}
-			$rel  = substr( $line, 0, $tab );
-			$size = (int) substr( $line, $tab + 1 );
-
-			// A file that would overflow a non-empty part belongs to the NEXT part —
-			// rewind so the next call starts exactly at it (same bins as the manifest).
-			if ( $part_size > 0 && ( $part_size + $size ) > $zip_size_limit ) {
-				fseek( $handle, $line_pos );
-				break;
-			}
-
-			$abs = $folder_root . '/' . $rel;
-			if ( is_file( $abs ) && is_readable( $abs ) ) {
-				if ( $use_ziparchive ) {
-					$zip->addFile( $abs, $prefix . $rel );
-				} else {
-					// Group by (source dir, in-zip dir) so PclZip's REMOVE_PATH/ADD_PATH
-					// reproduce the exact in-zip path as ZipArchive's addFile().
-					$in_zip = $prefix . $rel;
-					$pcl_groups[ dirname( $abs ) ][ dirname( $in_zip ) ][] = $abs;
-				}
-				++$added;
-			}
-			$part_size += $size; // count even if missing, to keep boundaries aligned.
-		}
-
-		$next_offset = ftell( $handle );
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- stream close.
-		fclose( $handle );
-		$closed = $use_ziparchive ? $zip->close() : $this->tailwatch_pclzip_write_part( $destination, $pcl_groups );
-
-		return array(
-			'next_offset' => (int) $next_offset,
-			'added'       => $added,
-			'part_size'   => $part_size,
-			'eof'         => $eof,
-			'closed'      => (bool) $closed,
-		);
+	private function tailwatch_pack_part_from_manifest( $manifest_file, $offset, $folder_path, $path_prefix, $destination, $zip_size_limit = 52428800, $deadline = 0 ) {
+		return BackupManifest::tailwatch_pack_part_from_manifest( $manifest_file, $offset, $folder_path, $path_prefix, $destination, $zip_size_limit, $deadline );
 	}
 
 	/**
-	 * Write a backup part with PclZip — fallback when the zip extension is off.
-	 * Adds files per (source dir, in-zip dir) group via REMOVE_PATH/ADD_PATH so the in-zip
-	 * layout is identical to the ZipArchive path; restore stays byte-compatible. An empty
-	 * part (all files missing) writes no file — the caller's zip-validity check handles it.
+	 * Read an archive's entry index: in-zip name => uncompressed size.
+	 *
+	 * Reads only the central directory, so this costs a seek and a small read no
+	 * matter how large the archive is — nothing is decompressed. Both engines expose
+	 * the uncompressed size, so the caller does not care which one wrote the part.
+	 *
+	 * @param string $zip_path Archive to read.
+	 * @return array<string,int>|null Name => size, or null when the archive cannot be opened.
+	 */
+	private function tailwatch_read_archive_index( $zip_path ) {
+		return ArchiveReader::read_index( $zip_path );
+	}
+
+	/**
+	 * @see BackupManifest::tailwatch_verify_part_against_manifest()
+	 *
+	 * @param string $zip_path       Finished part.
+	 * @param string $manifest_file  Manifest sidecar.
+	 * @param int    $start          Byte offset the part started at.
+	 * @param int    $end            Byte offset the packer stopped at.
+	 * @param string $path_prefix    In-zip prefix for this key.
+	 * @param int    $expected_added Files the packer reported adding.
+	 * @return array{ok:bool,entries:int,expected:int,drift:int,error:string}
+	 */
+	protected function tailwatch_verify_part_against_manifest( $zip_path, $manifest_file, $start, $end, $path_prefix, $expected_added ) {
+		return BackupManifest::tailwatch_verify_part_against_manifest( $zip_path, $manifest_file, $start, $end, $path_prefix, $expected_added );
+	}
+
+	/**
+	 * @see BackupManifest::tailwatch_pclzip_write_part()
 	 *
 	 * @param string $destination Part zip path to (over)write.
 	 * @param array  $groups      [source_dir][in_zip_dir][] = abs path.
-	 * @return bool True on success.
+	 * @return bool
 	 */
 	private function tailwatch_pclzip_write_part( $destination, $groups ) {
-		if ( ! class_exists( 'PclZip' ) && file_exists( ABSPATH . 'wp-admin/includes/class-pclzip.php' ) ) {
-			require_once ABSPATH . 'wp-admin/includes/class-pclzip.php';
-		}
-		if ( ! class_exists( 'PclZip' ) ) {
-			return false;
-		}
-		// PclZip's add() appends; start from a clean file so a resumed/retried part is not doubled.
-		if ( file_exists( $destination ) ) {
-			wp_delete_file( $destination );
-		}
-		$pclzip = new \PclZip( $destination );
-		foreach ( $groups as $source_dir => $in_zip_dirs ) {
-			foreach ( $in_zip_dirs as $in_zip_dir => $files ) {
-				$res = ( '' === $in_zip_dir || '.' === $in_zip_dir )
-					? $pclzip->add( $files, PCLZIP_OPT_REMOVE_PATH, $source_dir )
-					: $pclzip->add( $files, PCLZIP_OPT_REMOVE_PATH, $source_dir, PCLZIP_OPT_ADD_PATH, $in_zip_dir );
-				if ( 0 === $res ) {
-					return false;
-				}
-			}
-		}
-		return true;
+		return BackupManifest::tailwatch_pclzip_write_part( $destination, $groups );
 	}
 
+
+	/**
+	 * The content folder's name inside an archive when it cannot be placed by its path
+	 * under the site root, which also starts the plugins, themes and uploads paths then.
+	 * The restore reads the content folder under the same name.
+	 *
+	 * @return string
+	 */
+	public static function tailwatch_content_archive_name() {
+		return basename( WP_CONTENT_DIR );
+	}
 
 	/**
 	 * In-zip path prefix for a folder key — the directory each key's files extract to.
@@ -1445,59 +1910,167 @@ class BackupController extends BaseController {
 	 * @param string $key Folder key.
 	 * @return string Prefix (no trailing slash), '' for root.
 	 */
-	private function tailwatch_path_prefix_for_key( $key ) {
-		$content_base = basename( WP_CONTENT_DIR );
+	private function tailwatch_path_prefix_for_key( $key, $source = '' ) {
+		$content_base = self::tailwatch_content_archive_name();
+
 		switch ( $key ) {
 			case 'wp-admin':
-				return 'wp-admin';
+				$assumed = 'wp-admin';
+				break;
 			case 'wp-includes':
-				return 'wp-includes';
+				$assumed = 'wp-includes';
+				break;
 			case 'wp-content':
-				return $content_base;
+				$assumed = $content_base;
+				break;
 			case 'plugins':
-				return $content_base . '/plugins';
+				$assumed = $content_base . '/plugins';
+				break;
 			case 'themes':
-				return $content_base . '/themes';
+				$assumed = $content_base . '/themes';
+				break;
 			case 'uploads':
-				return $content_base . '/uploads';
+				$assumed = $content_base . '/uploads';
+				break;
 			case 'others':
-				return '';
+				$assumed = '';
+				break;
 			default:
-				return $key;
+				$assumed = $key;
+				break;
 		}
+
+		return self::tailwatch_area_prefix( $source, $assumed );
 	}
 
 	/**
-	 * Load the large-file manifest into the {realpath,pathname,filename,size} entry
-	 * shape the existing large-file loop + create_single_file_zip() consume, so the v2
-	 * engine reuses that path unchanged. Usually a small list (few >50MB files).
+	 * Where a source directory sits inside the tree being packed.
 	 *
-	 * @param string $large_manifest Large-file manifest sidecar (relPath\tsize lines).
-	 * @param string $folder_path    Folder the rel paths are under.
-	 * @return array List of large-file entries.
+	 * A hardcoded prefix asserts where a directory OUGHT to be, and WordPress lets every
+	 * one of them move: uploads via UPLOADS or the upload_path option, and per subsite on
+	 * multisite; plugins via WP_PLUGIN_DIR; themes via register_theme_directory. Reading
+	 * the real position keeps the archive describing the tree it was taken from.
+	 *
+	 * Resolved against the source rather than against the key, because two different
+	 * trees are packed by this code. A site backup reads the live directories, and their
+	 * root is ABSPATH. A malware or integrity scan reads a snapshot under
+	 * tailwatch-scanner/, which mirrors the live layout at a fixed path — and the pro
+	 * plugin's malware restore reads those archives back at exactly those fixed paths.
+	 * Asking where the source is, relative to the root of its own tree, answers both
+	 * without a run-context flag that a future caller would forget to pass.
+	 *
+	 * On a standard single site every key resolves to exactly the assumed prefix, so the
+	 * archive layout is the same either way.
+	 *
+	 * The fallback covers a source that is missing, unreadable, or outside every tree we
+	 * pack. There is no correct in-archive path for such a directory — an archive is
+	 * relative to a root by construction — so the assumed layout stands rather than
+	 * inventing one the restore could not honour.
+	 *
+	 * @param string $source  Absolute path to the directory being packed.
+	 * @param string $assumed Prefix to use when the source cannot be placed.
+	 * @return string Prefix with no leading or trailing slash.
 	 */
-	private function tailwatch_load_large_files_from_manifest( $large_manifest, $folder_path ) {
-		$out = array();
-		if ( ! file_exists( $large_manifest ) ) {
-			return $out;
+	private static function tailwatch_area_prefix( $source, $assumed ) {
+		if ( ! is_string( $source ) || '' === $source ) {
+			return $assumed;
 		}
-		$root  = rtrim( str_replace( '\\', '/', $folder_path ), '/' );
-		$lines = file( $large_manifest, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES );
-		foreach ( (array) $lines as $line ) {
-			$tab = strrpos( $line, "\t" );
-			if ( false === $tab ) {
+
+		$real = realpath( $source );
+		if ( false === $real ) {
+			return $assumed;
+		}
+		$real = rtrim( wp_normalize_path( $real ), '/' );
+
+		foreach ( self::tailwatch_layout_roots() as $root ) {
+			if ( $real === $root ) {
+				return '';
+			}
+
+			// Slash-terminated so a sibling that merely shares a prefix is not read as
+			// being inside the root.
+			if ( 0 === strpos( $real . '/', $root . '/' ) ) {
+				$relative = trim( substr( $real, strlen( $root ) ), '/' );
+				return ( '' === $relative ) ? $assumed : $relative;
+			}
+		}
+
+		return $assumed;
+	}
+
+	/**
+	 * Row identifiers for the backup folders that exist under either backup tree.
+	 *
+	 * A backup is a row AND a directory. The listing requires both, so the page count must
+	 * too: counting rows alone, a vault carrying rows for folders that are no longer there
+	 * — the usual causes being a migration, a manual delete, and a run that never
+	 * finished — would report more pages than it could fill.
+	 *
+	 * Two scandir calls against directories the listing is about to walk in full anyway.
+	 *
+	 * @return array<string> Row `type` values, deduplicated.
+	 */
+	private static function tailwatch_backup_row_types_on_disk() {
+		$names = array();
+
+		foreach ( array( 'files', 'database' ) as $tree ) {
+			$dir = trailingslashit( TAILWATCH_BACKUP_DIR ) . $tree;
+			if ( ! is_dir( $dir ) ) {
 				continue;
 			}
-			$rel = substr( $line, 0, $tab );
-			$abs = $root . '/' . $rel;
-			$out[] = array(
-				'realpath' => $abs,
-				'pathname' => $abs,
-				'filename' => basename( $rel ),
-				'size'     => (int) substr( $line, $tab + 1 ),
-			);
+
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_scandir -- listing names in the plugin's own storage; dirlist() builds a far heavier structure for the same answer.
+			foreach ( (array) scandir( $dir ) as $entry ) {
+				if ( '.' === $entry || '..' === $entry ) {
+					continue;
+				}
+				if ( is_dir( $dir . '/' . $entry ) ) {
+					// A backup row's `type` is 'backup_<folderDate>', so the bare directory
+					// name would match no row at all and every count would come back zero.
+					$names[ 'backup_' . $entry ] = true;
+				}
+			}
 		}
-		return $out;
+
+		return array_keys( $names );
+	}
+
+	/**
+	 * The roots an archive's paths can be relative to, most specific first.
+	 *
+	 * The scanner snapshot lives inside the site, so it has to be tested before ABSPATH
+	 * or every scanner path would be named relative to the site root and the archive
+	 * would carry the plugin's own storage directory in every entry.
+	 *
+	 * @return array<string> Normalised absolute paths, no trailing slash.
+	 */
+	private static function tailwatch_layout_roots() {
+		$roots = array();
+
+		if ( defined( 'TAILWATCH_BACKUP_DIR' ) ) {
+			$scanner = realpath( trailingslashit( TAILWATCH_BACKUP_DIR ) . 'tailwatch-scanner' );
+			if ( false !== $scanner ) {
+				$roots[] = rtrim( wp_normalize_path( $scanner ), '/' );
+			}
+		}
+
+		$site = realpath( ABSPATH );
+		if ( false !== $site ) {
+			$roots[] = rtrim( wp_normalize_path( $site ), '/' );
+		}
+
+		return $roots;
+	}
+
+	/**
+	 * @see BackupManifest::tailwatch_load_large_files_from_manifest()
+	 *
+	 * @param string $large_manifest Large-file manifest sidecar.
+	 * @param string $folder_path    Folder root the rel paths are under.
+	 * @return array
+	 */
+	private function tailwatch_load_large_files_from_manifest( $large_manifest, $folder_path ) {
+		return BackupManifest::tailwatch_load_large_files_from_manifest( $large_manifest, $folder_path );
 	}
 
 
@@ -1509,20 +2082,23 @@ class BackupController extends BaseController {
 	 * @return bool
 	 */
 	private function tailwatch_zip_engine_available() {
-		if ( class_exists( 'ZipArchive' ) || class_exists( 'PclZip' ) ) {
-			return true;
-		}
-		return file_exists( ABSPATH . 'wp-admin/includes/class-pclzip.php' );
+		return ArchiveReader::is_available();
 	}
 
-	public function process_folder_backup( $key, $folder_path, &$existing_data, $feature_controller, $tailwatch_key, $option, $exclude_wp_content_folders, $exclude_root_folders ) {
+	public function process_folder_backup( $key, $folder_path, &$existing_data, $feature_controller, $tailwatch_key, $option, $exclude_wp_content_folders, $exclude_root_folders, $worker_deadline = 0, $on_progress = null ) {
 		if ( ! isset( $existing_data['zipId'] ) || ! isset( $existing_data['folderDate'] ) ) {
 			return;
 		}
 
-		$zip_size_limit = 52428800; // 50MB
+		// A replaced run's folder has been deleted; working on would recreate it and count
+		// its missing manifest as this backup failing.
+		if ( ! $this->tailwatch_run_is_current() ) {
+			return self::LISTING_STOPPED;
+		}
+
+		$zip_size_limit = self::tailwatch_folder_part_size( $existing_data, $key );
 		if ( ! isset( $existing_data[ $key ] ) || ( ! isset( $existing_data[ $key ]['started_message'] ) || true !== $existing_data[ $key ]['started_message'] ) ) {
-			$this->update_logs_records( "Backing up {$key}" );
+			$this->update_logs_records( 'Backing up ' . self::tailwatch_area_label( $key ) );
 			$existing_data[ $key ]['started_message'] = true;
 		}
 
@@ -1545,21 +2121,29 @@ class BackupController extends BaseController {
 			// Seal the backup root with deny files so archives are not reachable over the web.
 			SecureDirectoryService::ensure_private_root( $backup_directory );
 		}
+		// Seal every level, not just the root. An ancestor .htaccess already covers
+		// Apache and web.config inherits on IIS, so this is defence in depth for the
+		// case where the root deny files are deleted or never written. On nginx no
+		// deny file applies at any level — there the protection is the unguessable
+		// path segment plus the absence of a published URL.
 		$files_directory = $backup_directory . 'files/';
 		if ( ! file_exists( $files_directory ) ) {
 			wp_mkdir_p( $files_directory );
 		}
+		SecureDirectoryService::ensure( $files_directory, true );
+
 		$daily_backup_directory = $files_directory . $folder_date . '/';
 		if ( ! file_exists( $daily_backup_directory ) ) {
 			wp_mkdir_p( $daily_backup_directory );
 		}
+		SecureDirectoryService::ensure( $daily_backup_directory, true );
 
 		$normal_files_count = 0;
 
 		$batch = isset( $existing_data[ $key ]['batch'] ) ? $existing_data[ $key ]['batch'] : array();
 
-		// ONE manifest build replaces the old large-file walk + part-count walk AND the
-		// per-part re-walk. First tick builds it and returns (one tick to plan).
+		// ONE manifest build serves the large-file list, the part count and every part, so
+		// the tree is walked once. The first tick builds it and returns (one tick to plan).
 		if ( empty( $existing_data[ $key ]['manifest_built'] ) ) {
 			if ( 'wp-content' === $key ) {
 				$folder_exclude = $exclude_wp_content_folders;
@@ -1576,18 +2160,25 @@ class BackupController extends BaseController {
 			$large_manifest = $daily_backup_directory . "{$key}_{$zip_unique_id}.large";
 
 			// Malware/integrity scan backups cap file size — skip oversize files (media/
-			// archives Imunify won't deep-scan) to cut upload+scan cost. Restore is unaffected:
+			// archives a scanner does not deep-scan) to cut upload+scan cost. Restore is unaffected:
 			// a skipped file never enters the backup → never uploaded/scanned/restored. The
-			// regular full backup keeps everything (cap stays 0). The cap value is FILTERABLE,
-			// so a future user-selectable option just hooks 'tailwatch_malware_scan_max_file_size'
-			// (return 0 to disable). Default 52428800 reuses the engine's 50MB large-file line.
+			// regular full backup keeps everything (cap stays 0). The cap value is filterable
+			// through 'tailwatch_malware_scan_max_file_size' (return 0 to disable). Default
+			// 52428800 reuses the engine's 50MB large-file line.
 			$scan_process_run = isset( $existing_data['process_run'] ) ? $existing_data['process_run'] : '';
 			$scan_max_size    = 0;
 			if ( in_array( $scan_process_run, array( 'malware', 'files_integrity' ), true ) ) {
 				$scan_max_size = (int) apply_filters( 'tailwatch_malware_scan_max_file_size', 52428800, $scan_process_run, $key );
 			}
 
-			$stats = $this->tailwatch_build_backup_manifest( $folder_path, $folder_exclude, $manifest_file, $large_manifest, $zip_size_limit, $scan_max_size );
+			$stats = $this->tailwatch_build_backup_manifest( $folder_path, $folder_exclude, $manifest_file, $large_manifest, $zip_size_limit, $scan_max_size, self::LARGE_FILE_SIZE, $on_progress );
+			if ( is_array( $stats ) && ! empty( $stats['aborted'] ) ) {
+				// The run was paused, cancelled or is gone; the tick loop reads which.
+				return self::LISTING_STOPPED;
+			}
+			if ( false === $stats && ! $this->tailwatch_run_is_current() ) {
+				return self::LISTING_STOPPED;
+			}
 			if ( false === $stats ) {
 				// Same hard-failure cap as the packing loop: a persistent manifest build
 				// failure (disk full, can't write the sidecars) would otherwise be re-kicked
@@ -1603,6 +2194,30 @@ class BackupController extends BaseController {
 				}
 				return; // build failed — retried next tick until the cap.
 			}
+			// Named, not just counted. A folder the backup could not open is a hole in the
+			// archive, and the operator can only fix a permission they can see.
+			if ( ! empty( $stats['unreadable_dirs'] ) ) {
+				$shown = array_slice( $stats['unreadable_dirs'], 0, 10 );
+				$this->update_logs_records(
+					count( $stats['unreadable_dirs'] ) . " folder(s) under {$key} could not be read and were skipped — " . implode( ', ', $shown ),
+					'WARNING'
+				);
+				$existing_data[ $key ]['unreadable_dirs'] = $stats['unreadable_dirs'];
+			}
+
+			// Not an error — each WP area is opened as its own root, so a symlinked
+			// wp-content, plugins, themes or uploads IS backed up. This is the nested case,
+			// and it is named so its absence from the archive is a fact the operator knows
+			// rather than one they discover during a restore.
+			if ( ! empty( $stats['linked_dirs'] ) ) {
+				$linked = array_slice( $stats['linked_dirs'], 0, 10 );
+				$this->update_logs_records(
+					count( $stats['linked_dirs'] ) . " symlinked folder(s) under {$key} were not followed and are not in this backup — " . implode( ', ', $linked ),
+					'WARNING'
+				);
+				$existing_data[ $key ]['linked_dirs'] = $stats['linked_dirs'];
+			}
+
 			if ( ! empty( $stats['skipped_oversize'] ) ) {
 				$this->update_logs_records( "Skipped {$stats['skipped_oversize']} file(s) over " . (int) round( $scan_max_size / 1048576 ) . "MB from the {$scan_process_run} scan backup" );
 			}
@@ -1610,21 +2225,27 @@ class BackupController extends BaseController {
 			$existing_data[ $key ]['manifest_file']   = $manifest_file;
 			$existing_data[ $key ]['num_zips']        = $stats['num_parts'];
 			$existing_data[ $key ]['manifest_offset'] = 0;
+			// The intended file count, persisted so finalize can reconcile it against what
+			// was actually archived; without it a backup that lost files would still report
+			// success.
+			$existing_data[ $key ]['expected_files'] = (int) $stats['files'];
+			$existing_data[ $key ]['expected_bytes'] = (int) $stats['total_size'];
+			$existing_data[ $key ]['packed_files']   = 0;
+			$existing_data[ $key ]['skipped_files']  = 0;
 			$existing_data[ $key ]['large_files']     = $this->tailwatch_load_large_files_from_manifest( $large_manifest, $folder_path );
 			$this->update_backup_data( $existing_data );
 			return;
 		}
 		$num_zips    = (int) $existing_data[ $key ]['num_zips'];
 		$large_files = isset( $existing_data[ $key ]['large_files'] ) ? $existing_data[ $key ]['large_files'] : array();
-		if ( $num_zips >= 1 ) {
-			if ( ! isset( $existing_data[ $key ]['archive_message'] ) ) {
-				$this->update_logs_records( "Creating {$num_zips} archive parts for {$key}" );
-				$existing_data[ $key ]['archive_message'] = true;
-			}
+		$label       = self::tailwatch_area_label( $key );
+		if ( ( $num_zips >= 1 || ! empty( $large_files ) ) && ! isset( $existing_data[ $key ]['archive_message'] ) ) {
+			$this->update_logs_records( self::tailwatch_describe_archive_plan( $label, $existing_data[ $key ], $large_files, $zip_size_limit ) );
+			$existing_data[ $key ]['archive_message'] = true;
 		}
 		$current_zip_index = isset( $existing_data[ $key ]['current_zip'] ) ? $existing_data[ $key ]['current_zip'] : 1;
 
-			// Handle large files.
+		// Handle large files.
 		$current_large_file_index = isset( $existing_data[ $key ]['current_large_file'] ) ? $existing_data[ $key ]['current_large_file'] : 0;
 
 		if ( $current_large_file_index < count( $large_files ) ) {
@@ -1675,14 +2296,28 @@ class BackupController extends BaseController {
 					wp_delete_file( $large_zip_file_path );
 				}
 
+				if ( ! $this->tailwatch_disk_guard( (int) $file_size, "the large file {$file['filename']}" ) ) {
+					return;
+				}
+
 				$this->create_single_file_zip( $file, $key, $large_zips, $folder_path, $daily_backup_directory, $zip_unique_id );
 			}
 
 			if ( $this->tailwatch_is_valid_zip( $large_zip_file_path ) ) {
+				// Fingerprint this part exactly as a manifest part is fingerprinted.
+				// Without it the restore validator finds no digest and no entry count,
+				// skips both checks, and reports "predates content fingerprinting" — so
+				// the largest single files in a backup, the ones over the 50MB part
+				// limit, would be the least verified things in the whole set.
+				$large_index  = ArchiveReader::read_index( $large_zip_file_path );
+				$large_digest = ArchiveReader::content_digest( $large_zip_file_path );
+
 				$batch[ "large_zip_{$large_zips}" ] = array(
 					'size'      => filesize( $large_zip_file_path ),
 					'path'      => $large_zip_file_path,
 					'status'    => 'completed',
+					'entries'   => is_array( $large_index ) ? count( $large_index ) : null,
+					'digest'    => is_string( $large_digest ) ? $large_digest : '',
 					'timestamp' => current_time( 'mysql' ),
 					'attempts'  => $existing_data[ $key ]['batch'][ "large_zip_{$large_zips}" ]['attempts'],
 				);
@@ -1702,6 +2337,9 @@ class BackupController extends BaseController {
 			}
 
 			$cancel_pause = $this->tailwatch_backup_cancel_pause_data();
+			if ( 'gone' === $cancel_pause['scan_state'] ) {
+				return self::LISTING_STOPPED;
+			}
 			if ( 'cancel' === $cancel_pause['scan_state'] || 'pause' === $cancel_pause['scan_state'] ) {
 				$timestamp = wp_next_scheduled( 'tailwatch_backup_daily_scan' );
 				if ( $timestamp ) {
@@ -1724,7 +2362,7 @@ class BackupController extends BaseController {
 				if ( $timestamp ) {
 					wp_unschedule_event( $timestamp, 'tailwatch_verify_backup_cron_hook' );
 				}
-				wp_schedule_single_event( time() + 3, 'tailwatch_backup_daily_scan' );
+				wp_schedule_single_event( time(), 'tailwatch_backup_daily_scan' );
 				return;
 			}
 		}
@@ -1737,9 +2375,37 @@ class BackupController extends BaseController {
 		}
 		$cursor_offset   = (int) ( isset( $existing_data[ $key ]['manifest_offset'] ) ? $existing_data[ $key ]['manifest_offset'] : 0 );
 		$manifest_path = isset( $existing_data[ $key ]['manifest_file'] ) ? $existing_data[ $key ]['manifest_file'] : '';
-		$in_zip_prefix   = $this->tailwatch_path_prefix_for_key( $key );
-		$tick_deadline = time() + 25;
-		$paused   = false;
+		$in_zip_prefix   = $this->tailwatch_path_prefix_for_key( $key, $folder_path );
+		$tick_budget   = self::tailwatch_tick_budget( 25 );
+		$tick_deadline = time() + $tick_budget;
+
+		// A pass later in the same tick packs only in what the tick has left. With less than
+		// the minimum it waits for the next tick, before the no-progress guard below would
+		// count a pass that never had time to pack as a stalled part.
+		if ( $worker_deadline > 0 && $worker_deadline < $tick_deadline ) {
+			$tick_deadline = (int) $worker_deadline;
+			$tick_budget   = max( 0, $tick_deadline - time() );
+			if ( $tick_budget < self::TICK_BUDGET_MIN ) {
+				if ( $this->tailwatch_run_may_continue() ) {
+					wp_schedule_single_event( time(), 'tailwatch_backup_daily_scan' );
+				}
+				return;
+			}
+		}
+
+		// Keep the close reserve proportional on a short budget: a flat 5s off a 5s
+		// budget would leave no time to add anything, so every part would hold one file.
+		$pack_reserve = min( self::PART_CLOSE_RESERVE, (int) max( 1, floor( $tick_budget / 3 ) ) );
+		// The loop has to stop at the same moment the packer does. Looping on to the tick
+		// deadline while each part is told to stop earlier opens a window in which every
+		// part closes after its first file, leaving a folder in hundreds of one-file parts.
+		$pack_deadline = $tick_deadline - $pack_reserve;
+		$paused        = false;
+
+		// Which writer this run uses. Decided here rather than inside the loop because the
+		// no-progress guard below responds differently depending on it.
+		$process_run = isset( $existing_data['process_run'] ) ? (string) $existing_data['process_run'] : '';
+		$use_stream  = ! in_array( $process_run, BackupMaintainController::SCAN_DRIVEN_PROCESS_RUNS, true );
 
 		// No-progress guard: if this folder's manifest cursor has not advanced since the
 		// previous tick, one part is failing to complete every tick — e.g. a large part whose
@@ -1749,22 +2415,104 @@ class BackupController extends BaseController {
 		$last_tick_offset = isset( $existing_data[ $key ]['last_tick_offset'] ) ? (int) $existing_data[ $key ]['last_tick_offset'] : -1;
 		$stuck_ticks      = isset( $existing_data[ $key ]['stuck_ticks'] ) ? (int) $existing_data[ $key ]['stuck_ticks'] : 0;
 		$stuck_ticks      = ( $last_tick_offset === $cursor_offset ) ? ( $stuck_ticks + 1 ) : 0;
-		if ( $stuck_ticks >= 3 ) {
-			$this->update_logs_records( "Backup of {$key} stalled at part {$current_zip_index} of {$num_zips} (a single part is exceeding the host time limit) — aborting backup", 'ERROR' );
+		if ( $stuck_ticks > 0 ) {
+			// A killed close can leave libzip's temporary copy beside the part.
+			self::tailwatch_remove_part_leftovers( $daily_backup_directory . "{$key}_part_{$current_zip_index}_{$zip_unique_id}.zip" );
+		}
+		// Only for the whole-part packer. Its close() cannot be interrupted and costs more the
+		// larger the part, so shrinking is the one way out. The streaming writer PAUSES at the
+		// deadline and its close is cheap, so a stuck streaming tick is not a part that is too
+		// big - it is a tick killed outright, which a smaller part does not fix. Halving there
+		// would permanently fragment the rest of the folder in response to something it
+		// cannot mend.
+		if ( $stuck_ticks > 0 && ! $use_stream && $zip_size_limit > self::PART_SIZE_FLOOR ) {
+			// Closing a part is the one step the tick cannot interrupt, and its cost grows with
+			// the part. Halve the size for the rest of this folder rather than retrying the same
+			// part until the guard gives up; only a part that stalls at the floor fails the backup.
+			$smaller = (int) max( self::PART_SIZE_FLOOR, floor( $zip_size_limit / 2 ) );
+			$this->update_logs_records(
+				sprintf(
+					'Packing %2$s at %1$s of content per part did not finish within this host\'s time limit; continuing with %3$s per part',
+					size_format( $zip_size_limit ),
+					$label,
+					size_format( $smaller )
+				),
+				'WARNING'
+			);
+			$existing_data[ $key ]['part_size'] = $smaller;
+			$zip_size_limit                     = $smaller;
+			$stuck_ticks                        = 0;
+		} elseif ( $stuck_ticks >= 3 ) {
+			$this->update_logs_records( "Backup of {$label} stalled at part {$current_zip_index}: a part holding " . size_format( $zip_size_limit ) . ' of content cannot be written within this host\'s time limit — aborting backup', 'ERROR' );
 			$this->tailwatch_mark_backup_failed( "part_pack_no_progress:{$key}:{$current_zip_index}" );
 			return;
 		}
 		$existing_data[ $key ]['last_tick_offset'] = $cursor_offset;
 		$existing_data[ $key ]['stuck_ticks']      = $stuck_ticks;
-		$this->update_backup_data( $existing_data ); // persist the guard BEFORE packing so a kill counts
+		// Forced past the write throttle: a request killed outright skips shutdown handlers, and
+		// a buffered write would take the evidence of the kill with it.
+		$this->update_backup_data( $existing_data, false, true );
 
-		// Throttled so a long folder shows steady movement (~20 lines) instead of looking
-		// frozen between "Creating N parts" and "Completed".
-		$progress_step = max( 10, (int) ceil( $num_zips / 20 ) );
+		// A line per part, throttled to about twenty for a folder with many.
+		$progress_step = max( 1, (int) ceil( $num_zips / 20 ) );
 
-		while ( $current_zip_index <= $num_zips && time() < $tick_deadline ) {
+		// Completion is decided by the manifest being exhausted ('eof'), NOT by reaching
+		// the planned part count. Parts can be closed short when the tick budget runs
+		// out, so a slow host legitimately produces more parts than the manifest's greedy
+		// bin plan predicted — keying completion off $num_zips would mark the folder done
+		// with files still unpacked.
+		$manifest_eof = ! empty( $existing_data[ $key ]['manifest_eof'] );
+		if ( 0 === $num_zips ) {
+			$manifest_eof = true; // nothing to pack.
+		}
+
+		while ( ! $manifest_eof && ! TickBudget::spent( $pack_deadline ) ) {
+			if ( ! $this->tailwatch_disk_guard( $zip_size_limit, "part {$current_zip_index} of {$label}" ) ) {
+				return;
+			}
+
 			$zip_file_path = $daily_backup_directory . "{$key}_part_{$current_zip_index}_{$zip_unique_id}.zip";
-			$result        = $this->tailwatch_pack_part_from_manifest( $manifest_path, $cursor_offset, $folder_path, $in_zip_prefix, $zip_file_path, $zip_size_limit );
+
+			// Malware and integrity runs use the whole-part packer. They are partial rollback
+			// snapshots that already drop oversize files, and their part size is an upload
+			// contract with the scanner rather than ours to change.
+
+			// A part the previous tick paused rather than closed. Its manifest slice began
+			// earlier than the cursor now stands, and verification has to read from THERE,
+			// so the start is remembered separately.
+			$part_resume = ( $use_stream && ! empty( $existing_data[ $key ]['part_resume'] ) )
+				? (array) $existing_data[ $key ]['part_resume']
+				: array();
+			$part_start  = ( ! empty( $part_resume ) && isset( $existing_data[ $key ]['part_start_offset'] ) )
+				? (int) $existing_data[ $key ]['part_start_offset']
+				: $cursor_offset;
+
+			if ( $use_stream ) {
+				$result = BackupManifest::tailwatch_stream_part_from_manifest(
+					$manifest_path,
+					$cursor_offset,
+					$folder_path,
+					$in_zip_prefix,
+					$zip_file_path,
+					$zip_size_limit,
+					self::PART_ENTRY_LIMIT,
+					$pack_deadline,
+					$part_resume
+				);
+			} else {
+				$result = $this->tailwatch_pack_part_from_manifest(
+					$manifest_path,
+					$cursor_offset,
+					$folder_path,
+					$in_zip_prefix,
+					$zip_file_path,
+					$zip_size_limit,
+					$pack_deadline
+				);
+			}
+			if ( false === $result && ! $this->tailwatch_run_is_current() ) {
+				return self::LISTING_STOPPED;
+			}
 			if ( false === $result ) {
 				// Hard packer failure (manifest gone, disk full, or the part zip can't be
 				// created). The cursor hasn't advanced, so a persistent error would re-break
@@ -1777,7 +2525,12 @@ class BackupController extends BaseController {
 				$existing_data[ $key ]['pack_fail_attempts'] = $pack_fail;
 				$this->update_backup_data( $existing_data );
 				if ( $pack_fail >= 3 ) {
-					$this->update_logs_records( "Failed to write a part for {$key} after {$pack_fail} attempts — aborting backup", 'ERROR' );
+					$free_now = self::tailwatch_backup_free_space();
+					$this->update_logs_records(
+						"Failed to write a part for {$label} after {$pack_fail} attempts — aborting backup"
+						. ( false !== $free_now && $free_now < self::DISK_RESERVE + $zip_size_limit ? ' (only ' . size_format( $free_now, 1 ) . ' of disk space is free)' : '' ),
+						'ERROR'
+					);
 					$this->tailwatch_mark_backup_failed( "part_pack_failed:{$key}" );
 					return;
 				}
@@ -1785,33 +2538,129 @@ class BackupController extends BaseController {
 			}
 			// Successful pack — clear the consecutive hard-failure counter.
 			$existing_data[ $key ]['pack_fail_attempts'] = 0;
-			if ( $this->tailwatch_is_valid_zip( $zip_file_path ) ) {
+
+			// The part is not finished: the tick ran out and the archive was paused rather
+			// than closed short. There is nothing to verify yet and the part index must not
+			// move - the next tick reopens this same archive and carries on, which is what
+			// stops a slow host producing more parts than a fast one.
+			if ( ! empty( $result['part_open'] ) ) {
+				$existing_data[ $key ]['part_resume']       = (array) $result['resume'];
+				$existing_data[ $key ]['part_start_offset'] = (int) $part_start;
+				$existing_data[ $key ]['manifest_offset']   = (int) $result['next_offset'];
+				$cursor_offset                              = (int) $result['next_offset'];
+				$this->update_backup_data( $existing_data );
+				break;
+			}
+
+			// Closed. Nothing is carried into the next part.
+			$existing_data[ $key ]['part_resume']       = array();
+			$existing_data[ $key ]['part_start_offset'] = 0;
+
+			// Verify the part against the manifest slice it was packed from, straight
+			// after writing it. Structural validity alone does not prove completeness: a
+			// part missing files still opens cleanly. $cursor_offset is still the START
+			// of this part here — it is advanced below.
+			// $part_start, not $cursor_offset: a part that spanned ticks began before the
+			// cursor now stands, and verifying only the last tick's slice would compare the
+			// whole archive against a fraction of what it holds.
+			$verify = $this->tailwatch_verify_part_against_manifest(
+				$zip_file_path,
+				$manifest_path,
+				$part_start,
+				(int) $result['next_offset'],
+				$in_zip_prefix,
+				(int) $result['added']
+			);
+
+			if ( $this->tailwatch_is_valid_zip( $zip_file_path ) && $verify['ok'] ) {
 				$batch[ "zip_{$current_zip_index}" ] = array(
 					'size'      => filesize( $zip_file_path ),
 					'path'      => $zip_file_path,
 					'status'    => 'completed',
+					'verified'  => true,
+					'entries'   => (int) $verify['entries'],
+					'digest'    => isset( $verify['digest'] ) ? (string) $verify['digest'] : '',
 					'timestamp' => current_time( 'mysql' ),
 				);
+
+				if ( ! empty( $verify['drift'] ) ) {
+					// Archived correctly, just at a different size than the manifest
+					// recorded — a file that changed while the backup ran. Worth saying,
+					// never worth failing a backup over.
+					$this->update_logs_records(
+						"{$verify['drift']} file(s) changed size while archiving part {$current_zip_index} of {$key}"
+					);
+				}
+
+				if ( ! empty( $verify['missing'] ) ) {
+					// Taken by the archive library and then left out when the part closed — on
+					// Windows, a path past its 260-character limit. The part holds what it says
+					// it holds, so it stands; the loss is named here and counted below.
+					$left_out_sample = ! empty( $verify['missing_sample'] ) ? ' — ' . implode( ', ', $verify['missing_sample'] ) : '';
+					$this->update_logs_records(
+						"{$verify['missing']} file(s) could not be archived in part {$current_zip_index} of {$key}{$left_out_sample}",
+						'WARNING'
+					);
+				}
 			} else {
+				$reason = '' !== $verify['error'] ? $verify['error'] : 'archive failed its validity check';
+				$this->update_logs_records(
+					"Part {$current_zip_index} of {$key} failed verification — {$reason}",
+					'ERROR'
+				);
 				$batch[ "zip_{$current_zip_index}" ] = array(
-					'status'    => 'failed',
-					'timestamp' => current_time( 'mysql' ),
+					'status'       => 'failed',
+					'verified'     => false,
+					'verify_error' => $reason,
+					'timestamp'    => current_time( 'mysql' ),
 				);
 			}
+			// Accumulate what this part actually archived; finalize reconciles the running
+			// totals against `expected_files`.
+			// A file the library left out of the closed part is skipped, not archived, so
+			// expected = archived + skipped still holds and the completion marker still
+			// reports a backup that is missing files as not fully restorable.
+			$left_out = isset( $verify['missing'] ) ? (int) $verify['missing'] : 0;
+
+			$existing_data[ $key ]['packed_files']  = (int) ( $existing_data[ $key ]['packed_files'] ?? 0 ) + max( 0, (int) $result['added'] - $left_out );
+			$existing_data[ $key ]['skipped_files'] = (int) ( $existing_data[ $key ]['skipped_files'] ?? 0 ) + (int) $result['skipped'] + $left_out;
+
+			if ( ! empty( $result['skipped'] ) ) {
+				$sample = ! empty( $result['skipped_sample'] ) ? ' — ' . implode( ', ', $result['skipped_sample'] ) : '';
+				$this->update_logs_records(
+					"Skipped {$result['skipped']} file(s) while archiving part {$current_zip_index} of {$key}{$sample}",
+					'WARNING'
+				);
+			}
+
 			$cursor_offset = (int) $result['next_offset'];
+			$manifest_eof  = ! empty( $result['eof'] );
 			++$current_zip_index;
 			$existing_data[ $key ]['batch']           = $batch;
 			$existing_data[ $key ]['current_zip']     = $current_zip_index;
 			$existing_data[ $key ]['manifest_offset'] = $cursor_offset;
+			$existing_data[ $key ]['manifest_eof']    = $manifest_eof;
 			$this->update_backup_data( $existing_data );
 
-			// Show steady progress so a long folder doesn't look frozen (throttled).
-			$done_parts = $current_zip_index - 1; // parts completed so far in this folder
-			if ( $done_parts > 0 && 0 === ( $done_parts % $progress_step ) ) {
-				$this->update_logs_records( "Archived {$done_parts} of {$num_zips} parts for {$key}" );
+			// Counted in files rather than parts. The file total is exact; the part total is
+			// the planner's estimate, and it grows whenever a tick closes a part short.
+			$done_parts = $current_zip_index - 1;
+			if ( ! $manifest_eof && 0 === ( $done_parts % $progress_step ) ) {
+				$this->update_logs_records(
+					sprintf(
+						'Archived %s of %s for %s (part %d)',
+						number_format_i18n( (int) $existing_data[ $key ]['packed_files'] ),
+						self::tailwatch_count( (int) ( $existing_data[ $key ]['expected_files'] ?? 0 ), 'file' ),
+						$label,
+						$done_parts
+					)
+				);
 			}
 
 			$cancel_pause = $this->tailwatch_backup_cancel_pause_data();
+			if ( 'gone' === $cancel_pause['scan_state'] ) {
+				return self::LISTING_STOPPED;
+			}
 			if ( 'cancel' === $cancel_pause['scan_state'] || 'pause' === $cancel_pause['scan_state'] ) {
 				$paused = true;
 				break;
@@ -1836,12 +2685,19 @@ class BackupController extends BaseController {
 			return;
 		}
 		
-		if ( $current_zip_index <= $num_zips ) {
+		// More manifest left — come back next tick. Keyed off eof, not the part count,
+		// for the reason given where the loop starts. Not for a run stopped while its part was
+		// packing: the loop's own stop check runs only after a part is closed. The pass loop
+		// then takes the stop path.
+		if ( ! $manifest_eof ) {
+			if ( ! $this->tailwatch_run_may_continue() ) {
+				return;
+			}
 			$timestamp_backup_status = wp_next_scheduled( 'tailwatch_verify_backup_cron_hook' );
 			if ( $timestamp_backup_status ) {
 				wp_unschedule_event( $timestamp_backup_status, 'tailwatch_verify_backup_cron_hook' );
 			}
-			wp_schedule_single_event( time() + 3, 'tailwatch_backup_daily_scan' );
+			wp_schedule_single_event( time(), 'tailwatch_backup_daily_scan' );
 			return;
 		}
 
@@ -1852,7 +2708,189 @@ class BackupController extends BaseController {
 		$existing_data[ $key ]['completed'] = true;
 		$this->update_backup_data( $existing_data );
 
-		$this->update_logs_records( "Completed {$key}", 'OK' );
+		$archived = self::tailwatch_tally_parts( $existing_data[ $key ] );
+		$this->update_logs_records(
+			sprintf( 'Completed %s: %s in %s', $label, self::tailwatch_count( $archived['files'], 'file' ), self::tailwatch_count( $archived['parts'], 'part' ) ),
+			'OK'
+		);
+	}
+
+	/**
+	 * The name a folder key is logged under. Every key is its directory's name except
+	 * 'others', which holds whatever sits in the site root outside the WordPress folders.
+	 *
+	 * @param string $key Folder key.
+	 * @return string
+	 */
+	public static function tailwatch_area_label( $key ) {
+		return 'others' === $key ? 'site root files' : (string) $key;
+	}
+
+	/**
+	 * The part size a new backup run uses.
+	 *
+	 * @param string   $process_run Run context (backup, malware, files_integrity).
+	 * @param int|null $chosen_mb   The owner's setting, in MB.
+	 * @return int Bytes.
+	 */
+	public static function tailwatch_part_size_for_run( $process_run, $chosen_mb ) {
+		if ( in_array( $process_run, BackupMaintainController::SCAN_DRIVEN_PROCESS_RUNS, true ) ) {
+			return self::FIXED_PART_SIZE;
+		}
+
+		$chosen_mb = (int) $chosen_mb;
+		if ( ! in_array( $chosen_mb, self::PART_SIZE_CHOICES_MB, true ) ) {
+			$chosen_mb = self::PART_SIZE_DEFAULT_MB;
+		}
+
+		return $chosen_mb * 1048576;
+	}
+
+	/**
+	 * The part size a folder packs at right now: its own stepped-down size if it has one,
+	 * otherwise the size the run started with.
+	 *
+	 * @param array  $existing_data Backup state.
+	 * @param string $key           Folder key.
+	 * @return int Bytes.
+	 */
+	private static function tailwatch_folder_part_size( array $existing_data, $key ) {
+		if ( ! empty( $existing_data[ $key ]['part_size'] ) ) {
+			return (int) $existing_data[ $key ]['part_size'];
+		}
+		if ( ! empty( $existing_data['part_size'] ) ) {
+			return (int) $existing_data['part_size'];
+		}
+
+		return self::FIXED_PART_SIZE;
+	}
+
+	/**
+	 * Delete the temporary copies libzip writes beside an archive while closing it.
+	 *
+	 * libzip closes by writing `<archive>.XXXXXX` and renaming it over the archive, so a close
+	 * that is killed leaves that copy behind, as large as the part it was writing.
+	 *
+	 * @param string $zip_path The part being written.
+	 * @return void
+	 */
+	private static function tailwatch_remove_part_leftovers( $zip_path ) {
+		$prefix = basename( $zip_path ) . '.';
+		foreach ( (array) glob( $zip_path . '.*' ) as $leftover ) {
+			if ( 1 === preg_match( '/^[A-Za-z0-9]{6}$/', substr( basename( $leftover ), strlen( $prefix ) ) ) ) {
+				wp_delete_file( $leftover );
+			}
+		}
+	}
+
+	/**
+	 * A count with its noun, pluralised: "1 row", "2,717 rows".
+	 *
+	 * @param int    $count How many.
+	 * @param string $noun  Singular noun.
+	 * @return string
+	 */
+	public static function tailwatch_count( $count, $noun ) {
+		$count = (int) $count;
+		return number_format_i18n( $count ) . ' ' . $noun . ( 1 === $count ? '' : 's' );
+	}
+
+	/**
+	 * What a folder is about to become, before its first part is written.
+	 *
+	 * The part count is an estimate. A part closes short when a tick runs out of time, so
+	 * the real number can only match it or exceed it.
+	 *
+	 * @param string $label       Folder label.
+	 * @param array  $area        The folder's backup state.
+	 * @param array  $large_files Files over the part limit, each archived on its own.
+	 * @param int    $part_size   Part size limit, in bytes.
+	 * @return string
+	 */
+	private static function tailwatch_describe_archive_plan( $label, array $area, array $large_files, $part_size = self::FIXED_PART_SIZE ) {
+		$files = (int) ( $area['expected_files'] ?? 0 ) + count( $large_files );
+		$bytes = (int) ( $area['expected_bytes'] ?? 0 );
+		foreach ( $large_files as $large ) {
+			$bytes += is_array( $large ) ? (int) ( $large['size'] ?? 0 ) : 0;
+		}
+		$parts = (int) ( $area['num_zips'] ?? 0 ) + count( $large_files );
+
+		return sprintf(
+			'Archiving %s: %s%s, %s',
+			$label,
+			self::tailwatch_count( $files, 'file' ),
+			$bytes > 0 ? ' (' . size_format( $bytes, 1 ) . ')' : '',
+			// "of content", because the limit is what goes IN. The zip itself comes out
+			// smaller, so quoting the figure as the file size overstates it - a 500 MB
+			// part of a plugins folder lands nearer 200 MB.
+			$parts > 1 ? 'about ' . self::tailwatch_count( $parts, 'part' ) . ', up to ' . size_format( (int) $part_size ) . ' of content each' : '1 part'
+		);
+	}
+
+	/**
+	 * What a folder's finished parts actually hold, read from the parts themselves.
+	 *
+	 * @param array $area The folder's backup state.
+	 * @return array{files:int,parts:int,bytes:int}
+	 */
+	private static function tailwatch_tally_parts( array $area ) {
+		$tally = array(
+			'files' => (int) ( $area['packed_files'] ?? 0 ),
+			'parts' => 0,
+			'bytes' => 0,
+		);
+
+		foreach ( (array) ( $area['batch'] ?? array() ) as $name => $part ) {
+			if ( ! is_array( $part ) || 'completed' !== ( $part['status'] ?? '' ) ) {
+				continue;
+			}
+			++$tally['parts'];
+			$tally['bytes'] += (int) ( $part['size'] ?? 0 );
+			// A large file is a part of its own, and packed_files does not count it.
+			if ( 0 === strpos( (string) $name, 'large_zip_' ) ) {
+				++$tally['files'];
+			}
+		}
+
+		return $tally;
+	}
+
+	/**
+	 * One line describing everything a finished backup holds.
+	 *
+	 * @param array $existing_data Final backup state.
+	 * @return string
+	 */
+	private static function tailwatch_describe_backup_totals( array $existing_data ) {
+		$said   = array();
+		$tables = isset( $existing_data['tables']['db_tables'] ) && is_array( $existing_data['tables']['db_tables'] ) ? $existing_data['tables']['db_tables'] : array();
+
+		if ( ! empty( $tables ) ) {
+			$rows = 0;
+			foreach ( $tables as $table ) {
+				$rows += is_array( $table ) ? (int) ( $table['rows_exported'] ?? 0 ) : 0;
+			}
+			$said[] = self::tailwatch_count( count( $tables ), 'table' ) . ' (' . self::tailwatch_count( $rows, 'row' ) . ')';
+		}
+
+		$files = 0;
+		$parts = 0;
+		$bytes = 0;
+		foreach ( $existing_data as $area ) {
+			if ( ! is_array( $area ) || ! isset( $area['expected_files'] ) ) {
+				continue;
+			}
+			$tally  = self::tailwatch_tally_parts( $area );
+			$files += $tally['files'];
+			$parts += $tally['parts'];
+			$bytes += $tally['bytes'];
+		}
+
+		if ( $parts > 0 ) {
+			$said[] = self::tailwatch_count( $files, 'file' ) . ' in ' . self::tailwatch_count( $parts, 'archive part' ) . ' (' . size_format( $bytes, 1 ) . ')';
+		}
+
+		return empty( $said ) ? 'nothing needed archiving' : implode( ', ', $said );
 	}
 
 	/**
@@ -1861,6 +2899,9 @@ class BackupController extends BaseController {
 	 */
 	public function tailwatch_update_scan_state_unschedule_cron() {
 		$cancel_pause = $this->tailwatch_backup_cancel_pause_data();
+		if ( 'gone' === $cancel_pause['scan_state'] ) {
+			return;
+		}
 		if ( 'cancel' === $cancel_pause['scan_state'] || 'pause' === $cancel_pause['scan_state'] ) {
 			$timestamp = wp_next_scheduled( 'tailwatch_backup_daily_scan' );
 			if ( $timestamp ) {
@@ -1883,7 +2924,7 @@ class BackupController extends BaseController {
 			if ( $timestamp ) {
 				wp_unschedule_event( $timestamp, 'tailwatch_verify_backup_cron_hook' );
 			}
-			wp_schedule_single_event( time() + 3, 'tailwatch_backup_daily_scan' );
+			wp_schedule_single_event( time(), 'tailwatch_backup_daily_scan' );
 			return;
 		}
 	}
@@ -1955,34 +2996,23 @@ class BackupController extends BaseController {
 			}
 		}
 
-		// Determine path prefix.
-		$content_base = basename( WP_CONTENT_DIR );
-		$path_prefix  = '';
-		switch ( $key ) {
-			case 'wp-admin':
-				$path_prefix = 'wp-admin';
-				break;
-			case 'wp-includes':
-				$path_prefix = 'wp-includes';
-				break;
-			case 'wp-content':
-				$path_prefix = $content_base;
-				break;
-			case 'plugins':
-				$path_prefix = $content_base . '/plugins';
-				break;
-			case 'themes':
-				$path_prefix = $content_base . '/themes';
-				break;
-			case 'uploads':
-				$path_prefix = $content_base . '/uploads';
-				break;
-			case 'others':
-				$path_prefix = '';
-				break;
-			default:
-				$path_prefix = $key;
-				break;
+		// The same map the multi-file packer uses, so single-file parts and multi-file parts
+		// always agree about where a file belongs.
+		$path_prefix = $this->tailwatch_path_prefix_for_key( $key, $source );
+
+		// A single-file part carries ONE file, and the packer that writes it has only the
+		// file's own name to work with — so the folders between the area root and the file
+		// travel in the prefix, the one thing that reaches the entry name. Without them a
+		// file in uploads/2026/01/ would restore into uploads/, and two files of the same
+		// name in different folders would overwrite each other.
+		$relative_dir = trim(
+			str_replace( chr( 92 ), '/', (string) substr( (string) $file_path, strlen( untrailingslashit( (string) $source ) ) ) ),
+			'/'
+		);
+		$relative_dir = ltrim( str_replace( chr( 92 ), '/', dirname( $relative_dir ) ), '/' );
+
+		if ( '' !== $relative_dir && '.' !== $relative_dir ) {
+			$path_prefix = '' === $path_prefix ? $relative_dir : $path_prefix . '/' . $relative_dir;
 		}
 
 		// Call global ZIP function, skipping 50MB limit for single file.
@@ -2008,9 +3038,17 @@ class BackupController extends BaseController {
 	 * @return void
 	 */
 	public function tailwatch_on_recovery_failed( $process_data ) {
-		if ( ! empty( $process_data['process_type'] ) && 'backup' === $process_data['process_type'] ) {
-			$this->tailwatch_mark_backup_failed( 'recovery_max_retries' );
+		if ( empty( $process_data['process_type'] ) || 'backup' !== $process_data['process_type'] ) {
+			return;
 		}
+		// Only the run whose own process gave up. A cancelled run's process can run out of
+		// retries after the next run has started, and that run has not failed.
+		$current   = $this->tailwatch_backup_cancel_pause_data();
+		$failed_id = isset( $process_data['process_id'] ) ? (string) $process_data['process_id'] : '';
+		if ( '' !== $failed_id && is_array( $current ) && ! empty( $current['process_id'] ) && (string) $current['process_id'] !== $failed_id ) {
+			return;
+		}
+		$this->tailwatch_mark_backup_failed( 'recovery_max_retries' );
 	}
 
 	/**
@@ -2058,7 +3096,9 @@ class BackupController extends BaseController {
 		$this->current_process_id = null;
 
 		$backup_type = isset( $scan_backp['backupType'] ) ? $scan_backp['backupType'] : 'website';
-		$impact      = 'The backup stopped partway through and could not be completed. Your previous backups are still safe — please try again.';
+		$impact      = 0 === strpos( (string) $reason, 'disk_space' )
+			? 'The server is running out of disk space, so the backup stopped before filling it. Your previous backups are still safe — free up space or choose a smaller archive part size, then try again.'
+			: 'The backup stopped partway through and could not be completed. Your previous backups are still safe — please try again.';
 		Log::error(
 			"Your {$backup_type} could not be completed and was marked as failed. {$impact}",
 			array(
@@ -2103,26 +3143,124 @@ class BackupController extends BaseController {
 	}
 
 	/**
-	 * Collect the parts that permanently failed (marked status='failed' after the
-	 * 3-attempt cap) across every folder's batch. Pure read — no side effects — so
-	 * finalize can report an incomplete backup honestly. Returns "folder/part" keys.
+	 * @see BackupReconciler::tailwatch_collect_failed_parts()
 	 *
 	 * @param array $existing_data Backup state.
-	 * @return array List of "folderKey/partKey" strings (empty when all parts succeeded).
+	 * @return array
 	 */
 	private function tailwatch_collect_failed_parts( array $existing_data ) {
-		$failed_parts = array();
-		foreach ( $existing_data as $folder_key => $folder_data ) {
-			if ( ! is_array( $folder_data ) || empty( $folder_data['batch'] ) || ! is_array( $folder_data['batch'] ) ) {
-				continue;
-			}
-			foreach ( $folder_data['batch'] as $part_key => $part ) {
-				if ( isset( $part['status'] ) && 'failed' === $part['status'] ) {
-					$failed_parts[] = $folder_key . '/' . $part_key;
-				}
-			}
+		return BackupReconciler::tailwatch_collect_failed_parts( $existing_data );
+	}
+
+	/**
+	 * @see BackupReconciler::tailwatch_write_completion_marker()
+	 *
+	 * @param array $existing_data Final backup state.
+	 * @return void
+	 */
+	private function tailwatch_write_completion_marker( array $existing_data ) {
+		BackupReconciler::tailwatch_write_completion_marker( $existing_data );
+	}
+
+	/**
+	 * Apply the retention limit once this backup counts towards it.
+	 *
+	 * Pruning only at the start of a backup tick cannot see the run being made, so a
+	 * limit of N would leave N + 1 backups, and a database-only run, which never reaches
+	 * that tick, would never prune at all.
+	 *
+	 * @return void
+	 */
+	public function tailwatch_prune_after_completion() {
+		( new BackupMaintainController() )->maintain_backups( 'default_backup_scan', 'scan_backp' );
+	}
+
+	/**
+	 * Whether the newest backup record is the cancelled run, or a run older than it.
+	 *
+	 * Folder names begin with the date and time a run started, so they sort in that order.
+	 *
+	 * @param mixed $current     Newest cancel/pause record.
+	 * @param mixed $last_cancel What the last cancel recorded, or false.
+	 * @return bool
+	 */
+	public static function tailwatch_is_cancelled_run( $current, $last_cancel ) {
+		if ( ! is_array( $last_cancel ) || empty( $last_cancel['folderDate'] ) ) {
+			return false;
 		}
-		return $failed_parts;
+
+		$folder = is_array( $current ) && isset( $current['folderDate'] ) ? (string) $current['folderDate'] : '';
+
+		return '' === $folder || strcmp( $folder, (string) $last_cancel['folderDate'] ) <= 0;
+	}
+
+	/**
+	 * @see BackupReconciler::tailwatch_read_completion_marker()
+	 *
+	 * @param string $folder_date Backup folder name.
+	 * @return array|null
+	 */
+	public function tailwatch_read_completion_marker( $folder_date ) {
+		return BackupReconciler::tailwatch_read_completion_marker( $folder_date );
+	}
+
+	/**
+	 * @see BackupReconciler::tailwatch_reconcile_file_counts()
+	 *
+	 * @param array $existing_data Backup state.
+	 * @return array{missing:int,unaccounted:int,detail:array}
+	 */
+	private function tailwatch_reconcile_file_counts( array $existing_data ) {
+		return BackupReconciler::tailwatch_reconcile_file_counts( $existing_data );
+	}
+
+	/**
+	 * Whether this run produces a database dump, and so must not finish without one.
+	 *
+	 * A type that holds a database does. One nothing describes does not: an unknown type
+	 * reaching finalize with no database should not be held open for ever.
+	 *
+	 * @param array $existing_data The run's state row.
+	 * @return bool
+	 */
+	public static function tailwatch_run_expects_database( array $existing_data ) {
+		$type  = isset( $existing_data['backupType'] ) ? (string) $existing_data['backupType'] : '';
+		$parts = self::tailwatch_backup_type_parts( $type );
+
+		$with_database = apply_filters(
+			'tailwatch_backup_types_with_database',
+			( null !== $parts && $parts['database'] ) ? array( $type ) : array(),
+			$type,
+			$existing_data
+		);
+
+		return in_array( $type, (array) $with_database, true );
+	}
+
+	/**
+	 * Which halves a backup type holds, or null for a type nothing describes. This
+	 * plugin's own type, Complete Backup, holds both; a type an add-on offers is described
+	 * by that add-on.
+	 *
+	 * @param string $backup_type Backup type.
+	 * @return array{files: bool, database: bool}|null
+	 */
+	public static function tailwatch_backup_type_parts( $backup_type ) {
+		$default = null;
+		if ( 'Complete Backup' === $backup_type ) {
+			$default = array(
+				'files'    => true,
+				'database' => true,
+			);
+		}
+		$parts = apply_filters( 'tailwatch_backup_type_parts', $default, (string) $backup_type );
+		if ( ! is_array( $parts ) ) {
+			return null;
+		}
+		return array(
+			'files'    => ! empty( $parts['files'] ),
+			'database' => ! empty( $parts['database'] ),
+		);
 	}
 
 	/**
@@ -2138,9 +3276,27 @@ class BackupController extends BaseController {
 		$all_completed = true;
 		$cancel_pause  = $this->tailwatch_backup_cancel_pause_data();
 
+		// A run that was replaced must not finish: its "completed" would name a folder that is
+		// gone, and the prune that follows would count it as a backup.
+		if ( 'gone' === ( $cancel_pause['scan_state'] ?? '' )
+			|| ( isset( $cancel_pause['folderDate'], $existing_data['folderDate'] ) && (string) $cancel_pause['folderDate'] !== (string) $existing_data['folderDate'] ) ) {
+			return;
+		}
+
+		// Only the entries that represent WORK. The state array also carries bookkeeping
+		// written at the top level, and an array there has no 'completed' key — so it would
+		// read as an unfinished folder and block finalize for ever. 'deleted' stays listed
+		// because the state of an older run can still carry it.
+		//
+		// Excluded by name rather than by testing for a positive marker: an area entry
+		// exists from its first tick (cron_start) but does not gain expected_files until
+		// its manifest is built, so a positive test would skip an area mid-flight and
+		// finalize EARLY — a far worse failure than finalizing late.
+		$bookkeeping = array( 'userData', 'deleted', 'failed_parts' );
+
 		foreach ( $existing_data as $folder => $data ) {
 
-			if ( 'userData' === $folder ) {
+			if ( in_array( $folder, $bookkeeping, true ) ) {
 				continue;
 			}
 
@@ -2150,27 +3306,83 @@ class BackupController extends BaseController {
 			}
 		}
 
+		// The database phase keeps its state under 'tables', and the loop above can only
+		// gate on keys that EXIST - so until that phase has written anything there is
+		// nothing holding finalize back. A files tick would then finish the run and write a
+		// completion marker built from this row, which lists no database at all; the dumps
+		// land on disk afterwards and are invisible to the manifest, the restore and the
+		// backup's own file listing.
+		//
+		// A database phase that never starts is not stranded by this: the recovery path in
+		// tailwatch_execute_cron_if_failed() reschedules the scan cron precisely when
+		// 'tables' is unset, and the stuck-process detector reports a run that stops moving.
+		if ( $all_completed && self::tailwatch_run_expects_database( $existing_data ) ) {
+			if ( empty( $existing_data['tables'] ) || empty( $existing_data['tables']['completed'] ) ) {
+				$all_completed = false;
+			}
+		}
+
 		if ( true === $all_completed ) {
-			$this->update_logs_records( 'Backup complete', 'SUCCESS' );
 
 			if ( isset( $cancel_pause['scan_state'] ) && ( 'cancel' === $cancel_pause['scan_state'] || 'pause' === $cancel_pause['scan_state'] ) ) {
 				// No action when scan state is cancel or pause.
 			}
 
-			// Phase 1a — find parts that permanently failed (hit the 3-attempt cap and
-			// were marked status='failed') so an incomplete backup is reported honestly
-			// instead of as a clean success. scan_state STAYS 'completed' (its enum is
-			// consumed by ~14 hardcoded sites; a new value would silently break the
-			// status reader, list filter, and cleanup) — the truth lives in these
-			// separate flags and the notification text.
+			// Find parts that permanently failed (hit the 3-attempt cap and were marked
+			// status='failed') so an incomplete backup is reported honestly instead of as
+			// a clean success. scan_state STAYS 'completed' (its enum is consumed by many
+			// hardcoded sites; a new value would silently break the status reader, list
+			// filter, and cleanup) — the truth lives in these separate flags and the
+			// notification text.
 			$failed_parts = $this->tailwatch_collect_failed_parts( $existing_data );
-			$had_failures = ! empty( $failed_parts );
 
-			$existing_data['had_failures'] = $had_failures;
-			$existing_data['failed_parts'] = $failed_parts;
-			$existing_data['completed']    = true;
-			$existing_data['scan_state']   = 'completed';
-			$this->update_backup_data( $existing_data );
+			// Reconcile intended vs archived file counts. A part can close as a
+			// structurally valid zip while silently containing fewer files than intended,
+			// so part status alone cannot tell us the backup is complete.
+			$reconciled   = $this->tailwatch_reconcile_file_counts( $existing_data );
+			$had_failures = ! empty( $failed_parts ) || $reconciled['missing'] > 0 || $reconciled['unaccounted'] > 0;
+
+			if ( ! empty( $reconciled['detail'] ) ) {
+				$this->update_logs_records(
+					'File count reconciliation found gaps — ' . implode( '; ', $reconciled['detail'] ),
+					'WARNING'
+				);
+			}
+
+			$existing_data['had_failures']      = $had_failures;
+			$existing_data['failed_parts']      = $failed_parts;
+			$existing_data['files_missing']     = (int) $reconciled['missing'];
+			$existing_data['files_unaccounted'] = (int) $reconciled['unaccounted'];
+
+			// Said after the checks rather than before them, so the last line of the log
+			// agrees with the notification instead of announcing success ahead of a warning.
+			$totals = self::tailwatch_describe_backup_totals( $existing_data );
+			if ( $had_failures ) {
+				$problems = array();
+				if ( ! empty( $failed_parts ) ) {
+					$problems[] = self::tailwatch_count( count( $failed_parts ), 'part' ) . ' could not be archived';
+				}
+				$lost = (int) $reconciled['missing'] + (int) $reconciled['unaccounted'];
+				if ( $lost > 0 ) {
+					$problems[] = self::tailwatch_count( $lost, 'file' ) . ' could not be included';
+				}
+				$this->update_logs_records( 'Backup finished, but ' . implode( ' and ', $problems ) . ', so it may be incomplete — take a new backup. It holds ' . $totals, 'WARNING' );
+			} else {
+				$this->update_logs_records( 'Backup complete: ' . $totals, 'SUCCESS' );
+			}
+			RetentionHold::stamp( $existing_data, ( new BackupMaintainController() )->tailwatch_retention_count() );
+			$existing_data['completed']         = true;
+			$existing_data['scan_state']        = 'completed';
+			// Forced past the write throttle: retention reads this row straight after, and a
+			// tick that packed its last folder moments ago would otherwise still show it unfinished.
+			$this->update_backup_data( $existing_data, false, true );
+
+			// Written only once the run has reached this point, so its presence on disk
+			// is the proof that the backup set is finished — the folder alone can then be
+			// judged without consulting the state row.
+			$this->tailwatch_write_completion_marker( $existing_data );
+
+			$this->tailwatch_prune_after_completion();
 
 			if ( 'in-progress' === $cancel_pause['scan_state'] ) {
 				$cancel_pause['scan_state'] = 'completed';
@@ -2185,27 +3397,50 @@ class BackupController extends BaseController {
 				$this->current_process_id = null;
 			}
 
+			// Before the notification and the add-on hook below: the push can wait on the network
+			// for seconds, and the live log must not say "still running" while the status row
+			// already says "completed".
+			$live_logs = new LiveLogsController();
+			$live_logs->tailwatch_live_logs_completed( true, $this->tailwatch_get_log_file_path() );
+
 			// Log backup completion (also triggers notification via NotificationActions).
 			// Routing stays on action 'backup_complete' (→ backup_push_notification) in
 			// BOTH cases; only the human text + meta change when parts permanently
 			// failed, so the user is told the truth instead of a false "ready".
 			$complete_backup_type = isset( $existing_data['backupType'] ) ? $existing_data['backupType'] : 'website';
 			if ( $had_failures ) {
-				$failed_count   = count( $failed_parts );
+				$failed_count    = count( $failed_parts );
+				$missing_files   = (int) $reconciled['missing'];
+				$unaccounted     = (int) $reconciled['unaccounted'];
+				$lost_files      = $missing_files + $unaccounted;
+
+				// A backup can be incomplete for two independent reasons, and the message
+				// has to say which — reporting "0 part(s) could not be archived" when whole
+				// files went missing would pass a lossy backup off as sound.
+				$reasons = array();
+				if ( $failed_count > 0 ) {
+					$reasons[] = "{$failed_count} part(s) could not be archived";
+				}
+				if ( $lost_files > 0 ) {
+					$reasons[] = "{$lost_files} file(s) could not be included";
+				}
+
 				$partial_impact = 'Some files could not be archived, so this backup may be incomplete. We recommend running a new backup.';
 				Log::warning(
-					"Your {$complete_backup_type} finished, but {$failed_count} part(s) could not be archived — your backup may be incomplete.",
+					"Your {$complete_backup_type} finished, but " . implode( ' and ', $reasons ) . ' — your backup may be incomplete.',
 					array(
 						'feature'   => 'backup',
 						'action'    => 'backup_complete',
 						'title'     => 'Backup completed with warnings',
 						'meta_data' => array(
-							'feature'      => 'Backup Vault',
-							'event'        => 'Completed',
-							'impact'       => $partial_impact,
-							'backup_type'  => $complete_backup_type,
-							'partial'      => true,
-							'failed_count' => $failed_count,
+							'feature'           => 'Backup Vault',
+							'event'             => 'Completed',
+							'impact'            => $partial_impact,
+							'backup_type'       => $complete_backup_type,
+							'partial'           => true,
+							'failed_count'      => $failed_count,
+							'files_missing'     => $missing_files,
+							'files_unaccounted' => $unaccounted,
 						),
 					)
 				);
@@ -2231,9 +3466,6 @@ class BackupController extends BaseController {
 
 			// Allow pro plugin (MalwareScanner) to handle backup completion notification.
 			do_action( 'tailwatch_backup_completed_notification', $existing_data );
-
-			$live_logs = new LiveLogsController();
-			$live_logs->tailwatch_live_logs_completed( true, $this->tailwatch_get_log_file_path() );
 
 			$timestamp_backup_status = wp_next_scheduled( 'tailwatch_verify_backup_cron_hook' );
 			if ( $timestamp_backup_status ) {
@@ -2269,6 +3501,13 @@ class BackupController extends BaseController {
 
 			$livelogs = new LiveLogsController();
 			$result   = $livelogs->tailwatch_import_live_logs( $post_data, $this->tailwatch_get_log_file_path(), $backup_data, $feature_type, $params );
+
+			// The run is over once its status row says so. The live log's own flag is written a
+			// step later, and is missing altogether if that request died in between.
+			if ( is_array( $result ) && isset( $result['scan_state'] ) && 'completed' === $result['scan_state'] ) {
+				$result['is_completed'] = true;
+				$result['progress']     = 100;
+			}
 
 			return $result;
 		} catch ( \Throwable $e ) {
@@ -2397,10 +3636,14 @@ class BackupController extends BaseController {
 					} else {
 						$optimize_skip     = false;
 						$database_optimize = true;
-						$this->tailwatch_start_backup_creation( $database_optimize, $optimize_skip, 'on-demand' );
+						$started           = $this->tailwatch_start_backup_creation( $database_optimize, $optimize_skip, 'on-demand' );
 					}
 				} else {
-					$this->tailwatch_start_backup_creation( $database_optimize, $optimize_skip, 'on-demand' );
+					$started = $this->tailwatch_start_backup_creation( $database_optimize, $optimize_skip, 'on-demand' );
+				}
+
+				if ( isset( $started ) && self::tailwatch_start_was_refused( $started ) ) {
+					return $started;
 				}
 
 				Log::info(
@@ -2456,11 +3699,8 @@ class BackupController extends BaseController {
 	 *
 	 * Encapsulates the full gate chain used by the user-initiated entry
 	 * point (`tailwatch_backup_api_cron_start`) so the recurring cron path
-	 * (`BackupCronJob::execute`) can honour the same setting. Prior to
-	 * 1.0.1 the cron path hardcoded the `$database_optimize` argument
-	 * to `false`, which silently disabled the "Optimize Database Before
-	 * Backup" toggle for every scheduled backup. This helper restores
-	 * symmetry between the two entry points.
+	 * (`BackupCronJob::execute`) honours the same "Optimize Database Before
+	 * Backup" setting.
 	 *
 	 * Gates (all must pass to return `true`):
 	 *   - `optimizeDatabase` is true in the backup settings (the
@@ -2522,12 +3762,39 @@ class BackupController extends BaseController {
 		$user_name    = $current_user->user_login;
 		$user_role    = implode( ', ', $current_user->roles );
 
-		// Unschedule recurring backup so it does not fire during this manual/instant run.
+		// Restart the schedule's clock, so the next automatic backup is a full interval after
+		// this one. Re-armed straight away: the job's own re-arm runs only on admin_init, so a
+		// site nobody opens wp-admin on would lose its schedule after the first run. A scheduled run
+		// firing while this one is still going is refused by the process guard in the job.
 		$backup_job = CronJobManager::get_instance()->get_cron_job( 'backup' );
 		if ( null !== $backup_job ) {
 			$backup_job->unschedule();
+			$backup_job->maybe_schedule( true );
 		}
-		$this->tailwatch_calculate_folder_sizes( $user_name, $user_role, $scan_type, 'backup', $db_optimize );
+
+		return $this->tailwatch_calculate_folder_sizes( $user_name, $user_role, $scan_type, 'backup', $db_optimize );
+	}
+
+	/**
+	 * Whether a start answer is a refusal to begin: no room on the disk (507), or another
+	 * backup starting or running (409).
+	 *
+	 * @param mixed $started What a start returned.
+	 * @return bool
+	 */
+	public static function tailwatch_start_was_refused( $started ) {
+		return is_array( $started ) && isset( $started['code'] ) && in_array( (int) $started['code'], array( 507, 409 ), true );
+	}
+
+	/**
+	 * The running processes a backup of this kind belongs to: the scan that backs the site up
+	 * before it looks at it.
+	 *
+	 * @param string $process_run The backup's process_run.
+	 * @return array<string>
+	 */
+	private static function tailwatch_runs_inside_of( $process_run ) {
+		return in_array( (string) $process_run, BackupMaintainController::SCAN_DRIVEN_PROCESS_RUNS, true ) ? array( 'malware_scan', 'files_integrity' ) : array();
 	}
 
 	/**
@@ -2538,6 +3805,12 @@ class BackupController extends BaseController {
 	 */
 	public function tailwatch_start_backup_with_optimize_or_not( $post_data ) {
 		try {
+			// The same refusal as tailwatch_instant_backup_scanner(): this is the other way in.
+			$blocked = ( new ProcessGuard() )->ensure_can_start_process( 'backup' );
+			if ( null !== $blocked ) {
+				return $blocked;
+			}
+
 			$json_data = isset( $post_data ) ? wp_unslash( $post_data ) : '';
 			$data      = json_decode( $json_data, true );
 
@@ -2558,6 +3831,9 @@ class BackupController extends BaseController {
 
 			if ( isset( $data['optimize_skip'] ) && false === $data['optimize_skip'] ) {
 				$optimizer_enable = $this->tailwatch_enable_database_optimizer();
+				if ( self::tailwatch_start_was_refused( $optimizer_enable ) ) {
+					return $optimizer_enable;
+				}
 
 				if ( $optimizer_enable ) {
 					Log::info(
@@ -2587,7 +3863,10 @@ class BackupController extends BaseController {
 					);
 				}
 			} else {
-				$this->tailwatch_start_backup_creation( false, true, 'on-demand' );
+				$started = $this->tailwatch_start_backup_creation( false, true, 'on-demand' );
+				if ( self::tailwatch_start_was_refused( $started ) ) {
+					return $started;
+				}
 				Log::info(
 					'Backup process started without database optimization',
 					array(
@@ -2645,9 +3924,9 @@ class BackupController extends BaseController {
 			$features_controller = new FeaturesController();
 			$is_updated          = $features_controller->tailwatch_update_inner_feature( null, $options_data );
 
-			$this->tailwatch_start_backup_creation( true, false, 'on-demand' );
+			$started = $this->tailwatch_start_backup_creation( true, false, 'on-demand' );
 
-			return true;
+			return self::tailwatch_start_was_refused( $started ) ? $started : true;
 		}
 
 		return false;
@@ -2669,6 +3948,19 @@ class BackupController extends BaseController {
 				$backup_download_status = $download_status['in_progress'] ?? false;
 			}
 
+			// Removing a cancelled run's rows leaves the previous run's record as the newest,
+			// which would otherwise be reported as this backup's success.
+			if ( self::tailwatch_is_cancelled_run( $existing_data, get_option( self::LAST_CANCEL_OPTION ) ) ) {
+				return array(
+					'is_completed'       => true,
+					'scan_state'         => 'cancel',
+					'progress'           => 0,
+					'message'            => __( 'Backup was cancelled.', 'tailwatch' ),
+					'backup_downloading' => $backup_download_status,
+					'code'               => 200,
+				);
+			}
+
 			// No cancel/pause record means there is no tracked backup process.
 			if ( empty( $existing_data ) ) {
 				return array(
@@ -2683,6 +3975,21 @@ class BackupController extends BaseController {
 			// / missing-scan_backp branches below, so we never report "completed" while the cron is
 			// still in-progress or paused.
 			$scan_state = $existing_data['scan_state'] ?? null;
+
+			// In progress over a backup whose own row says it finished. A stale write can leave
+			// this, and nothing runs after the finaliser to correct it, so the screen would spin
+			// at 100% and the process gate would take the backup for running. The finaliser
+			// writes that row, so it is the one to believe.
+			if ( 'in-progress' === $scan_state
+				&& is_array( $backup_data )
+				&& isset( $existing_data['folderDate'], $backup_data['folderDate'] )
+				&& $existing_data['folderDate'] === $backup_data['folderDate']
+				&& true === ( $backup_data['completed'] ?? false )
+				&& 'completed' === ( $backup_data['scan_state'] ?? null ) ) {
+				$existing_data['scan_state'] = 'completed';
+				$this->update_backup_cancel_pause( $existing_data );
+				$scan_state = 'completed';
+			}
 
 			if ( 'pause' === $scan_state ) {
 				return array(
@@ -2772,8 +4079,18 @@ class BackupController extends BaseController {
 
 	public function tailwatch_resume_backup() {
 		try {
+			$refused = $this->tailwatch_refuse_resume_unless_paused();
+			if ( null !== $refused ) {
+				return $refused;
+			}
+
 			$existing_data = $this->tailwatch_get_scan_backup_data();
 			if ( ! empty( $existing_data ) && ! empty( $existing_data['backupType'] ) ) {
+				// Resumed only while nothing that cannot run beside a backup is running or paused.
+				$blocked = ( new ProcessGuard() )->ensure_can_start_process( 'backup', self::tailwatch_runs_inside_of( $existing_data['process_run'] ?? '' ) );
+				if ( null !== $blocked ) {
+					return $blocked;
+				}
 
 				// Resume is the one deliberate stop -> in-progress transition; force past the
 				// stop-state guard that otherwise keeps a pause/cancel from being reverted.
@@ -2813,10 +4130,10 @@ class BackupController extends BaseController {
 							// tailwatch_execute_cron_if_failed().
 							if ( ! isset( $existing_data['tables'] ) ) {
 								if ( ! wp_next_scheduled( 'tailwatch_scan_db_tables_cron' ) ) {
-									wp_schedule_single_event( time() + 5, 'tailwatch_scan_db_tables_cron' );
+									wp_schedule_single_event( time(), 'tailwatch_scan_db_tables_cron' );
 								}
 							} elseif ( ! wp_next_scheduled( 'tailwatch_create_db_backup_cron' ) ) {
-								wp_schedule_single_event( time() + 5, 'tailwatch_create_db_backup_cron' );
+								wp_schedule_single_event( time(), 'tailwatch_create_db_backup_cron' );
 							}
 							break;
 						default:
@@ -2867,6 +4184,41 @@ class BackupController extends BaseController {
 		}
 	}
 
+	/**
+	 * Why a resume is refused, or null when the newest run is a paused run of this site's own.
+	 *
+	 * Resume writes in-progress past the guard that keeps a finished run whole, so it may act
+	 * only on a run that is really paused: not on one that finished, was cancelled or failed, and
+	 * not on a migrated backup's catalogue entry, which is a record rather than a run.
+	 *
+	 * @return array|null
+	 */
+	private function tailwatch_refuse_resume_unless_paused() {
+		$status = $this->tailwatch_backup_cancel_pause_data();
+		$state  = ( is_array( $status ) && isset( $status['scan_state'] ) ) ? (string) $status['scan_state'] : '';
+		$run    = $this->tailwatch_backup_run_state();
+		$done   = is_array( $run ) && ( true === ( $run['completed'] ?? false ) || 'completed' === ( $run['scan_state'] ?? '' ) );
+
+		if ( 'pause' === $state && is_array( $run ) && ! $done
+			&& (string) ( $status['folderDate'] ?? '' ) === (string) ( $run['folderDate'] ?? '' ) ) {
+			return null;
+		}
+
+		if ( 'in-progress' === $state && ! $done ) {
+			$message = __( 'This backup is already running.', 'tailwatch' );
+		} elseif ( 'completed' === $state || $done ) {
+			$message = __( 'This backup has already finished, so there is nothing to resume.', 'tailwatch' );
+		} else {
+			$message = __( 'There is no paused backup to resume.', 'tailwatch' );
+		}
+
+		return array(
+			'data'    => array(),
+			'message' => $message,
+			'code'    => 409,
+		);
+	}
+
 	public function tailwatch_pause_backup_creation( $post_data ) {
 		try {
 			$json_data = isset( $post_data ) ? wp_unslash( $post_data ) : '';
@@ -2889,7 +4241,20 @@ class BackupController extends BaseController {
 
 			if ( ! empty( $data['scan_state'] ) && ( 'pause' === $data['scan_state'] || 'cancel' === $data['scan_state'] ) ) {
 
-				$cancel_pause            = $this->tailwatch_backup_cancel_pause_data();
+				$cancel_pause  = $this->tailwatch_backup_cancel_pause_data();
+				$current_state = ( is_array( $cancel_pause ) && isset( $cancel_pause['scan_state'] ) ) ? $cancel_pause['scan_state'] : '';
+				// A click that lands after the backup finished must not relabel it; Pause only means
+				// something to a backup that is running. Cancelling a paused or failed one still
+				// discards it, as the screen offers.
+				if ( 'completed' === $current_state || ( 'pause' === $data['scan_state'] && 'in-progress' !== $current_state ) ) {
+					return array(
+						'data'    => array(),
+						'message' => ( 'completed' === $current_state )
+							? __( 'This run has already finished, so there is nothing to pause or cancel.', 'tailwatch' )
+							: __( 'Only a run that is in progress can be paused.', 'tailwatch' ),
+						'code'    => 409,
+					);
+				}
 				$timestamp_backup_status = wp_next_scheduled( 'tailwatch_verify_backup_cron_hook' );
 				if ( $timestamp_backup_status ) {
 					wp_unschedule_event( $timestamp_backup_status, 'tailwatch_verify_backup_cron_hook' );
@@ -2918,6 +4283,16 @@ class BackupController extends BaseController {
 							$this->process_manager->mark_failed( $process_id, 'Backup cancelled by user' );
 						}
 
+						// Outlives the cleanup scheduled below, which removes this run's rows.
+						update_option(
+							self::LAST_CANCEL_OPTION,
+							array(
+								'folderDate' => isset( $cancel_pause['folderDate'] ) ? (string) $cancel_pause['folderDate'] : '',
+								'time'       => time(),
+							),
+							false
+						);
+
 						$message = __( 'Backup cancel successfully, and previous backup files have been deleted.', 'tailwatch' );
 						Log::info(
 							'Backup cancelled successfully',
@@ -2927,10 +4302,18 @@ class BackupController extends BaseController {
 							)
 						);
 
-						wp_schedule_single_event( time() + 5, 'tailwatch_delete_backup_files_entry' );
+						// Read afresh: when a cron runner took the files tick a moment ago, the unschedule
+						// above changed nothing stored, WordPress kept its cached copy, and writing that
+						// copy back would put the cancelled run's tick back.
+						self::tailwatch_forget_cached_schedule();
+
+						// Named, so the cleanup cannot take a backup started after this cancel.
+						wp_schedule_single_event(
+							time() + 5,
+							'tailwatch_delete_backup_files_entry',
+							array( isset( $cancel_pause['folderDate'] ) ? (string) $cancel_pause['folderDate'] : '' )
+						);
 					} elseif ( 'pause' === $data['scan_state'] ) {
-						// Keep state as in_progress when paused (for recovery)
-						// Just send final heartbeat
 						if ( $process_id ) {
 							$this->process_manager->update_state( $process_id, 'pause' );
 						}
@@ -2999,7 +4382,18 @@ class BackupController extends BaseController {
 		}
 	}
 
-	public function tailwatch_delete_files_entry_with_cron() {
+	/**
+	 * Remove an unfinished backup's folder and rows.
+	 *
+	 * Called with no folder at the start of a backup, to clear the run before it. Called by
+	 * the cancel's cleanup event with the cancelled run's folder: that event fires on the next
+	 * WP-Cron run, which can be after a new backup has started, and the rows it would read then
+	 * are the new backup's - so it acts only while they are still the cancelled run's.
+	 *
+	 * @param string $cancelled_folder The cancelled run's folder, from the cancel's event.
+	 * @return array
+	 */
+	public function tailwatch_delete_files_entry_with_cron( $cancelled_folder = '' ) {
 
 		$feature_controller = new DBModel();
 		$key                = 'default_backup_scan';
@@ -3012,6 +4406,11 @@ class BackupController extends BaseController {
 			'code'           => 400,
 		);
 
+		if ( is_string( $cancelled_folder ) && '' !== $cancelled_folder
+			&& ( ! is_array( $backup_progress ) || ( $backup_progress['folderDate'] ?? '' ) !== $cancelled_folder ) ) {
+			return $is_folder_deleted;
+		}
+
 		if (
 			! empty( $existing_data )
 			&& is_array( $backup_progress )
@@ -3022,10 +4421,12 @@ class BackupController extends BaseController {
 			if ( isset( $backup_progress['folderDate'] ) && $existing_data['folderDate'] === $backup_progress['folderDate'] ) {
 				$is_folder_deleted = $this->tailwatch_cleanup_incomplete_backup( $existing_data );
 				if ( isset( $is_folder_deleted['folder_deleted'] ) && true === $is_folder_deleted['folder_deleted'] ) {
+					// That run's own rows: a run inserted since the check above is newer, and a
+					// delete of "the newest row" would take its rows instead.
 					$delete_entries = array( 'scan_backp', 'backup_cancel_pause' );
 
 					foreach ( $delete_entries as $delete_entry ) {
-						$feature_controller->delete_recent_row( $key, $delete_entry );
+						$feature_controller->delete_run_row( $key, $delete_entry, (string) $existing_data['folderDate'] );
 					}
 				}
 			}
@@ -3141,6 +4542,11 @@ class BackupController extends BaseController {
 			foreach ( $all_backups as $backup_data ) {
 				$backup_json        = json_decode( $backup_data['value'], true );
 				$all_backup_dates[] = $backup_json['folderDate'];
+				// The folder a row's label names is kept too: a damaged row's value can name
+				// another folder, and its own would otherwise be swept as a leftover.
+				if ( isset( $backup_data['type'] ) && 0 === strpos( (string) $backup_data['type'], 'backup_' ) ) {
+					$all_backup_dates[] = substr( (string) $backup_data['type'], strlen( 'backup_' ) );
+				}
 			}
 
 			foreach ( $all_backups as $backup_data ) {
@@ -3191,7 +4597,7 @@ class BackupController extends BaseController {
 							// Handle in-progress backups older than 24 hours
 							if ( $backup_progress_json['scan_state'] === 'in-progress' && isset( $backup_json['zipId'] ) ) {
 								$time_elapsed = time() - $backup_json['zipId'];
-								if ( $time_elapsed >= 86400 ) { // 12 hours
+								if ( $time_elapsed >= 86400 ) { // 24 hours
 									$this->tailwatch_delete_backup_folders( $backup_json );
 									$delete_entries = array( $backup_data['id'], $backup_progress['id'] );
 									$this->tailwatch_delete_backup_entries( $delete_entries );
@@ -3273,6 +4679,11 @@ class BackupController extends BaseController {
 				'database' => $this->db_directory,
 			);
 
+			// A migration's folder is catalogued only once its last part is sealed, so while it
+			// is still receiving it has no row and looks like a failed backup's leftovers. The
+			// transfers name the folders they are filling.
+			$protected = (array) apply_filters( 'tailwatch_backup_protected_folders', array() );
+
 			foreach ( $directories as $type => $directoryPath ) {
 				if ( ! is_dir( $directoryPath ) ) {
 					continue;
@@ -3280,9 +4691,9 @@ class BackupController extends BaseController {
 
 				foreach ( new \DirectoryIterator( $directoryPath ) as $folder ) {
 					if ( $folder->isDir() && ! $folder->isDot() ) {
-						$folderName = $folder->getFilename();
-						if ( ! in_array( $folderName, $all_backup_dates ) ) {
-							$this->delete_folder_and_files( $directoryPath . $folderName );
+						$folder_name = $folder->getFilename();
+						if ( ! in_array( $folder_name, $all_backup_dates ) && ! isset( $protected[ $folder_name ] ) ) {
+							$this->delete_folder_and_files( $directoryPath . $folder_name );
 						}
 					}
 				}
@@ -3350,7 +4761,15 @@ class BackupController extends BaseController {
 
 			$backup_model  = new BackupModel();
 			$dbFoldersData = $backup_model->get_all_backup_folders( 'default_backup_scan', 'scan_backp', $limit, $offset, $exclude_process_runs );
-			$total         = $backup_model->get_all_backup_folders_count( 'default_backup_scan', 'scan_backp', $exclude_process_runs );
+
+			// Counted over the folders that are actually on disk, because that is what the
+			// list below returns. A raw row count would advertise pages that render empty.
+			$total = $backup_model->get_all_backup_folders_count(
+				'default_backup_scan',
+				'scan_backp',
+				$exclude_process_runs,
+				self::tailwatch_backup_row_types_on_disk()
+			);
 
 			if ( ! $dbFoldersData ) {
 				Log::error(
@@ -3583,6 +5002,32 @@ class BackupController extends BaseController {
 		return $size;
 	}
 
+	/**
+	 * Build the per-backup folder name.
+	 *
+	 * A timestamp alone is enumerable: anyone who knows roughly when a backup ran
+	 * can walk the directory names. The random suffix makes the path itself the
+	 * last line of defence on hosts where no deny file applies — nginx ignores
+	 * .htaccess entirely — so it must come from a CSPRNG, not from time()/rand().
+	 *
+	 * Only the leading timestamp is ever parsed back (see
+	 * BackupMaintainController::backup_sort_key()); the suffix is opaque.
+	 *
+	 * @return string e.g. '2026-09-08_10-00-00-a1b2c3d4'
+	 */
+	private function generate_backup_folder_name() {
+		try {
+			$suffix = bin2hex( random_bytes( 4 ) );
+		} catch ( \Exception $e ) {
+			// random_bytes() throws only when no CSPRNG source is available at all.
+			// wp_generate_password() is wp_rand()-backed, which is the best
+			// remaining option; a predictable name is never acceptable here.
+			$suffix = strtolower( substr( wp_generate_password( 8, false, false ), 0, 8 ) );
+		}
+
+		return current_time( 'Y-m-d_H-i-s' ) . '-' . $suffix;
+	}
+
 	public function format_size_units( $bytes ) {
 		if ( $bytes >= 1073741824 ) {
 			return number_format( $bytes / 1073741824, 2 ) . ' GB';
@@ -3664,6 +5109,15 @@ class BackupController extends BaseController {
 		}
 
 		$db_files = array();
+
+		// The schema dump. It is recorded at tables.path rather than in a batch, so walking
+		// only the batches would leave out the file holding the CREATE TABLE statements every
+		// rows part depends on, and it could not be downloaded, because the download grant
+		// takes its name from this list. BackupReconciler records it first for the same reason.
+		if ( ! empty( $db_results['tables']['path'] ) ) {
+			$db_files[] = basename( (string) $db_results['tables']['path'] );
+		}
+
 		if ( isset( $db_results['tables']['db_tables'] ) && is_array( $db_results['tables']['db_tables'] ) ) {
 			foreach ( $db_results['tables']['db_tables'] as $table_name => $table_data ) {
 				if ( isset( $table_data['batch'] ) && is_array( $table_data['batch'] ) ) {
@@ -3694,14 +5148,16 @@ class BackupController extends BaseController {
 
 					if ( in_array( $file_name, $db_files, true ) ) {
 						$file_size = $file->getSize();
-						$file_url  = TAILWATCH_BACKUP_URL . '/' . $type . '/' . $folder_name . '/' . $file_name;
 
+						// No public URL is published for a backup artifact. The
+						// archive and the SQL dump contain user rows and password
+						// hashes, so the only supported way out is an authenticated
+						// streaming download.
 						$verified_files[] = array(
 							'file_name'         => $file_name,
 							'file_path'         => $directory_path . $file_name,
 							'file_size'         => $this->format_size_units( $file_size ),
 							'modification_time' => gmdate( 'Y-m-d H:i:s', $file->getMTime() ), // phpcs:ignore WordPress.DateTime.RestrictedFunctions.date_gmdate
-							'download_slug'     => $file_url,
 							'type'              => $type,
 						);
 					}

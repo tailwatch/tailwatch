@@ -19,6 +19,7 @@ use Tailwatch\Admin\App\Api\Logging\Logger;
 use Tailwatch\Admin\App\Api\Logging\Handlers\LogHandlerInterface;
 use Tailwatch\Admin\App\Api\Models\DBModel;
 
+use Tailwatch\Admin\App\Api\Logging\Log;
 /**
  * Class DatabaseHandler
  *
@@ -204,7 +205,7 @@ class DatabaseHandler implements LogHandlerInterface {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				$data['file']  = sanitize_text_field( $exception->getFile() );
 				$data['line']  = absint( $exception->getLine() );
-				$data['trace'] = $exception->getTraceAsString();
+				$data['trace'] = Log::trace( $exception );
 			}
 			return $data;
 		} elseif ( is_array( $exception ) ) {

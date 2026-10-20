@@ -16,6 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use Tailwatch\Admin\App\Api\Models\DBModel;
+use Tailwatch\Admin\App\Api\Models\OptionsModel;
 use Tailwatch\Admin\App\Api\Logging\Log;
 use Tailwatch\Admin\App\Api\Controllers\Features\SecurityFeaturesVerifyController;
 
@@ -76,7 +77,6 @@ class VerifyStatusController {
 				);
 			}
 
-			// Validate data is an array
 			if ( ! is_array( $data ) ) {
 				Log::warning(
 					'Plugin activation update failed: Invalid data format',
@@ -115,7 +115,7 @@ class VerifyStatusController {
 				$data['planName'] = self::normalize_plan_name( $data['planName'] );
 			}
 
-			// Add endDate as required only for premium plans
+			// Paid plans carry an end date; a free account does not.
 			if ( isset( $data['planName'] ) && in_array( $data['planName'], array( 'Business', 'Agency' ), true ) ) {
 				$required_fields[] = 'endDate';
 			}
@@ -238,7 +238,12 @@ class VerifyStatusController {
 			}
 
 			$license_data = array(
-				'devices'              => $data['devices'] ?? 1,
+				// Empty LIST, not a count. The admin UI treats this as a collection — it reads
+				// devices.length and maps over it — and `?? []` on the React side does not
+				// replace a scalar, so a scalar default would leave the licence screen throwing
+				// a TypeError until a relay verify supplies a real array. Reachable whenever a
+				// caller omits the field, which /provision permits.
+				'devices'              => isset( $data['devices'] ) ? $data['devices'] : array(),
 				'email'                => sanitize_email( $data['email'] ),
 				'license_key'          => sanitize_text_field( $data['licenseKey'] ),
 				'plan_name'            => sanitize_text_field( $data['planName'] ),
@@ -267,17 +272,7 @@ class VerifyStatusController {
 
 			$existing_data['extended_connected'] = $license_data;
 
-			$db_data = array(
-				'value' => wp_json_encode( $existing_data ),
-			);
-
-			$where = array(
-				'option' => $this->option,
-				'key'    => $this->key,
-			);
-
-			$db_model = new DBModel();
-			$result   = $db_model->update_rows( $db_data, $where );
+			$result = $this->persist_activation_row( $license_data );
 
 			if ( $result ) {
 				// Clear any existing license verification cache
@@ -321,6 +316,81 @@ class VerifyStatusController {
 		}
 	}
 
+	/**
+	 * Write a licence binding back after a restore has replaced the settings table.
+	 *
+	 * The cutover restores whatever licence the backup held, which is never the right
+	 * answer: a backup taken before connecting disconnects the site, and after a
+	 * migration the source's backup would move the SOURCE's licence onto the
+	 * destination. RestoreOrchestrator captures the live binding before the swap and
+	 * hands it back here.
+	 *
+	 * Deliberately does NOT re-verify against the licence service. This is putting back
+	 * a binding that was already verified minutes ago on this same site, and a rejection
+	 * mid-restore would delete the pairing the restore is in the middle of preserving.
+	 * The scheduled verification picks it up on its own cycle.
+	 *
+	 * @param array $license_data The binding as it stood before the cutover.
+	 * @return bool True when the row was written.
+	 */
+	public function tailwatch_restore_activation_binding( array $license_data ) {
+		return $this->persist_activation_row( $license_data );
+	}
+
+	/**
+	 * Write the license binding into the site_settings/plugin_activation row,
+	 * creating that row when it does not exist yet.
+	 *
+	 * The row is normally seeded by the setup wizard's batch worker, so a site
+	 * connected through wp-admin always has one. A site installed, activated and
+	 * provisioned entirely over the REST API has never run that wizard, so the row
+	 * is absent — and an UPDATE against it matches nothing. $wpdb->update() reports
+	 * that as 0 rows, not an error, so the caller would see success while the license
+	 * is silently dropped: /authenticate (which never reads this row) would keep
+	 * minting tokens that /dispatch then refuses, because JwtService::validate_jwt()
+	 * rejects every token while extended_connected is missing. Seeding the row here is
+	 * what makes remote provisioning able to complete at all — the wizard action that
+	 * would otherwise seed it is itself only reachable through /dispatch.
+	 *
+	 * @param array $license_data Sanitized license binding to store.
+	 * @return bool True when the row was written.
+	 */
+	private function persist_activation_row( array $license_data ) {
+		$db_model = new DBModel();
+		$stored   = $db_model->get_value( $this->option, $this->key );
+
+		if ( is_array( $stored ) ) {
+			$stored['extended_connected'] = $license_data;
+
+			return $db_model->update_rows(
+				array( 'value' => wp_json_encode( $stored ) ),
+				array(
+					'option' => $this->option,
+					'key'    => $this->key,
+				)
+			);
+		}
+
+		// Seed from the canonical default so the row carries the same shape the
+		// wizard would have created, then carry the license into it.
+		$defaults = ( new OptionsModel() )->tailwatch_complete_site_data();
+		if ( ! isset( $defaults['site_settings'] ) || ! is_array( $defaults['site_settings'] ) ) {
+			return false;
+		}
+
+		$row   = $defaults['site_settings'];
+		$value = json_decode( isset( $row['value'] ) ? $row['value'] : '', true );
+		if ( ! is_array( $value ) ) {
+			$value = array();
+		}
+		$value['extended_connected'] = $license_data;
+		$row['value']                = wp_json_encode( $value );
+
+		// No format array, mirroring insert_rows_batch_wise() — the batch worker
+		// inserts these same rows the same way.
+		return false !== $db_model->insert_row( $row, null );
+	}
+
 	public function tailwatch_get_plugin_activation() {
 		try {
 			$license_data = $this->get_plugin_activation_status();
@@ -339,13 +409,22 @@ class VerifyStatusController {
 					);
 				}
 
-				// Check license expiry
-				if ( isset( $extended_connected['end_date'] ) ) {
-					$end_timestamp     = strtotime( $extended_connected['end_date'] );
+				// Check license expiry.
+				//
+				// A plan with no end date does not expire — a perpetual or non-expiring
+				// tier legitimately sends an empty endDate. The key is always written (it
+				// defaults to '' where the payload omits it), so isset() is always true;
+				// strtotime('') is false, and false < time() is true, so testing presence
+				// would report every such licence as permanently expired. Emptiness is the
+				// test, not presence, and an unparseable date is left alone rather than
+				// called expired — being unable to read a date is not evidence that it has
+				// passed.
+				$end_raw = isset( $extended_connected['end_date'] ) ? trim( (string) $extended_connected['end_date'] ) : '';
+				if ( '' !== $end_raw && false !== strtotime( $end_raw ) ) {
+					$end_timestamp     = strtotime( $end_raw );
 					$current_timestamp = time();
 
 					if ( $end_timestamp < $current_timestamp ) {
-						// License expired - mark as such
 						$extended_connected['status']        = 'expired';
 						$extended_connected['expired_since'] = $current_timestamp - $end_timestamp;
 					} else {
@@ -391,7 +470,7 @@ class VerifyStatusController {
 	 *   - header_key         — outbound API auth credential.
 	 *   - connection_date_time, connected_at, connected_from_ip,
 	 *     site_url, plugin_version, user_id — diagnostic / internal context.
-	 *   - Per-device `_id`, `user` — Mongo IDs from the central API.
+	 *   - Per-device `_id`, `user` — database IDs from the central API.
 	 *   - Per-device `is_linked`, `is_primary`, `createdAt`, `updatedAt`,
 	 *     `__v`, `linked_at`, `status` — bookkeeping fields the UI does
 	 *     not surface; reduces payload size and information leakage.
@@ -689,7 +768,6 @@ class VerifyStatusController {
 							}
 						}
 
-						// Log successful deletion.
 						Log::info(
 							"Plugin activation data deleted successfully: {$delete_key}",
 							array(
@@ -876,11 +954,88 @@ class VerifyStatusController {
 			return $this->run_verify_and_cache( $post_data );
 		}
 
+		// A cached verification is an answer about a particular site. After a restore from
+		// another install, or a migration onto a new domain, the cache would keep reporting
+		// 'live' while the central API's record of this site points somewhere else entirely,
+		// so the address recorded at pairing time is checked before the cache is trusted.
+		if ( $this->paired_address_has_changed() ) {
+			delete_transient( self::VERIFY_CACHE_KEY );
+			return $this->run_verify_and_cache();
+		}
+
 		$cached = get_transient( self::VERIFY_CACHE_KEY );
 		if ( false !== $cached && is_array( $cached ) ) {
 			return $cached;
 		}
 		return $this->run_verify_and_cache();
+	}
+
+	/**
+	 * Whether this site is answering at a different address than it paired from.
+	 *
+	 * Re-verifying is the whole response, deliberately. Disconnecting on a changed URL
+	 * would punish every ordinary site move — an HTTPS switch, a www change, a staging
+	 * copy promoted to production — and the licence server is the only thing that can
+	 * actually decide whether this install is still entitled. So the stale answer is
+	 * dropped and a fresh one is asked for; whatever comes back is the truth.
+	 *
+	 * The recorded address is refreshed on the way past, so this costs one extra
+	 * verification per move rather than one per page load.
+	 *
+	 * @return bool
+	 */
+	private function paired_address_has_changed() {
+		$status = $this->get_plugin_activation_status();
+		if ( ! is_array( $status ) || empty( $status['extended_connected'] ) || ! is_array( $status['extended_connected'] ) ) {
+			return false;
+		}
+
+		$paired = isset( $status['extended_connected']['site_url'] ) ? (string) $status['extended_connected']['site_url'] : '';
+		if ( '' === $paired ) {
+			// Paired before this field was recorded. Stamp it and say nothing changed —
+			// an absent record is not evidence of a move.
+			$this->remember_paired_address( $status );
+			return false;
+		}
+
+		if ( untrailingslashit( $paired ) === untrailingslashit( (string) TAILWATCH_GET_SITE_URL ) ) {
+			return false;
+		}
+
+		Log::warning(
+			'The site address has changed since this licence was connected; re-verifying.',
+			array(
+				'feature' => 'license',
+				'action'  => 'license_site_url_changed',
+			)
+		);
+
+		$this->remember_paired_address( $status );
+
+		return true;
+	}
+
+	/**
+	 * Record the address this install is currently answering at.
+	 *
+	 * @param array $status Activation status row contents.
+	 * @return void
+	 */
+	private function remember_paired_address( array $status ) {
+		$status['extended_connected']['site_url'] = TAILWATCH_GET_SITE_URL;
+
+		$encoded = wp_json_encode( $status );
+		if ( false === $encoded ) {
+			return;
+		}
+
+		( new DBModel() )->update_rows(
+			array( 'value' => $encoded ),
+			array(
+				'option' => $this->option,
+				'key'    => $this->key,
+			)
+		);
 	}
 
 	private function run_verify_and_cache( $post_data = false ) {
@@ -910,7 +1065,7 @@ class VerifyStatusController {
 			if ( empty( $get_extended_data['extended_connected'] ) || empty( $get_extended_data['extended_connected']['user_id'] ) ) {
 				// Broadcast even on no-license fast-path so pro (if present)
 				// can re-apply locks for premium rows mutated since the original
-				// disconnect (reset / bulk activation can wrote is_active=1 on a
+				// disconnect (reset / bulk activation can write is_active=1 on a
 				// premium feature without knowing the license was gone). $force
 				// is false here so pro's throttle absorbs repeat dashboard hits;
 				// real kill paths pass $force = true.
@@ -997,12 +1152,14 @@ class VerifyStatusController {
 		$response = wp_remote_get(
 			$check_connected_url,
 			array(
-				'headers' => array(
+				'headers'     => array(
 					'Accept'            => 'application/json',
 					'X-Tailwatch-Header-Key' => $header_key,
 					'X-Tailwatch-Route'      => $route_token,
 				),
-				'timeout' => 15,
+				'timeout'     => 15,
+				// The header key goes to the relay and nowhere else.
+				'redirection' => 0,
 			)
 		);
 
@@ -1168,13 +1325,13 @@ class VerifyStatusController {
 
 	private function tailwatch_handle_suspended_license( $user_id, $plan_name, $plan_status ) {
 		$suspension_messages = array(
-			'suspended' => 'Your license has been suspended. You still have access to Basic plan features.',
-			'expired'   => 'Your license has expired. You still have access to Basic plan features.',
-			'cancelled' => 'Your subscription has been cancelled. You still have access to Basic plan features.',
-			'inactive'  => 'Your account is inactive. You still have access to Basic plan features.',
+			'suspended' => __( 'Your license has been suspended. Tailwatch Pro is paused; the free plugin keeps working.', 'tailwatch' ),
+			'expired'   => __( 'Your license has expired. Tailwatch Pro is paused; the free plugin keeps working.', 'tailwatch' ),
+			'cancelled' => __( 'Your subscription has been cancelled. Tailwatch Pro is paused; the free plugin keeps working.', 'tailwatch' ),
+			'inactive'  => __( 'Your account is inactive. Tailwatch Pro is paused; the free plugin keeps working.', 'tailwatch' ),
 		);
 
-		$suspension_message = $suspension_messages[ strtolower( $plan_status ) ] ?? 'Your license is not active. Basic plan features are still available.';
+		$suspension_message = $suspension_messages[ strtolower( $plan_status ) ] ?? __( 'Your license is not active. The free plugin keeps working.', 'tailwatch' );
 
 		update_option(
 			'tailwatch_last_license_check',
@@ -1204,18 +1361,17 @@ class VerifyStatusController {
 				'access_level'      => 'basic_only',
 			),
 			'code'    => 200,
-			'message' => __( 'License Suspended - Basic Plan Access Maintained', 'tailwatch' ),
+			'message' => __( 'License suspended - the free plugin keeps working', 'tailwatch' ),
 		);
 	}
 
 	/**
 	 * Response shape for API-returned role='suspended'. Preserves the real
-	 * plan name in `planName` (so UI can render "Agency (suspended)") while
-	 * functionally treating the user as Basic via plan_tier=1.
+	 * plan name in `planName` (so UI can render "Agency (suspended)") and
+	 * stores plan_tier=1, the tier the add-on reads for a suspended account.
 	 *
-	 * tailwatch_handle_suspended_license is the sibling for the other suspension
-	 * causes (HTTP 401/403/418/419, invalid plan name); that one downgrades
-	 * `planName` to 'Basic' in display.
+	 * tailwatch_handle_suspended_license is the sibling for an invalid plan
+	 * name; that one downgrades `planName` to 'Basic' in display.
 	 */
 	private function tailwatch_handle_role_suspended_license( $user_id, $plan_name, $get_extended_data ) {
 		update_option(
@@ -1250,12 +1406,12 @@ class VerifyStatusController {
 				'start_date'        => $start_date,
 				'end_date'          => $end_date,
 				'expires_in'        => $expires_in,
-				'suspension_reason' => 'Your account is suspended. Basic features remain available — reactivate your subscription to restore full access.',
+				'suspension_reason' => __( 'Your account is suspended. Tailwatch Pro is paused; the free plugin keeps working. Reactivate your subscription to resume Tailwatch Pro.', 'tailwatch' ),
 				'access_level'      => 'basic_only',
 				'last_verified'     => time(),
 			),
 			'code'    => 200,
-			'message' => __( 'Account suspended — Basic plan access maintained.', 'tailwatch' ),
+			'message' => __( 'Account suspended — the free plugin keeps working.', 'tailwatch' ),
 		);
 	}
 

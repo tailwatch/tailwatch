@@ -1,9 +1,16 @@
 import React from 'react';
 import { IoClose } from "react-icons/io5";
-import { GiPauseButton } from "react-icons/gi";
+import { Pause } from "lucide-react";
 import { FaInfoCircle } from "react-icons/fa";
 
-const InfoBar = ({ type, message, onClose, showCloseButton = false }) => {
+/**
+ * `action` — one control that belongs to this notice, sitting inside the bar.
+ *
+ * A notice that tells someone to go and change a setting needs the way to change it.
+ * Inside the bar and pushed to the end, the control reads as part of the sentence it
+ * belongs to; below the bar it would float on its own, aligned to nothing.
+ */
+const InfoBar = ({ type, message, onClose, showCloseButton = false, action }) => {
   const isInfo = type === "info";
 
   const alertClasses = {
@@ -34,17 +41,21 @@ const InfoBar = ({ type, message, onClose, showCloseButton = false }) => {
   };
 
   const content = (
-    <div className={`flex items-center p-4 ${alertClasses[type]?.container}`} role="alert">
+    <div
+      className={`flex flex-wrap items-center gap-y-2 p-4 ${alertClasses[type]?.container}`}
+      role="alert"
+    >
       {type === "progress" ? (
         <svg className='w-[30px]' xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><path fill="#847A7A" stroke="#847A7A" stroke-width="2" transform-origin="center" d="m148 84.7 13.8-8-10-17.3-13.8 8a50 50 0 0 0-27.4-15.9v-16h-20v16A50 50 0 0 0 63 67.4l-13.8-8-10 17.3 13.8 8a50 50 0 0 0 0 31.7l-13.8 8 10 17.3 13.8-8a50 50 0 0 0 27.5 15.9v16h20v-16a50 50 0 0 0 27.4-15.9l13.8 8 10-17.3-13.8-8a50 50 0 0 0 0-31.7Zm-47.5 50.8a35 35 0 1 1 0-70 35 35 0 0 1 0 70Z"><animateTransform type="rotate" attributeName="transform" calcMode="spline" dur="1.6" values="0;120" keyTimes="0;1" keySplines="0 0 1 1" repeatCount="indefinite"></animateTransform></path></svg>
       ) : type === "paused" ? (
-        <GiPauseButton className="text-blue-500" />
+        <Pause className="text-blue-500" size="1em" fill="currentColor" />
       ) : (
         <FaInfoCircle className="flex-shrink-0 w-5 h-5 text-orange-600" />
       )}
-      <div className="ms-3 text-sm font-medium">
+      <div className="ms-3 min-w-0 flex-1 text-sm font-medium">
         {message}
       </div>
+      {action && <div className="ms-3 shrink-0">{action}</div>}
       {showCloseButton && (
         <IoClose onClick={onClose} className="ms-auto text-[20px] cursor-pointer text-black" />
       )}

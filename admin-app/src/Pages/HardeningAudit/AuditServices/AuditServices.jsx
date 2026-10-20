@@ -1,3 +1,4 @@
+import { readFeatureGate } from '../../../Components/Utils/featureGate';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { CronHealer } from '../../../Components/CroneHealer/CronHealer';
@@ -93,7 +94,7 @@ const checkCronExecution = async (cron_running) => {
     }
 };
 
-export const fetchLogs = async (setLogs, setIsCompleted, isFirstExecution = true, isComponentActiveRef, setProgress, setIsScanInProgress, setIsLogsVisible, setErrorMessages, setIsPaused, setIsCanceled, setRenderKey, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setFeatureEnable, setParentEnable) => {
+export const fetchLogs = async (setLogs, setIsCompleted, isFirstExecution = true, isComponentActiveRef, setProgress, setIsScanInProgress, setIsLogsVisible, setErrorMessages, setIsPaused, setIsCanceled, setRenderKey, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setFeatureEnable, setParentEnable, setIsFailed) => {
     try {
         const formData = new FormData();
         formData.append("action", "tailwatch_global_ajax_handler");
@@ -106,9 +107,13 @@ export const fetchLogs = async (setLogs, setIsCompleted, isFirstExecution = true
         const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
+        // A reply the gate let through is proof both switches are on. Read from every
+        // response, not only refusals, so these flags cannot latch to false and stay there.
+        readFeatureGate(response, setFeatureEnable, setParentEnable);
+
 
         // Backend gates: when feature/parent are disabled the call returns success=false
-        // with the disable flags in `data`. Mirror BrokenLink's pattern.
+        // with the disable flags in `data`.
         if (response.data?.success === false) {
             const { feature_enable, parent_enable } = response.data.data || {};
             if (typeof feature_enable !== 'undefined' && setFeatureEnable) setFeatureEnable(feature_enable);
@@ -131,6 +136,20 @@ export const fetchLogs = async (setLogs, setIsCompleted, isFirstExecution = true
             if (timeDifference >= 12) {
                 await CronHealer();
             }
+        }
+
+        // Returns before the retry timer at the bottom: the site has given up on this audit,
+        // so asking it to restart the cron would only be refused.
+        if (scan_state === "failed") {
+            setIsScanInProgress(false);
+            setIsPaused(false);
+            setOperationLoading(false);
+            setIsLogsVisible(true);
+            if (typeof setIsFailed === "function") {
+                setIsFailed(true);
+            }
+            setLogs((prevLogs) => [...prevLogs, "The hardening audit stopped because of an error before it finished. The log above shows how far it got."]);
+            return;
         }
 
         if (is_completed && scan_state === "completed") {
@@ -162,7 +181,7 @@ export const fetchLogs = async (setLogs, setIsCompleted, isFirstExecution = true
         else if (scan_state === "in-progress") {
             if (isComponentActiveRef.current) {
                 setTimeout(() => {
-                    fetchLogs(setLogs, setIsCompleted, false, isComponentActiveRef, setProgress, setIsScanInProgress, setIsLogsVisible, setErrorMessages, setIsPaused, setIsCanceled, setRenderKey, setOperationLoading, last_log_index, setIsLastLogIndex, setFeatureEnable, setParentEnable);
+                    fetchLogs(setLogs, setIsCompleted, false, isComponentActiveRef, setProgress, setIsScanInProgress, setIsLogsVisible, setErrorMessages, setIsPaused, setIsCanceled, setRenderKey, setOperationLoading, last_log_index, setIsLastLogIndex, setFeatureEnable, setParentEnable, setIsFailed);
                 }, 4000);
             }
         }
@@ -204,7 +223,10 @@ export const handleHardeningAuditActions = async ({ scan_state, setIsScanInProgr
                 setIsPaused(true);
                 setLogs((prevLogs) => [...prevLogs, "Hardening Audit paused by user"]);
             }
+            return true;
         }
+        toast.error(response.data?.data?.message || "The hardening audit could not be paused or canceled.");
+        return false;
     } catch (error) {
         setErrorMessages((prevErrors) => [...prevErrors, `Error while ${scan_state === 'cancel' ? 'canceling' : 'pausing'} hardening audit`]);
         console.error(`Error during ${scan_state === 'cancel' ? 'cancel' : 'pause'} hardening audit:`, error);
@@ -222,6 +244,10 @@ export const verifyHardeningAuditStatus = async (setLoading, setVerifyStatus, se
         const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
+        // A reply the gate let through is proof both switches are on. Read from every
+        // response, not only refusals, so these flags cannot latch to false and stay there.
+        readFeatureGate(response, setFeatureEnable, setParentEnable);
+
 
         if (response.data.success === true) {
             const { is_completed, progress, scan_state, scan_type } = response.data.data;
@@ -267,6 +293,10 @@ export const listHardeningAuditReports = async ({ setReports, setLoading, page =
         const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
+        // A reply the gate let through is proof both switches are on. Read from every
+        // response, not only refusals, so these flags cannot latch to false and stay there.
+        readFeatureGate(response, setFeatureEnable, setParentEnable);
+
 
         if (response.data?.data?.code === 200) {
             // Response shape: response.data.data.data = { reports: [...], limit, offset, total? }

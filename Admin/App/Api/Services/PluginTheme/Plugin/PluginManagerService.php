@@ -740,15 +740,15 @@ class PluginManagerService {
 	 *
 	 * Handles every slug shape the codebase encounters, in order:
 	 *   1. A full plugin file path already keyed in get_plugins() (returned as-is).
-	 *   2. Folder-based plugins:    "akismet"     -> "akismet/akismet.php"
-	 *   3. Single-file plugins:     "hello"       -> "hello.php"
-	 *   4. WP.org canonical slug:   "hello-dolly" -> "hello.php"
+	 *   2. Folder-based plugins:    "my-plugin"   -> "my-plugin/my-plugin.php"
+	 *   3. Single-file plugins:     "single"      -> "single.php"
+	 *   4. WP.org canonical slug:   "single-file" -> "single.php"
 	 *
 	 * For case (4), the resolver consults the `update_plugins` site transient,
 	 * where each entry carries the canonical WordPress.org slug under
 	 * `$entry->slug` -- the same source WordPress itself uses to map installed
 	 * plugins to their repository identity. This is what makes single-file
-	 * plugins like Hello Dolly resolvable from their WP.org slug.
+	 * plugins resolvable from a WP.org slug that differs from their file name.
 	 *
 	 * @param string $slug Plugin slug or full plugin file path.
 	 *
@@ -803,8 +803,8 @@ class PluginManagerService {
 	/**
 	 * Resolve an installed plugin file to its canonical WordPress.org slug.
 	 *
-	 * The canonical slug is what api.wordpress.org expects (e.g. "hello-dolly"
-	 * for the file "hello.php"). It is NOT always derivable from the file path
+	 * The canonical slug is what api.wordpress.org expects (e.g. "single-file"
+	 * for the file "single.php"). It is NOT always derivable from the file path
 	 * alone -- a single-file plugin's filename rarely matches its repo slug.
 	 *
 	 * Resolution order:

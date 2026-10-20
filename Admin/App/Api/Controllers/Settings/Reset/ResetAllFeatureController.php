@@ -360,8 +360,8 @@ class ResetAllFeatureController {
 				// Settings are back to defaults, so unschedule every plugin/feature cron and drop
 				// the cron bookkeeping. Each enabled feature re-registers its own cron on the next
 				// load ("schedule if missing"), so this realigns the schedule to the reset (default)
-				// state and drops crons of features that are now off — fixing the orphaned-cron gap
-				// the direct-row rewrite would otherwise leave. clear_all_cron_events() sweeps the
+				// state and drops crons of features that are now off, which the direct-row rewrite
+				// would otherwise leave behind. clear_all_cron_events() sweeps the
 				// canonical hook list (pro's included via tailwatch_register_cron_hooks) and does NOT
 				// touch this reset's cron or the verify cron, so it is safe to run mid-completion.
 				CronJobManager::clear_all_cron_events();

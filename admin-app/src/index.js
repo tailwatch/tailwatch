@@ -6,11 +6,14 @@ import "./App.css";
 import { HashRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Home from "./Pages/Home/Home.jsx";
 import Settings from "./Pages/Settings/Settings.jsx";
+import Account from "./Pages/Account/Account.jsx";
 import Features from "./Pages/Features/Features.jsx";
 import Logs from "./Pages/Logs/Logs.jsx";
 import Visit from "./Pages/Visit/Visit.jsx";
 import VisitFeatures from "./Pages/Visit/VisitFeatures/VisitFeatures.jsx";
 import Backup from './Pages/Backup/Backup.jsx';
+import Migration from './Pages/Migration/Migration.jsx';
+import Restore from './Pages/Restore/Restore.jsx';
 import InnerFiles from './Pages/Backup/BackupFiles/InnerFiles/InnerFiles.jsx';
 import DatabaseOptimizer from "./Pages/DatabaseOptimizer/DatabaseOptimizer.jsx";
 import SearchReplace from "./Pages/SearchReplace/SearchReplace.jsx";
@@ -52,6 +55,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route path="logs/*" element={<Navigate to="/dashboard/logs" replace />} />
 
           {/* Settings */}
+          <Route path="account" element={<Account />} />
+          {/* The account page used to be a tab of Settings; old links still arrive. */}
+          <Route path="settings/license" element={<Navigate to="/dashboard/account" replace />} />
           <Route path="settings/*" element={<Settings />} />
           <Route path="settings/*" element={<Navigate to="/dashboard/settings" replace />} />
 
@@ -64,14 +70,20 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route path="backup/*" element={<Navigate to="/dashboard/backup" replace />} />
 
           {/* Migration */}
-          <Route path="migration/*" element={<ComingSoon title="Migration" />} />
+          <Route path="migration" element={<Migration />} />
+          <Route path="migration/*" element={<Navigate to="/dashboard/migration" replace />} />
 
           {/* User Management */}
           <Route path="usermangement/*" element={<UserManagement />} />
           <Route path="usermangement/*" element={<Navigate to="/dashboard/usermangement" replace />} />
 
           {/* Restore */}
-          <Route path="restore/*" element={<ComingSoon title="Restore" />} />
+          {/* The folder is in the URL so a fresh tab lands on the right restore; the
+              screen falls back to asking the server, because a restore signs the
+              operator out often enough that returning by hand is the normal case. */}
+          <Route path="restore" element={<Restore />} />
+          <Route path="restore/:folderDate" element={<Restore />} />
+          <Route path="restore/*" element={<Navigate to="/dashboard/restore" replace />} />
 
           {/* Database Optimizer */}
           <Route path="database-optimizer" element={<DatabaseOptimizer />} />
@@ -108,7 +120,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route path="hardening-audit/report/:reportId" element={<AuditReportDetails />} />
           <Route path="hardening-audit/*" element={<Navigate to="/dashboard/hardening-audit" replace />} />
 
-          {/*Google Authenticator */}
+          {/* Role-based 2FA */}
           <Route path="rolebased-twofa" element={<TwoFaAuthenticator />} />
           <Route path="rolebased-twofa/*" element={<Navigate to="/dashboard/rolebased-twofa" replace />} />
 

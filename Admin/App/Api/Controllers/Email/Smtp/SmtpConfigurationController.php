@@ -151,6 +151,13 @@ class SmtpConfigurationController {
 			}
 
 			$provider = $settings->smtp_provider;
+			// A password saved with a key this site does not have cannot be read, and SMTP with an
+			// empty one fails every email: WordPress's own mail sends until it is entered again.
+			if ( 'custom' === $provider && self::tailwatch_secret_unreadable( $settings->custom->smtp_password ?? '' ) ) {
+				self::tailwatch_note_unreadable_password();
+				return;
+			}
+
 			if ( $provider === 'gmail' && ! $this->is_system_email() ) {
 				return;
 			}
@@ -517,6 +524,71 @@ class SmtpConfigurationController {
 			$phpmailer->DKIM_passphrase = $settings->$provider->smtp_dkim_passphrase ?? '';
 			$phpmailer->DKIM_identity   = $settings->$provider->smtp_from_email ?? '';
 		}
+	}
+
+	/**
+	 * Whether a saved secret is encrypted but cannot be decrypted with this site's keys.
+	 *
+	 * @param mixed $stored Value as saved.
+	 * @return bool
+	 */
+	public static function tailwatch_secret_unreadable( $stored ) {
+		return is_string( $stored ) && EncryptionService::is_encrypted( $stored ) && false === EncryptionService::decrypt( $stored );
+	}
+
+	/**
+	 * Record, at most once an hour, that the SMTP password cannot be read.
+	 *
+	 * @return void
+	 */
+	private static function tailwatch_note_unreadable_password() {
+		if ( false !== get_transient( 'tailwatch_smtp_password_unreadable' ) ) {
+			return;
+		}
+		set_transient( 'tailwatch_smtp_password_unreadable', 1, HOUR_IN_SECONDS );
+		Log::error(
+			'The SMTP password cannot be read on this site',
+			array(
+				'feature'  => 'email_smtp',
+				'action'   => 'smtp_password_unreadable',
+				'detail'   => 'The saved SMTP password was encrypted with a key this site does not have. Emails are sent with the server\'s own mail until it is entered again.',
+				'origin'   => 'system',
+				'severity' => 'high',
+			)
+		);
+	}
+
+	/**
+	 * What has to be entered again in Email & SMTP: the secrets of the provider in use that
+	 * this site cannot decrypt, said in one line each.
+	 *
+	 * @return string[]
+	 */
+	public static function tailwatch_unreadable_secret_notes() {
+		$config   = ( new OptionsController() )->get_features_options( 'default_feature_settings', 'default_email_configure', true );
+		$selected = null;
+		foreach ( (array) ( $config['field_3']['options'] ?? array() ) as $provider ) {
+			if ( is_array( $provider ) && ! empty( $provider['selected'] ) ) {
+				$selected = $provider;
+				break;
+			}
+		}
+		if ( ! is_array( $selected ) ) {
+			return array();
+		}
+
+		$fields = isset( $selected['sub_options'] ) && is_array( $selected['sub_options'] ) ? $selected['sub_options'] : array();
+		$saved  = static function ( $field ) use ( $fields ) {
+			return $fields[ $field ]['options']['option']['value'] ?? '';
+		};
+
+		if ( 'custom' === ( $selected['value'] ?? '' ) && self::tailwatch_secret_unreadable( $saved( 'field_9' ) ) ) {
+			return array( __( 'SMTP password: enter it again in Email & SMTP. Until then emails are sent with the server\'s own mail.', 'tailwatch' ) );
+		}
+		if ( 'gmail' === ( $selected['value'] ?? '' ) && ( self::tailwatch_secret_unreadable( $saved( 'field_39' ) ) || self::tailwatch_secret_unreadable( $saved( 'field_40' ) ) ) ) {
+			return array( __( 'Gmail: enter the client secret again and reconnect Gmail in Email & SMTP. If this site\'s address changed, add its redirect address to your Google Cloud app first.', 'tailwatch' ) );
+		}
+		return array();
 	}
 
 	private function get_decrypted_password( $provider, $option_name ) {

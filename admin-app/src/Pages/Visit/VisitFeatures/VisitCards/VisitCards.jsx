@@ -191,10 +191,16 @@ const VisitCards = ({ isloading, setShowCustomSettings, features, handleParentTo
                                     </div>
                                 ) : isLockedLike ? (
                                     <div className="mt-auto pt-4 border-t-2 border-gray-300 flex flex-col items-center space-y-3">
-                                        {(featureValue.is_locked && pluginStatus?.status === false) ? (
-                                            <p className="text-sm font-semibold text-teal-600 text-center">
-                                                Install Premium Plugin
-                                            </p>
+                                        {pluginStatus?.status === false ? (
+                                            <>
+                                                <p className="text-sm font-semibold text-teal-600 text-center">
+                                                    Available in Tailwatch Pro
+                                                </p>
+                                                <ActionButton defaultText="See Tailwatch Pro"
+                                                    onClick={() => window.open(`${window.tailwatch_ajax?.urls?.pricing || "https://wptailwatch.com/pricing/"}?utm_source=wp-plugins&utm_medium=wp-dash&utm_campaign=pro_upgrade&utm_content=setup_card`, "_blank", "noopener")}
+                                                    className="!py-2 !px-6 !text-sm !font-semibold !bg-gradient-to-r !from-teal-500 !to-teal-600 hover:!from-teal-600 hover:!to-teal-700 !shadow-lg hover:!shadow-xl !transition-all !duration-300"
+                                                />
+                                            </>
                                         ) : (
                                             <ActionButton defaultText="Upgrade"
                                                 isDisabled={connecting} onClick={handleConnectClick} className="!py-2 !px-6 !text-sm !font-semibold !bg-gradient-to-r !from-teal-500 !to-teal-600 hover:!from-teal-600 hover:!to-teal-700 !shadow-lg hover:!shadow-xl !transition-all !duration-300"

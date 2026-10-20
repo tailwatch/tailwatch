@@ -13,6 +13,7 @@ use Tailwatch\Admin\App\Api\Services\ProcessGuard;
 use Tailwatch\Admin\App\Api\Services\Common\FilesystemService;
 use Tailwatch\Admin\App\Api\Controllers\Base\BaseController;
 use Tailwatch\Admin\App\Api\Logging\Log;
+use Tailwatch\Admin\App\Api\Services\SearchReplace\SerializedReplacer;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -70,20 +71,24 @@ class SearchReplaceController extends BaseController {
 
 		ProcessManager::register_process(
 			array(
-				'process_type'    => 'search_replace',
-				'cron_hooks'      => array( 'tailwatch_search_replace_cron' ),
-				'data_source'     => 'wp_tw_settings',
-				'data_key'        => 'default_search_replace',
-				'data_option'     => 'tailwatch_search_replace',
-				'stuck_threshold' => 300,
-				'max_retries'     => 3,
-				'description'     => 'Search & Replace Process',
-				'locks_features'  => array( 'default_search_replace' ),
+				'process_type'        => 'search_replace',
+				'cron_hooks'          => array( 'tailwatch_search_replace_cron' ),
+				'data_source'         => 'wp_tw_settings',
+				'data_key'            => 'default_search_replace',
+				'data_option'         => 'tailwatch_search_replace',
+				// The run's timestamps are on the status row; the data row above has none.
+				'cancel_pause_key'    => 'default_search_replace',
+				'cancel_pause_option' => 'search_replace_pause_cancel',
+				'stuck_threshold'     => 300,
+				'max_retries'         => 3,
+				'description'         => 'Search & Replace Process',
+				'locks_features'      => array( 'default_search_replace' ),
 				// Process types that, when running, prevent a user from starting
 				// a manual search & replace. SR writes site-wide DB rows so it
 				// cannot run alongside any other heavy DB-touching process.
 				'cannot_start_while' => array(
 					'backup',
+					'db_optimize',
 					'malware_scan',
 					'malware_restore',
 					'files_integrity',
@@ -101,6 +106,7 @@ class SearchReplaceController extends BaseController {
 		$hook_controller->add_action_hook( 'tailwatch_search_replace_cron', array( $this, 'tailwatch_search_and_replace_with' ) );
 		$hook_controller->add_action_hook( 'tailwatch_update_table_status_on_cancel_cron', array( $this, 'tailwatch_update_table_status_on_cancel' ) );
 		$hook_controller->add_action_hook( 'init', array( $this, 'tailwatch_search_replace_feature' ) );
+		$hook_controller->add_action_hook( 'tailwatch_recovery_process_failed', array( $this, 'tailwatch_on_recovery_failed' ) );
 	}
 
 	/**
@@ -265,13 +271,17 @@ class SearchReplaceController extends BaseController {
 	 * @param string $post_data JSON-encoded POST data (search, replace, all_tables, etc.).
 	 * @return array Response with code, message, data.
 	 */
-	public function tailwatch_start_search_replace( $post_data ) {
+	public function tailwatch_start_search_replace( $post_data, $internal = false ) {
 		try {
-			// Search & replace rewrites rows across every table (SHOW TABLES), which on
-			// multisite spans all sites; require a super-admin-level capability there. A
-			// plain site admin keeps manage_options on single-site.
+			// $internal is a METHOD PARAMETER, never anything read out of $post_data. The
+			// dispatcher calls this with one argument, so a web request cannot set it; only
+			// in-process code that has already established its own authority can. A flag
+			// carried in the request body would be a capability bypass wearing a comment.
+			//
+			// The internal caller is the restore, which runs in cron with no current user at
+			// all — so the check below cannot pass there and cannot be made to.
 			$sr_network_cap = is_multisite() ? 'manage_network_options' : 'manage_options';
-			if ( ! current_user_can( $sr_network_cap ) ) {
+			if ( ! $internal && ! current_user_can( $sr_network_cap ) ) {
 				return array(
 					'code'    => 403,
 					'message' => __( 'You are not allowed to run a search and replace on this site.', 'tailwatch' ),
@@ -281,16 +291,10 @@ class SearchReplaceController extends BaseController {
 			$json_data = isset( $post_data ) ? wp_unslash( $post_data ) : '';
 			$data      = json_decode( $json_data, true );
 
-			// Refuse to start if a conflicting process is currently running —
-			// but ONLY for user-initiated runs. This same method is also
-			// invoked by migration, restore, and malware_restore as a sub-step
-			// of their own flows; those internal calls pass process_run set
-			// to 'migrator', 'restore', or 'malware', and must bypass the
-			// cross-process gate (otherwise the parent flow's own search_replace
-			// step would deadlock against the parent's running state).
-			$internal_callers   = array( 'migrator', 'restore', 'malware' );
-			$incoming_run       = is_array( $data ) && isset( $data['process_run'] ) ? $data['process_run'] : '';
-			$is_user_initiated  = ! in_array( $incoming_run, $internal_callers, true );
+			// Refuse to start if a conflicting process is running — but only for a run the
+			// user started. A restore invokes this as a step inside its own flow, and would
+			// otherwise deadlock against its own running state.
+			$is_user_initiated = ! $internal;
 
 			if ( $is_user_initiated ) {
 				$blocked = ( new ProcessGuard() )->ensure_can_start_process( 'search_replace' );
@@ -475,7 +479,6 @@ class SearchReplaceController extends BaseController {
 				$cron_scheduled = wp_schedule_single_event( time(), 'tailwatch_search_replace_cron' );
 
 				if ( $cron_scheduled ) {
-					// Create/Get process for monitoring.
 					$process_id = $this->process_manager->get_or_create_process(
 						'search_replace',
 						'tailwatch_search_replace_cron',
@@ -489,7 +492,6 @@ class SearchReplaceController extends BaseController {
 						)
 					);
 
-					// Store process_id in cancel_pause data for reference.
 					$cancel_pause['process_id'] = $process_id;
 					$this->update_search_replace_cancel_pause( $cancel_pause );
 
@@ -583,6 +585,70 @@ class SearchReplaceController extends BaseController {
 	}
 
 	/**
+	 * Rewrite one URL to another across every table, as a step inside another flow.
+	 *
+	 * A restore replaces the database with the contents of a backup, and that backup records
+	 * whatever URL the site had when it was taken. Restore a backup onto a different address
+	 * — a migration, a domain change, a move to staging — and every absolute URL in the data
+	 * still points at the old one. The site comes back broken in a way that looks like the
+	 * backup was bad.
+	 *
+	 * Runs across every table, so it uses the same table list a user-initiated run would.
+	 * Serialized values are handled structurally by SerializedReplacer, which never calls
+	 * unserialize() — a URL inside a serialized string changes its length, and a naive
+	 * replacement corrupts every such row.
+	 *
+	 * @param string $from URL currently in the data.
+	 * @param string $to   URL the site is actually served from.
+	 * @return bool Whether a rewrite was scheduled.
+	 */
+	public function tailwatch_rewrite_site_url( $from, $to ) {
+		$from = untrailingslashit( trim( (string) $from ) );
+		$to   = untrailingslashit( trim( (string) $to ) );
+
+		// Nothing to do when the backup came from this same address, which is the ordinary
+		// case: restoring a site's own backup onto itself.
+		if ( '' === $from || '' === $to || $from === $to ) {
+			return false;
+		}
+
+		// An ENVELOPE — { all_tables, message, code } — not a list. Passed straight to
+		// array_values() it gives [ [names…], 'All tables successfully received', 200 ],
+		// which validates to zero usable tables, and an envelope is never empty, not even
+		// the 404 one, so the emptiness check only means something on the list inside it.
+		$response   = $this->tailwatch_get_all_table_names();
+		$all_tables = isset( $response['all_tables'] ) && is_array( $response['all_tables'] )
+			? $response['all_tables']
+			: array();
+
+		if ( empty( $all_tables ) ) {
+			return false;
+		}
+
+		$payload = wp_json_encode(
+			array(
+				'search'           => $from,
+				'replace'          => $to,
+				'process_run'      => 'restore',
+				'dry_run'          => false,
+				// GUIDs are permanent identifiers, not addresses. Rewriting them re-keys every
+				// post for feed readers and is the one thing WordPress explicitly warns against.
+				'guid'             => false,
+				'case_insensitive' => false,
+				'all_tables'       => array_values( $all_tables ),
+			)
+		);
+
+		if ( false === $payload ) {
+			return false;
+		}
+
+		$result = $this->tailwatch_start_search_replace( $payload, true );
+
+		return is_array( $result ) && ! empty( $result['is_started'] );
+	}
+
+	/**
 	 * Inserts multiple rows into the options table (search-replace and cancel/pause).
 	 *
 	 * @param \Tailwatch\Admin\App\Api\Models\DBModel $db_model       DB model instance.
@@ -625,13 +691,12 @@ class SearchReplaceController extends BaseController {
 
 			// Check if paused/cancelled before doing anything.
 			// This prevents recovery from rescheduling paused processes.
-			if ( 'pause' === $scan_state || 'cancel' === $scan_state ) {
+			if ( 'pause' === $scan_state || 'cancel' === $scan_state || 'failed' === $scan_state ) {
 				// Don't update heartbeat or state - let it stay stuck.
 				// User will resume manually when ready.
 				return;
 			}
 
-			// Get process_id from cancel_pause data.
 			$process_id = $cancel_pause_data['process_id'] ?? null;
 
 			// If no process_id, create one (recovery scenario).
@@ -648,7 +713,6 @@ class SearchReplaceController extends BaseController {
 				$cancel_pause_data['process_id'] = $process_id;
 			}
 
-			// Update state to in_progress and send heartbeat.
 			$this->process_manager->update_state( $process_id, 'in_progress' );
 			$this->process_manager->heart_beat( $process_id );
 
@@ -760,7 +824,6 @@ class SearchReplaceController extends BaseController {
 						// Send heartbeat and update progress metadata.
 						$this->process_manager->heart_beat( $process_id );
 
-						// Calculate progress.
 						$completed_tables = 0;
 						$total_tables     = count( $options['all_tables'] );
 						foreach ( $options['all_tables'] as $tbl_status ) {
@@ -769,7 +832,6 @@ class SearchReplaceController extends BaseController {
 							}
 						}
 
-						// Update process metadata with progress.
 						$this->process_manager->update_metadata(
 							$process_id,
 							array(
@@ -787,10 +849,9 @@ class SearchReplaceController extends BaseController {
 							if ( false === $dry_run && 'cancel' === $scan_state && false === $cron_running ) {
 								wp_schedule_single_event( time() + 5, 'tailwatch_update_table_status_on_cancel_cron' );
 							}
-							// Intentional: return after scheduling.
 						} else {
 							wp_schedule_single_event( time() + 5, 'tailwatch_search_replace_cron' );
-							// Intentional: return after scheduling.
+							// One batch per tick: the scheduled event continues from here.
 						}
 
 						$this->tailwatch_search_replace_function_completed();
@@ -813,11 +874,14 @@ class SearchReplaceController extends BaseController {
 
 			if ( $all_completed ) {
 				try {
+					// The counts only feed the closing message, so they must never keep a run from
+					// closing. A run that processed no table has no file at all - a live run cancelled
+					// before its first step reverts nothing - and throwing here would leave it 'reverting'.
 					$fs           = FilesystemService::get_filesystem();
-					$log_contents = $fs ? $fs->get_contents( $log_file ) : false;
-					$get_data     = ( false === $log_contents ) ? null : json_decode( $log_contents, true );
+					$log_contents = ( $fs && $fs->exists( $log_file ) ) ? $fs->get_contents( $log_file ) : '';
+					$get_data     = ( is_string( $log_contents ) && '' !== $log_contents ) ? json_decode( $log_contents, true ) : array();
 
-					if ( null === $get_data ) {
+					if ( ! is_array( $get_data ) ) {
 						Log::error(
 							'Invalid JSON in file: ' . $log_file,
 							array(
@@ -825,7 +889,7 @@ class SearchReplaceController extends BaseController {
 								'action'  => 'search_replace_process_failed',
 							)
 						);
-						throw new \Exception( "Failed to parse JSON from log file: {$log_file}" );
+						$get_data = array();
 					}
 
 					$total_counts = isset( $get_data['overall_total_entries'] ) ? $get_data['overall_total_entries'] : 0;
@@ -836,7 +900,6 @@ class SearchReplaceController extends BaseController {
 						$this->update_search_replace_cancel_pause( $cancel_pause_data );
 					}
 
-					// Mark process as completed.
 					if ( isset( $process_id ) && $process_id ) {
 						$this->process_manager->mark_completed( $process_id );
 					}
@@ -858,7 +921,6 @@ class SearchReplaceController extends BaseController {
 
 					$this->update_search_replace_logs_records( $message_is, 'RESULT' );
 
-					// Optional cleanup cron (left disabled; enable if desired).
 					$live_logs = new LiveLogsController();
 					$live_logs->tailwatch_live_logs_completed( $all_completed, $this->get_live_logs );
 
@@ -879,7 +941,7 @@ class SearchReplaceController extends BaseController {
 						)
 					);
 
-					// Pro's malware-restore R6 waits on this hook to advance.
+					// The pro malware restore waits on this hook to advance.
 					// Gated so standalone SR runs don't fire it. 2nd arg = success.
 					if ( in_array( $options['process_run'], array( 'malware' ), true ) ) {
 						do_action( 'tailwatch_search_replace_completed', $options['process_run'], true );
@@ -904,12 +966,12 @@ class SearchReplaceController extends BaseController {
 				)
 			);
 		} catch ( \Throwable $e ) {
-			// Mark process as failed on exception.
 			$cancel_pause_data = $this->search_replace_cancel_pause_data();
 			$process_id        = $cancel_pause_data['process_id'] ?? null;
 			if ( $process_id ) {
 				$this->process_manager->mark_failed( $process_id, 'Exception: ' . $e->getMessage() );
 			}
+			$this->tailwatch_mark_run_failed( $process_id );
 
 				Log::error(
 					$e->getMessage(),
@@ -920,7 +982,7 @@ class SearchReplaceController extends BaseController {
 					)
 				);
 
-				// Signal abnormal termination so pro's R6 doesn't poll forever.
+				// Signal abnormal termination so the pro malware restore doesn't poll forever.
 				// $options may be undefined if the exception fired before its
 				// assignment; coalesce defensively.
 				$sr_process_run = isset( $options['process_run'] ) ? $options['process_run'] : '';
@@ -971,7 +1033,6 @@ class SearchReplaceController extends BaseController {
 		}
 
 		foreach ( $columns as $column ) {
-			// Skip the guid column in wp_posts when $guid is false.
 			if ( $table === $wpdb->prefix . 'posts' && ! $guid && 'guid' === $column ) {
 				continue;
 			}
@@ -1046,149 +1107,15 @@ class SearchReplaceController extends BaseController {
 	 * @return mixed Processed data.
 	 */
 	private function safe_replace_in_serialized_data( $data, $search, $replace, $case_insensitive = false ) {
-		return $this->recursive_unserialize_replace( $search, $replace, $data, false, $case_insensitive );
+		// Delegates to the structural rewriter. An unserialize / walk / re-serialize
+		// round-trip is correct only when the value is itself valid serialized data, and
+		// silently destructive when it is not: the fallback then is a flat str_replace,
+		// which leaves every `s:N:` prefix inside the value counting the OLD byte length.
+		// A serialized fragment wrapped in anything (JSON, a prefix, a concatenation) would
+		// hit that path, and the row would not fail until something reads it.
+		return SerializedReplacer::replace( $data, $search, $replace, $case_insensitive );
 	}
 
-
-	/**
-	 * Recursively replaces in serialized data (strings, arrays, objects).
-	 *
-	 * @param string $from             Search term.
-	 * @param string $to               Replacement term.
-	 * @param mixed  $data             Data to process (string, array, or object).
-	 * @param bool   $serialised       Whether to serialize the result. Default false.
-	 * @param bool   $case_insensitive Case-insensitive search. Default false.
-	 * @return mixed Processed data.
-	 */
-	private function recursive_unserialize_replace( $from = '', $to = '', $data = '', $serialised = false, $case_insensitive = false ) {
-		try {
-			// Early exit if string does not contain search term (optimization).
-			if ( is_string( $data ) ) {
-				$has_match = $case_insensitive ? false !== stripos( $data, $from ) : false !== strpos( $data, $from );
-				if ( ! $has_match ) {
-					return $data;
-				}
-			}
-
-			$unserialized = ( is_string( $data ) && ! $this->is_serialized_string( $data ) ) ? $this->safe_unserialize( $data ) : false;
-			// Handle serialized strings (but not serialized strings themselves).
-			if ( false !== $unserialized ) {
-				$data = $this->recursive_unserialize_replace( $from, $to, $unserialized, true, $case_insensitive );
-			} elseif ( is_array( $data ) ) {
-				// Handle arrays.
-				$_tmp = array();
-				foreach ( $data as $key => $value ) {
-					$_tmp[ $key ] = $this->recursive_unserialize_replace( $from, $to, $value, false, $case_insensitive );
-				}
-				$data = $_tmp;
-				unset( $_tmp );
-			} elseif ( 'object' === gettype( $data ) ) {
-				// Handle objects (use gettype like Better Search Replace).
-				if ( $this->is_object_cloneable( $data ) ) {
-					$_tmp  = clone $data;
-					$props = get_object_vars( $data );
-					foreach ( $props as $key => $value ) {
-						// Skip integer properties (they cause issues).
-						if ( is_int( $key ) ) {
-							continue;
-						}
-						// Skip protected properties (they cannot be modified).
-						if ( is_string( $key ) && 1 === preg_match( '/^(\\\\0).+/im', preg_quote( $key, '/' ) ) ) {
-							continue;
-						}
-						$_tmp->$key = $this->recursive_unserialize_replace( $from, $to, $value, false, $case_insensitive );
-					}
-					$data = $_tmp;
-					unset( $_tmp );
-				}
-			} elseif ( $this->is_serialized_string( $data ) ) {
-				// Handle serialized strings specifically.
-				$unserialized = $this->safe_unserialize( $data );
-				if ( false !== $unserialized ) {
-					$data = $this->recursive_unserialize_replace( $from, $to, $unserialized, true, $case_insensitive );
-				}
-			} else {
-				// Handle regular strings.
-				if ( is_string( $data ) ) {
-					$data = $case_insensitive ? str_ireplace( $from, $to, $data ) : str_replace( $from, $to, $data );
-				}
-			}
-
-			// Re-serialize if needed (required for serialized DB values in search-replace).
-			if ( $serialised ) {
-                // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Required for serialized data replacement.
-				return serialize( $data );
-			}
-		} catch ( \Exception $error ) {
-			// On any error, return original data to prevent corruption.
-			Log::error( 'SearchReplace: Exception in recursive_unserialize_replace: ' . $error->getMessage( // phpcs:ignore PEAR.Functions.FunctionCallSignature.ContentAfterOpenBracket -- Complex multi-line call format.
-				), // phpcs:ignore PEAR.Functions.FunctionCallSignature.Indent -- Complex multi-line call format.
-				array(
-					'feature' => 'search_replace',
-					'action'  => 'recursive_unserialize_replace',
-				)
-			);
-		}
-
-		return $data;
-	}
-
-	/**
-	 * Safe unserialize with allowed_classes false. Uses WordPress is_serialized().
-	 *
-	 * Always passes ['allowed_classes' => false] so no class instantiation can
-	 * occur during unserialization — closes PHP object-injection attack vectors
-	 * on tainted serialized data found inside post_meta / options / etc. The
-	 * option has been available since PHP 7.0, and this plugin requires PHP 7.4+
-	 * (see Requires PHP header in tailwatch.php), so no version branch is needed.
-	 *
-	 * @param string $serialized_string Serialized string.
-	 * @return mixed Unserialized data or false.
-	 */
-	private function safe_unserialize( $serialized_string ) {
-		if ( ! is_serialized( $serialized_string ) ) {
-			return false;
-		}
-
-		$serialized_string = trim( $serialized_string );
-
-		// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_unserialize, WordPress.PHP.NoSilencedErrors.Discouraged -- Required for serialized search-replace; errors handled, no class instantiation via allowed_classes=false.
-		return @unserialize( $serialized_string, array( 'allowed_classes' => false ) );
-	}
-
-	/**
-	 * Checks if data is a serialized string (not array or object).
-	 *
-	 * @param mixed $data Data to check.
-	 * @return bool True if serialized string.
-	 */
-	private function is_serialized_string( $data ) {
-		if ( ! is_serialized( $data ) ) {
-			return false;
-		}
-
-		// Check if it's a serialized string by looking at the first character.
-		// s: = serialized string, a: = serialized array, O: = serialized object.
-		return substr( trim( $data ), 0, 2 ) === 's:';
-	}
-
-	/**
-	 * Checks if a given object can be cloned safely.
-	 *
-	 * @param object $obj Instance to check (param name avoids reserved keyword).
-	 * @return bool True if cloneable.
-	 */
-	private function is_object_cloneable( $obj ) {
-		if ( ! is_object( $obj ) ) {
-			return false;
-		}
-
-		try {
-			return ( new \ReflectionClass( get_class( $obj ) ) )->isCloneable();
-		} catch ( \Exception $e ) {
-			return false;
-		}
-	}
 
 	/**
 	 * Updates the search-replace count log file for a table/column.
@@ -1258,9 +1185,12 @@ class SearchReplaceController extends BaseController {
 	/**
 	 * Updates cancel/pause state in the database.
 	 *
-	 * @param array $options Cancel/pause data (scan_state, process_id, etc.).
+	 * @param array $options            Cancel/pause data (scan_state, process_id, etc.).
+	 * @param bool  $allow_state_change Resume only: put a paused run back to work.
 	 */
-	public function update_search_replace_cancel_pause( $options ) {
+	public function update_search_replace_cancel_pause( $options, $allow_state_change = false ) {
+		$options = $this->tailwatch_keep_stop_state( $options, $allow_state_change );
+
 		$db_model = new DBModel();
 		$tailwatch_key = 'default_search_replace';
 		$option   = 'search_replace_pause_cancel';
@@ -1270,6 +1200,80 @@ class SearchReplaceController extends BaseController {
 		);
 
 		$db_model->update_recent_row( $db_data, $tailwatch_key, $option );
+	}
+
+	/**
+	 * Keep a pause, cancel, revert or finish from being undone by an older copy of this row.
+	 *
+	 * The live-log poll writes back the copy it read at its start. A copy read before the user
+	 * paused or cancelled, or before the run finished, would put 'in-progress' back: the run
+	 * would carry on after Pause, or a finished run would show as running and every new run be
+	 * refused as "already scheduled". A finished row is kept whole. A revert keeps its state, since the
+	 * data row is already running in reverse. Only resume moves a stopped run back to work,
+	 * and it says so.
+	 *
+	 * @param array $options            The row about to be stored.
+	 * @param bool  $allow_state_change Resume only.
+	 * @return array
+	 */
+	private function tailwatch_keep_stop_state( $options, $allow_state_change ) {
+		if ( $allow_state_change || ! is_array( $options ) || ! isset( $options['scan_state'] ) || 'in-progress' !== $options['scan_state'] ) {
+			return $options;
+		}
+
+		$current = $this->search_replace_cancel_pause_data();
+		if ( ! is_array( $current ) || ! isset( $current['scan_state'] ) ) {
+			return $options;
+		}
+		if ( in_array( $current['scan_state'], array( 'completed', 'failed' ), true ) ) {
+			return $current;
+		}
+		if ( in_array( $current['scan_state'], array( 'pause', 'cancel', 'reverting_changes' ), true ) ) {
+			$options['scan_state'] = $current['scan_state'];
+		}
+
+		return $options;
+	}
+
+	/**
+	 * Listener for 'tailwatch_recovery_process_failed': recovery gave up on a stuck run.
+	 *
+	 * @param array $process_data The process recovery gave up on.
+	 * @return void
+	 */
+	public function tailwatch_on_recovery_failed( $process_data ) {
+		if ( is_array( $process_data ) && isset( $process_data['process_type'] ) && 'search_replace' === $process_data['process_type'] ) {
+			$this->tailwatch_mark_run_failed( $process_data['process_id'] ?? null );
+		}
+	}
+
+	/**
+	 * Put a run that stopped on an error into 'failed'.
+	 *
+	 * Otherwise its row says 'in-progress' for good: the screen shows it running, and every new
+	 * run is answered "already scheduled". Only a run still going forward or reverting is
+	 * converted, and only the one the failed process belongs to, so a newer run is never touched.
+	 *
+	 * @param string|null $process_id The process that failed.
+	 * @return void
+	 */
+	private function tailwatch_mark_run_failed( $process_id ) {
+		$row = $this->search_replace_cancel_pause_data();
+		if ( ! is_array( $row ) || ! in_array( $row['scan_state'] ?? '', array( 'in-progress', 'reverting_changes' ), true ) ) {
+			return;
+		}
+		if ( ! empty( $process_id ) && ! empty( $row['process_id'] ) && $row['process_id'] !== $process_id ) {
+			return;
+		}
+
+		$timestamp = wp_next_scheduled( 'tailwatch_search_replace_cron' );
+		if ( $timestamp ) {
+			wp_unschedule_event( $timestamp, 'tailwatch_search_replace_cron' );
+		}
+
+		$row['scan_state']   = 'failed';
+		$row['cron_running'] = false;
+		$this->update_search_replace_cancel_pause( $row );
 	}
 
 	/**
@@ -1357,12 +1361,24 @@ class SearchReplaceController extends BaseController {
 			$existing_data = $this->search_replace_cancel_pause_data();
 
 			if ( ! empty( $existing_data ) && ! empty( $existing_data['scan_state'] ) && 'pause' === $existing_data['scan_state'] ) {
+				// Resumed only while nothing that cannot run beside it is running or paused. A run
+				// that is a step of a restore or a malware clean-up is resumed beside it.
+				$run_data = $this->tailwatch_get_search_replace_data();
+				$run      = is_array( $run_data ) ? (string) ( $run_data['process_run'] ?? '' ) : '';
+				$inside   = array(
+					'restore' => array( 'restore' ),
+					'malware' => array( 'malware_scan', 'malware_restore' ),
+				);
+				$blocked  = ( new ProcessGuard() )->ensure_can_start_process( 'search_replace', $inside[ $run ] ?? array() );
+				if ( null !== $blocked ) {
+					return $blocked;
+				}
+
 				wp_schedule_single_event( time() + 5, 'tailwatch_search_replace_cron' );
 
 				$existing_data['scan_state'] = 'in-progress';
-				$this->update_search_replace_cancel_pause( $existing_data );
+				$this->update_search_replace_cancel_pause( $existing_data, true );
 
-				// Update process state to in_progress when resumed.
 				$process_id = $existing_data['process_id'] ?? null;
 				if ( $process_id ) {
 					$this->process_manager->update_state( $process_id, 'in_progress' );
@@ -1443,6 +1459,36 @@ class SearchReplaceController extends BaseController {
 			$search_replace_data = $this->tailwatch_get_search_replace_data();
 
 			if ( ! empty( $data['scan_state'] ) && ( 'pause' === $data['scan_state'] || 'cancel' === $data['scan_state'] ) ) {
+				$current_state = ( is_array( $existing_data ) && isset( $existing_data['scan_state'] ) ) ? $existing_data['scan_state'] : '';
+				// Cancelling a live run reverts it, so a click that lands after it finished would
+				// undo the whole replacement, and one during a revert would stop it halfway. Pause
+				// only means something to a run that is going forward.
+				if ( 'reverting_changes' === $current_state ) {
+					return array(
+						'data'    => array(),
+						'message' => __( 'The changes are being put back. This cannot be paused or cancelled until it finishes.', 'tailwatch' ),
+						'code'    => 409,
+					);
+				}
+				// Recovery has already failed this run's process, so a cancel here would start a
+				// revert that holds no lock and that nothing watches. To undo a stopped live run, run
+				// Search & Replace again with the two terms swapped.
+				if ( 'failed' === $current_state ) {
+					return array(
+						'data'    => array(),
+						'message' => __( 'This run has stopped, so there is nothing to pause or cancel.', 'tailwatch' ),
+						'code'    => 409,
+					);
+				}
+				if ( 'completed' === $current_state || ( 'pause' === $data['scan_state'] && 'in-progress' !== $current_state ) ) {
+					return array(
+						'data'    => array(),
+						'message' => ( 'completed' === $current_state )
+							? __( 'This run has already finished, so there is nothing to pause or cancel.', 'tailwatch' )
+							: __( 'Only a run that is in progress can be paused.', 'tailwatch' ),
+						'code'    => 409,
+					);
+				}
 
 				$existing_data['scan_state'] = $data['scan_state'];
 
@@ -1455,7 +1501,6 @@ class SearchReplaceController extends BaseController {
 
 				if ( 'cancel' === $data['scan_state'] ) {
 					if ( true === $search_replace_data['dry_run'] ) {
-						// Optional: schedule cleanup (commented to avoid auto-delete).
 						if ( $process_id ) {
 							$this->process_manager->mark_failed( $process_id, 'Search Replace cancelled by user' );
 						}
@@ -1554,6 +1599,22 @@ class SearchReplaceController extends BaseController {
 			return;
 		}
 
+		// This runs seconds after the cancel. By then the row can belong to a new run, or have
+		// been failed by recovery; either way there is no cancelled run left to revert.
+		if ( ! is_array( $cancel_pause_data ) || 'cancel' !== ( $cancel_pause_data['scan_state'] ?? '' ) ) {
+			return;
+		}
+
+		// A cancel that crossed recovery giving up: the process is already failed and inactive, so
+		// the revert would run with no lock and nothing to recover it. The run stays failed.
+		$process = empty( $cancel_pause_data['process_id'] ) ? null : $this->process_manager->get_process( $cancel_pause_data['process_id'] );
+		if ( is_array( $process ) && ! empty( $process['failed_at'] ) ) {
+			$cancel_pause_data['scan_state']   = 'failed';
+			$cancel_pause_data['cron_running'] = false;
+			$this->update_search_replace_cancel_pause( $cancel_pause_data );
+			return;
+		}
+
 		foreach ( $options['all_tables'] as $table => &$table_data ) {
 
 			if ( 0 === $table_data['rows_processed'] && ( ! isset( $table_data['total_count'] ) || 0 === $table_data['total_count'] ) && ( ! isset( $table_data['revert_change'] ) || false === $table_data['revert_change'] ) ) {
@@ -1601,7 +1662,7 @@ class SearchReplaceController extends BaseController {
 					return array(
 						'is_completed' => false,
 						'scan_state'   => 'pause',
-						'progress'     => $existing_data['progress'],
+						'progress'     => $existing_data['progress'] ?? 0,
 						'options'      => $get_options,
 						'message'      => __( 'Search Replace was paused', 'tailwatch' ),
 						'code'         => 200,
@@ -1610,7 +1671,7 @@ class SearchReplaceController extends BaseController {
 					return array(
 						'is_completed' => false,
 						'scan_state'   => 'in-progress',
-						'progress'     => $existing_data['progress'],
+						'progress'     => $existing_data['progress'] ?? 0,
 						'options'      => $get_options,
 						'message'      => __( 'Search Replace is in progress', 'tailwatch' ),
 						'code'         => 200,
@@ -1619,7 +1680,7 @@ class SearchReplaceController extends BaseController {
 					return array(
 						'is_completed' => false,
 						'scan_state'   => 'reverting_changes',
-						'progress'     => $existing_data['progress'],
+						'progress'     => $existing_data['progress'] ?? 0,
 						'options'      => $get_options,
 						'message'      => __( 'Search Replace are reverting the changes', 'tailwatch' ),
 						'code'         => 200,
@@ -1628,7 +1689,7 @@ class SearchReplaceController extends BaseController {
 					return array(
 						'is_completed' => false,
 						'scan_state'   => 'cancel',
-						'progress'     => $existing_data['progress'],
+						'progress'     => $existing_data['progress'] ?? 0,
 						'options'      => $get_options,
 						'message'      => __( 'Search Replace are reverting the changes', 'tailwatch' ),
 						'code'         => 200,
@@ -1698,7 +1759,23 @@ class SearchReplaceController extends BaseController {
 	public function tailwatch_search_replace_cron_if_failed() {
 		try {
 			$existing_data = $this->search_replace_cancel_pause_data();
-			if ( false === $existing_data['cron_running'] ) {
+			if ( ! is_array( $existing_data ) ) {
+				return array(
+					'data'    => '',
+					'message' => __( 'There is no run to restart.', 'tailwatch' ),
+					'code'    => 409,
+				);
+			}
+			// A run that stopped on an error stays stopped: the screen asks for this while it
+			// polls, and a tick scheduled here would run the failed step again.
+			if ( in_array( $existing_data['scan_state'] ?? '', array( 'failed', 'completed' ), true ) ) {
+				return array(
+					'data'    => '',
+					'message' => __( 'This run has stopped, so there is nothing to restart.', 'tailwatch' ),
+					'code'    => 409,
+				);
+			}
+			if ( false === ( $existing_data['cron_running'] ?? null ) ) {
 				if ( ! wp_next_scheduled( 'tailwatch_search_replace_cron' ) ) {
 					$cron_scheduled = wp_schedule_single_event( time() + 5, 'tailwatch_search_replace_cron' );
 

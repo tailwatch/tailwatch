@@ -96,8 +96,8 @@ const IpManagementModal = ({ onClose, getData, isEditing = false, initialData = 
             }
 
             // Pre-fill the Target Page section when editing an existing rule.
-            // Backend now returns block_page (post ID OR custom URL) AND
-            // block_page_post_type so we can restore the exact pick.
+            // The rule carries block_page (post ID OR custom URL) AND
+            // block_page_post_type, so the exact pick can be restored.
             if (!isWhitelist && initialData.block_page != null && initialData.block_page !== '') {
                 setTargetMode('specific');
                 setBlockPage(initialData.block_page);

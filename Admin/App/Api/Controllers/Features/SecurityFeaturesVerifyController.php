@@ -101,6 +101,16 @@ class SecurityFeaturesVerifyController {
 
 	public function tailwatch_verify_features_with_cron() {
 		$get_features = $this->tailwatch_get_features_value();
+
+		// A state row written before the builder guaranteed this key, or one left by a
+		// run that started with nothing to do. Both walks below assume it is an array.
+		if ( ! is_array( $get_features ) ) {
+			return;
+		}
+		if ( ! isset( $get_features['all_options']['active_features'] )
+			|| ! is_array( $get_features['all_options']['active_features'] ) ) {
+			$get_features['all_options']['active_features'] = array();
+		}
 		$process_id   = isset( $get_features['process_id'] ) ? $get_features['process_id'] : ( $this->currentProcessId ?? null );
 		if ( ! $process_id ) {
 			$total = 0;
@@ -246,7 +256,7 @@ class SecurityFeaturesVerifyController {
 					foreach ( $existing_data['all_features'] as $key => $feature ) {
 						// Skip stale entries for features that have since been removed
 						// from the security verification set (e.g. security_headers,
-						// google_recaptcha, login_defender_management).
+						// google_recaptcha).
 						if ( ! in_array( $key, self::$security_features, true ) ) {
 							continue;
 						}
@@ -275,10 +285,8 @@ class SecurityFeaturesVerifyController {
 							/**
 							 * Extension point — lets a separately-shipped add-on
 							 * augment the per-row payload with extra metadata
-							 * (for example, the plan tier required to unlock a
-							 * feature, or a lock-state flag the dashboard can
-							 * use to pick between "upgrade", "connect license",
-							 * and "activate feature" CTAs).
+							 * (for example, a flag the dashboard uses to choose
+							 * which action a row offers).
 							 *
 							 * Free intentionally outputs only the minimal shape
 							 * above. Any add-on that needs additional row
@@ -370,9 +378,18 @@ class SecurityFeaturesVerifyController {
 		$db_model = new DBModel();
 		$this->tailwatch_delete_verify_features_entries( $db_model, $option, $key );
 
+		// get_features() answers NULL, not an empty array, when the site has no feature
+		// rows — which is every site provisioned over the API before the seeding worker
+		// has run. foreach(null) emits a warning, and a warning printed here lands in the
+		// response body ahead of the JSON the dashboard is parsing.
 		$get_features = $db_model->get_features( false );
+		if ( ! is_array( $get_features ) ) {
+			$get_features = array();
+		}
 
-		$all_options = array();
+		// Always present, so neither this method nor the cron worker has to test for the
+		// key before walking it.
+		$all_options = array( 'active_features' => array() );
 		$recommended = self::$security_features;
 
 		foreach ( $get_features as $feature ) {
@@ -392,7 +409,24 @@ class SecurityFeaturesVerifyController {
 			'attempt_count' => 0,
 		);
 
-		$total                      = isset( $all_options['active_features'] ) ? count( $all_options['active_features'] ) : 0;
+		$total = count( $all_options['active_features'] );
+
+		// Nothing to verify means the site is not seeded yet, not that it is secure. The
+		// completion loop below walks the feature list, so with an empty one it would run
+		// zero times, leave is_completed = true, and report a clean verification of
+		// nothing. Refuse to start instead, and let the caller say why.
+		if ( 0 === $total ) {
+			Log::warning(
+				'Security verification asked for before the site had any features to verify.',
+				array(
+					'feature' => 'security_verification',
+					'action'  => 'security_verify_not_seeded',
+				)
+			);
+
+			return false;
+		}
+
 		$process_id                 = $this->processManager->get_or_create_process(
 			'security_verify',
 			'tailwatch_verify_features_in_multi_cron',
@@ -421,11 +455,13 @@ class SecurityFeaturesVerifyController {
 		$db_model->insert_row( $db_data, $db_data_format );
 
 		wp_schedule_single_event( time() + 5, 'tailwatch_verify_features_in_multi_cron' );
+
+		return true;
 	}
 
 	public function tailwatch_start_security_features_process() {
 		try {
-			// Fix typo and clear hooks
+			// Older versions may still have the misspelt '..._crone' hook scheduled.
 			wp_clear_scheduled_hook( 'tailwatch_verify_features_with_crone' );
 			wp_clear_scheduled_hook( 'tailwatch_verify_features_in_multi_cron' );
 
@@ -438,7 +474,15 @@ class SecurityFeaturesVerifyController {
 				)
 			);
 
-			$this->tailwatch_get_all_features_with_cron( 'manually' );
+			if ( ! $this->tailwatch_get_all_features_with_cron( 'manually' ) ) {
+				// 409 rather than 200-with-nothing-started: the dashboard polls this during
+				// onboarding, and a success it can never see complete is worse than a
+				// refusal it can retry once initialization has finished.
+				return array(
+					'code'    => 409,
+					'message' => __( 'This site has not finished setting up yet, so there are no features to verify. Try again once initialization completes.', 'tailwatch' ),
+				);
+			}
 
 			return array(
 				'code'    => 200,
@@ -473,7 +517,6 @@ class SecurityFeaturesVerifyController {
 
 	public function tailwatch_execute_security_features_cron_if_failed() {
 		try {
-			// Check if cron is already scheduled
 			if ( wp_next_scheduled( 'tailwatch_verify_features_in_multi_cron' ) ) {
 				return array(
 					'code'    => 200,
@@ -493,7 +536,6 @@ class SecurityFeaturesVerifyController {
 				)
 			);
 
-			// Schedule the cron
 			wp_schedule_single_event( time() + 4, 'tailwatch_verify_features_in_multi_cron' );
 
 			return array(
@@ -574,20 +616,8 @@ class SecurityFeaturesVerifyController {
 		// backup_enable 8, database_optimizer 5, hardening_audit 6,
 		// login_defender_management 8, config_generate_key 3,
 		// updates_rollback 4 — sum 77.
-		// Extension weights (Pro, via the dispatcher filter below):
+		// Extension weights (Pro, via the extension-feature branch below):
 		// malware_scan 14, two_step_authenticate 9 — sum 23. Grand total 100.
-		// Extension weights (handled by the dispatcher branch below):
-		// malware_scan 14, two_step_authenticate 9 — sum 23.
-		// login_defender_management (8) was re-added; its 8 points were
-		// rebalanced out of files_and_permission (11->9), file_integrity_check
-		// (14->12), log_activity (8->6), and hardening_audit (8->6) so the free
-		// total stays 77 and the overall total stays 100. Prior rebalance had
-		// dropped security_headers (7) and google_recaptcha (12).
-		// config_generate_key (3, Security Keys Rotation) and updates_rollback
-		// (4, scored on the auto-update toggles) were then added; their 7 points
-		// were rebalanced out of file_integrity_check (12->10),
-		// database_optimizer (8->5), and hardening_audit (8->6), keeping the
-		// free total at 77 and the overall total at 100.
 		if ( $calculate_status === 'default_files_and_permission' ) {
 			$feature_name = 'File Permissions';
 			if ( $feature_active ) {
@@ -690,10 +720,9 @@ class SecurityFeaturesVerifyController {
 		$total_score = 0;
 
 		// Drop entries for features that are no longer in $security_features (e.g.
-		// previously stored scores for security_headers / google_recaptcha /
-		// login_defender_management). Without this cleanup, stale rows in the cached
-		// `all_features` blob would keep contributing to the total and the score
-		// could exceed 100 again — defeating the rebalance.
+		// scores stored for security_headers / google_recaptcha by older versions).
+		// Without this cleanup, stale rows in the cached `all_features` blob would
+		// keep contributing to the total and could push the score past 100.
 		if ( isset( $existing_data['all_features'] ) ) {
 			foreach ( $existing_data['all_features'] as $key => $feature ) {
 				if ( ! in_array( $key, self::$security_features, true ) ) {
@@ -804,9 +833,9 @@ class SecurityFeaturesVerifyController {
 	}
 
 	/**
-	 * Score the Login Defender feature from its two core brute-force
-	 * protections — username-based and IP-based attempt limiting. Each
-	 * enabled protection contributes an equal share of $percentage.
+	 * Score the Login Defender feature on its IP-based attempt limiting.
+	 *
+	 * Full weight when that protection is enabled; zero otherwise.
 	 *
 	 * @param array  $feature_options  Decoded `options` of default_login_defender_management.
 	 * @param int    $percentage       Point weight for this feature.
@@ -1146,7 +1175,7 @@ class SecurityFeaturesVerifyController {
 	 *                                  and sub_options children).
 	 * @param int    $percentage       Weight contribution to the 100-point total.
 	 * @param string $feature_name     Human label used in the response.
-	 * @param string $calculate_status Feature option key, used for plan-tier lookup.
+	 * @param string $calculate_status Feature option key.
 	 * @return array Standard score entry: feature_name, total_score, message, disabled_features.
 	 */
 	public function tailwatch_calculate_hardening_audit( $feature_options, $percentage, $feature_name, $calculate_status = '' ) {

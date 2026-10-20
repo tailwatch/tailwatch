@@ -92,7 +92,7 @@ class FeatureCacheController {
 	 * @return void
 	 */
 	public function invalidate_feature_cache( $key, $option ) {
-		$variants = array( true, false, 1, 0 );
+		$variants = array( true, false, 1, 0, '1_solo', '_solo', '0_solo' );
 		foreach ( $variants as $is_active ) {
 			$cache_key = $this->generate_cache_key( $key, $option, $is_active );
 			GlobalCacheService::invalidate( self::CACHE_GROUP, $cache_key );

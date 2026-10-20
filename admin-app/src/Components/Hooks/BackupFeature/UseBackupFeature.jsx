@@ -8,7 +8,9 @@ const UseBackupFeature = () => {
       const localStorageData = getLocalStorage('features_data', 'data');
 
       if (localStorageData && Array.isArray(localStorageData)) {
-        const backupScanner = localStorageData.find(item => item.option === "default_backup_enable");          
+        const backupScanner = localStorageData.find(item => item.option === "default_backup_enable");
+        // Restoring is its own feature with its own row, not a field of Backup Vault.
+        const restoreFeature = localStorageData.find(item => item.option === "default_site_migration");
 
         if (backupScanner && backupScanner.value) {
           const backupValue = JSON.parse(backupScanner.value);
@@ -16,8 +18,18 @@ const UseBackupFeature = () => {
           const isBackupEnabled =
             backupValue?.options?.field_1?.values?.option?.selected === true;
 
-          const isRestoreWebsiteEnabled =
-            backupValue?.options?.field_9?.values?.option?.selected === true;
+          let isRestoreWebsiteEnabled = false;
+          if (restoreFeature?.value && restoreFeature.is_active !== "0") {
+            try {
+              isRestoreWebsiteEnabled =
+                JSON.parse(restoreFeature.value)?.options?.field_1?.values?.option
+                  ?.selected === true;
+            } catch (error) {
+              // A stored copy from an older schema: treat it as off rather than
+              // taking the whole hook down with it.
+              isRestoreWebsiteEnabled = false;
+            }
+          }
 
           setEnableBackup({
             backupFeature:

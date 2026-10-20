@@ -47,6 +47,7 @@ const UsersTab = ({ loading, setLoading, widget = false }) => {
           featureId={passwordLess?.featureId}
           CheckStatus={checkUserMgmtStatus}
           isDisabled={tabBlockSettingsState?.disabled}
+          isSearchDisabled={false}
         />
       )}
 

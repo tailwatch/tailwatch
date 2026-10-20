@@ -28,7 +28,7 @@ use Tailwatch\Admin\App\Api\Logging\Log;
  * Class BackupCronJob
  *
  * Cron job for Backup feature:
- * - Schedules recurring backups based on backup interval (Every 12/24 Hours, Every 3 Days, Every 1 Week).
+ * - Schedules recurring backups based on the configured backup interval.
  * - On execute, triggers the main backup hook so BackupController runs the backup cycle.
  *
  */

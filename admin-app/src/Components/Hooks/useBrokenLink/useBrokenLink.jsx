@@ -14,6 +14,7 @@ export const useBrokenLink = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isOperationInProgress, setIsOperationInProgress] = useState(false);
     const [isCanceled, setIsCanceled] = useState(false);
+    const [isFailed, setIsFailed] = useState(false);
     const [loading, setLoading] = useState(true);
     const [isPausing, setIsPausing] = useState(false);
     const [isCanceling, setIsCanceling] = useState(false);
@@ -66,7 +67,7 @@ export const useBrokenLink = () => {
 
         if (scanState === "in-progress" && !isCompleted) {
             const delayFetchLogs = setTimeout(() => {
-                fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setErrorMessages, setIsPaused, setIsCanceled, setRenderKey, setOperationLoading, isLastLogIndex, setIsLastLogIndex);
+                fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setErrorMessages, setIsPaused, setIsCanceled, setRenderKey, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setIsFailed);
             }, 4000);
 
             return () => clearTimeout(delayFetchLogs);
@@ -94,7 +95,7 @@ export const useBrokenLink = () => {
 
         try {
             const fetchLogsWrapper = async () => {
-                return fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setErrorMessages, setIsPaused, setIsCanceled, setRenderKey, setOperationLoading, isLastLogIndex, setIsLastLogIndex);
+                return fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setErrorMessages, setIsPaused, setIsCanceled, setRenderKey, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setIsFailed);
             };
             const scanSuccessful = await instantScanning({ setScanCompleted, setErrorMessages, fetchLogs: fetchLogsWrapper });
 
@@ -106,6 +107,7 @@ export const useBrokenLink = () => {
             setIsScanInProgress(true);
             setIsPaused(false);
             setIsCompleted(false);
+            setIsFailed(false);
             setProgress(1);
             setIsLogsVisible(true);
             setRenderKey((prevKey) => prevKey + 1);
@@ -116,7 +118,7 @@ export const useBrokenLink = () => {
     };
 
     const handleAction = async (scan_state) => {
-        await handleBrokenLinkActions({ scan_state, setIsScanInProgress, setIsPaused, setIsCompleted, setLogs, setIsLogsVisible, setErrorMessages });
+        return handleBrokenLinkActions({ scan_state, setIsScanInProgress, setIsPaused, setIsCompleted, setLogs, setIsLogsVisible, setErrorMessages });
     };
 
     const handleCancel = async () => {
@@ -124,7 +126,12 @@ export const useBrokenLink = () => {
             setOperationLoading(true);
         }
         setIsCanceling(true);
-        await handleAction("cancel");
+        const accepted = await handleAction("cancel");
+        if (accepted === false) {
+            setOperationLoading(false);
+            setIsCanceling(false);
+            return;
+        }
         setIsCanceled(true);
         setIsLogsVisible(false);
         setIsPaused(false);
@@ -134,7 +141,12 @@ export const useBrokenLink = () => {
     const handlePause = async () => {
         setOperationLoading(true);
         setIsPausing(true);
-        await handleAction("pause");
+        const accepted = await handleAction("pause");
+        if (accepted === false) {
+            setOperationLoading(false);
+            setIsPausing(false);
+            return;
+        }
         await verifyLinkStatus();
         setVerifyStatus(true);
         setIsPausing(false);
@@ -148,6 +160,7 @@ export const useBrokenLink = () => {
         setLogs([]);
         setIsCanceled(false);
         setIsCanceling(false);
+        setIsFailed(false);
         setIsCompleted(false);
         setIsLogsVisible(false);
         setIsScanInProgress(false);
@@ -218,6 +231,7 @@ export const useBrokenLink = () => {
         verifyLinkStatus,
         refreshBrokenLinkStatus,
         enableBrokenLink, isLicenseConnect, setIsLicenseConnect,
-        featureEnable, parentEnable, setParentEnable, setFeatureEnable, isOperationLoading, setOperationLoading, isLastLogIndex, setIsLastLogIndex
+        featureEnable, parentEnable, setParentEnable, setFeatureEnable, isOperationLoading, setOperationLoading, isLastLogIndex, setIsLastLogIndex,
+        isFailed, setIsFailed
     };
 }

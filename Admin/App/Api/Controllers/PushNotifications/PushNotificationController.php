@@ -2,10 +2,9 @@
 /**
  * Push Notification Controller
  *
- * Manages mobile push notifications via FCM. Email notifications and severity-based
- * filtering have been removed; only the mobile channel remains. Severity is preserved
- * as a metadata tag forwarded to the mobile app (so it can render appropriate UI),
- * not as a user-configurable filter.
+ * Manages mobile push notifications via FCM; mobile is the only channel. Severity is
+ * a metadata tag forwarded to the mobile app (so it can render appropriate UI), not a
+ * user-configurable filter.
  *
  * @package    Tailwatch
  * @subpackage Controllers/PushNotifications
@@ -299,11 +298,53 @@ class PushNotificationController {
 	}
 
 	/**
+	 * Whether a push for an event that anyone can cause may still be sent in this window.
+	 *
+	 * Visitors can repeat such events at will (unknown-user logins, error pages), and each
+	 * push spends one of the account's notification credits, so each event type sends only
+	 * a few pushes per window. The events themselves are still logged.
+	 *
+	 * @param string $event Event type.
+	 * @return bool
+	 */
+	public static function tailwatch_push_budget_allows( $event ) {
+		$budget = apply_filters(
+			'tailwatch_push_budget',
+			array(
+				'limit'  => 5,
+				'window' => HOUR_IN_SECONDS,
+			),
+			$event
+		);
+		$limit  = isset( $budget['limit'] ) ? absint( $budget['limit'] ) : 5;
+		$window = isset( $budget['window'] ) ? absint( $budget['window'] ) : HOUR_IN_SECONDS;
+		if ( $limit < 1 || $window < 1 ) {
+			return false;
+		}
+
+		$key  = 'tailwatch_push_budget_' . md5( (string) $event );
+		$used = get_transient( $key );
+		if ( ! is_array( $used ) || ! isset( $used['count'], $used['start'] ) ) {
+			$used = array(
+				'count' => 0,
+				'start' => time(),
+			);
+		}
+		if ( (int) $used['count'] >= $limit ) {
+			return false;
+		}
+
+		$used['count'] = (int) $used['count'] + 1;
+		set_transient( $key, $used, max( 1, $window - ( time() - (int) $used['start'] ) ) );
+		return true;
+	}
+
+	/**
 	 * Trigger a mobile push notification.
 	 *
-	 * Severity is preserved as a metadata tag forwarded to FCM (so the mobile
-	 * app can render appropriate UI). It no longer gates whether the
-	 * notification fires — that's purely the mobile_notification toggle.
+	 * Severity is a metadata tag forwarded to FCM (so the mobile app can render
+	 * appropriate UI). It does not gate whether the notification fires — only
+	 * the mobile_notification toggle does.
 	 *
 	 * @param string     $severity Notification severity (critical, warning, info).
 	 * @param string     $title    Notification title.
@@ -349,7 +390,7 @@ class PushNotificationController {
 				$response_data['mobile_reason'] = 'license_not_connected';
 				return array(
 					'data'    => $response_data,
-					'message' => __( 'Mobile notification skipped: License not connected.', 'tailwatch' ),
+					'message' => __( 'Mobile notification skipped: this site is not connected to a Tailwatch account.', 'tailwatch' ),
 					'code'    => 400,
 				);
 			}
@@ -399,8 +440,7 @@ class PushNotificationController {
 	/**
 	 * Dispatch a critical mobile push notification that bypasses the user's push toggle.
 	 *
-	 * Standard "transactional override" pattern (cf. Stripe payment-failure emails,
-	 * AWS billing alerts, Auth0 security events): safety-critical messages override
+	 * Standard "transactional override" pattern: safety-critical messages override
 	 * user unsubscribe preferences. Use this ONLY for events the site operator must
 	 * hear about regardless of preferences — recovery mode activation, hard security
 	 * incidents, etc. For everything else, use tailwatch_trigger_notification().

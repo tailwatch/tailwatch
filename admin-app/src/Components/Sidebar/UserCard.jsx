@@ -5,7 +5,7 @@ const UserCard = ({ loading, userData }) => {
   const navigate = useNavigate();
 
   const handleSettingsClick = () => {
-    navigate("/dashboard/settings/license");
+    navigate("/dashboard/account");
   };
 
   return (

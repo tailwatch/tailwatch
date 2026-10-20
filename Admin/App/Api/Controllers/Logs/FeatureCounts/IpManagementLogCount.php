@@ -46,7 +46,7 @@ class IpManagementLogCount {
 			}
 
 			if ( ! empty( $feature_status['whitelist_feature'] ) ) {
-				$total_count = (int) $whitelist_model->count_ip_whitelists() + (int) $whitelist_model->count_country_whitelists();
+				$total_count = (int) $whitelist_model->count_ip_whitelists() + (int) apply_filters( 'tailwatch_country_whitelist_count', 0 );
 				$logs_data[] = array(
 					'feature_name' => 'whitelist',
 					'total_count'  => $total_count,

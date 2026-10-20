@@ -23,7 +23,7 @@ class UserRetrievalController {
 			// Defense-in-depth: both routers gate this upstream (nonce+manage_options
 			// / JWT), but this endpoint returns full user PII, so re-check at the
 			// method level to match the write-side user controllers.
-			if ( ! $this->is_authorized_request() ) {
+			if ( ! $this->is_authorized_request( 'list_users' ) ) {
 				return $this->unauthorized_response();
 			}
 
@@ -37,9 +37,8 @@ class UserRetrievalController {
 			$limit = min( $limit, 100 );
 
 			// Single WP_User_Query with count_total => true — fetches the page AND the total
-			// in one round-trip via SQL_CALC_FOUND_ROWS. Mirrors WP core wp-admin/users.php.
-			// Replaces the previous two-query pattern that hydrated all matching IDs into PHP
-			// just to count them.
+			// in one round-trip via SQL_CALC_FOUND_ROWS, as core's wp-admin/users.php does,
+			// rather than loading every matching ID into PHP just to count them.
 			$args = array(
 				'role__in'    => array( 'administrator', 'editor', 'author', 'contributor', 'subscriber' ),
 				'orderby'     => 'user_nicename',
@@ -149,7 +148,7 @@ class UserRetrievalController {
 	 */
 	public function tailwatch_get_user_by_id( $post_data ) {
 		try {
-			if ( ! $this->is_authorized_request() ) {
+			if ( ! $this->is_authorized_request( 'list_users' ) ) {
 				return $this->unauthorized_response();
 			}
 
@@ -230,17 +229,16 @@ class UserRetrievalController {
 	 */
 	public function tailwatch_get_all_roles() {
 		try {
-			if ( ! $this->is_authorized_request() ) {
+			if ( ! $this->is_authorized_request( 'list_users' ) ) {
 				return $this->unauthorized_response();
 			}
 
 			$wp_roles  = wp_roles();
 			$all_roles = $wp_roles->roles;
 
-			// Descriptions for the five WordPress built-in roles.
-			// WordPress stores no description natively — this is the correct approach.
-			// Third-party plugins that register custom roles can provide descriptions
-			// by hooking 'tailwatch_role_descriptions' and adding their role slug => text.
+			// Descriptions for the five WordPress built-in roles; WordPress stores none.
+			// Plugins that register custom roles can provide descriptions by hooking
+			// 'tailwatch_role_descriptions' and adding their role slug => text.
 			$built_in_descriptions = array(
 				'administrator' => __( 'Has access to all the administration features within a single site.', 'tailwatch' ),
 				'editor'        => __( 'Can publish and manage posts including the posts of other users.', 'tailwatch' ),

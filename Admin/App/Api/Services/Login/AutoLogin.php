@@ -2,6 +2,21 @@
 /**
  * Auto Login Service
  *
+ * @package    Tailwatch
+ * @subpackage Admin\App\Api\Services\Login
+ * @author     WP Tailwatch
+ * @copyright  2025-2026 WP TAILWATCH LLC
+ * @license    GPL-2.0+
+ * @since      1.0.0
+ */
+
+namespace Tailwatch\Admin\App\Api\Services\Login;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+/**
  * Passwordless one-click login for the site administrator. An authenticated
  * request (via the Connect API, running as the paired admin) mints a single-use,
  * short-lived token; opening the resulting link logs that administrator in.
@@ -27,21 +42,7 @@
  * factor that gates on the password `authenticate` step. The link is minted only by
  * an already-authenticated administrator for their own account and is single-use and
  * short-lived; the residual risk is link leakage.
- *
- * @package    Tailwatch
- * @subpackage Admin\App\Api\Services\Login
- * @author     WP Tailwatch
- * @copyright  2025-2026 WP TAILWATCH LLC
- * @license    GPL-2.0+
- * @since      1.0.0
  */
-
-namespace Tailwatch\Admin\App\Api\Services\Login;
-
-if ( ! defined( 'ABSPATH' ) ) {
-	exit;
-}
-
 class AutoLogin {
 
 	/** Plaintext token length (characters). */

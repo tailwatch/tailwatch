@@ -392,7 +392,7 @@ class CronJobManagerController {
 				array(
 					'feature'   => 'cron_jobs',
 					'action'    => 'cron_job_run_failed',
-					'detail'    => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'    => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'    => 'system',
 					'severity'  => 'high',
 					'meta_data' => array(
@@ -604,7 +604,7 @@ class CronJobManagerController {
 				array(
 					'feature'  => 'cron_jobs',
 					'action'   => 'cron_job_pause_failed',
-					'detail'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'   => 'system',
 					'severity' => 'high',
 				)
@@ -812,7 +812,7 @@ class CronJobManagerController {
 				array(
 					'feature'  => 'cron_jobs',
 					'action'   => 'cron_job_resume_failed',
-					'detail'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'   => 'system',
 					'severity' => 'high',
 				)
@@ -1003,7 +1003,7 @@ class CronJobManagerController {
 				array(
 					'feature'  => 'cron_jobs',
 					'action'   => 'cron_job_delete_failed',
-					'detail'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'   => 'system',
 					'severity' => 'high',
 				)
@@ -1303,7 +1303,7 @@ class CronJobManagerController {
 				array(
 					'feature'  => 'cron_jobs',
 					'action'   => 'cron_job_add_failed',
-					'detail'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'   => 'system',
 					'severity' => 'high',
 				)
@@ -1622,7 +1622,7 @@ class CronJobManagerController {
 				array(
 					'feature'  => 'cron_jobs',
 					'action'   => 'cron_job_edit_failed',
-					'detail'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'   => 'system',
 					'severity' => 'high',
 				)
@@ -1762,7 +1762,7 @@ class CronJobManagerController {
 				array(
 					'feature'  => 'cron_jobs',
 					'action'   => 'cron_job_bulk_action_failed',
-					'detail'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'   => 'system',
 					'severity' => 'high',
 				)
@@ -1919,7 +1919,7 @@ class CronJobManagerController {
 				array(
 					'feature'  => 'cron_jobs',
 					'action'   => 'cron_job_add_schedule_failed',
-					'detail'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'   => 'system',
 					'severity' => 'high',
 				)
@@ -2094,7 +2094,7 @@ class CronJobManagerController {
 				array(
 					'feature'  => 'cron_jobs',
 					'action'   => 'cron_job_edit_schedule_failed',
-					'detail'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'   => 'system',
 					'severity' => 'high',
 				)
@@ -2236,7 +2236,7 @@ class CronJobManagerController {
 				array(
 					'feature'  => 'cron_jobs',
 					'action'   => 'cron_job_delete_schedule_failed',
-					'detail'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'   => 'system',
 					'severity' => 'high',
 				)
@@ -2282,7 +2282,7 @@ class CronJobManagerController {
 				array(
 					'feature'  => 'cron_jobs',
 					'action'   => 'cron_job_cleanup_paused_jobs_failed',
-					'detail'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'   => 'system',
 					'severity' => 'high',
 				)

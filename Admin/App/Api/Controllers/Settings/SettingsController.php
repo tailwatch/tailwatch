@@ -97,7 +97,7 @@ class SettingsController {
 					'feature'  => 'settings',
 					'action'   => 'settings_import_reset_status_verify_failed',
 					'title'  => 'Settings Import Failed',
-					'detail'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'   => 'system',
 					'severity' => 'high',
 				)

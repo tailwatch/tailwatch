@@ -12,6 +12,7 @@ namespace Tailwatch\Admin\App\Api\Controllers\Database\DBOptimizer;
 
 use Tailwatch\Admin\App\Api\Controllers\Backup\BackupController;
 use Tailwatch\Admin\App\Api\Services\Cron\CronHealthService;
+use Tailwatch\Admin\App\Api\Services\Cron\CronKick;
 use Tailwatch\Admin\App\Api\Controllers\Features\OptionsController;
 use Tailwatch\Admin\App\Api\Controllers\PushNotifications\PushNotificationController;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\CronJobManager;
@@ -45,6 +46,7 @@ class DatabaseOptimizerController {
 		$hook_controller = new HookControllers();
 		$hook_controller->add_action_hook( 'tailwatch_auto_db_optimize', array( $this, 'tailwatch_global_db_optimize_with_monitoring' ) );
 		$hook_controller->add_action_hook( 'tailwatch_delete_optimizer_garbage_data', array( $this, 'tailwatch_delete_optimizer_garbage_data' ) );
+		$hook_controller->add_action_hook( 'tailwatch_recovery_process_failed', array( $this, 'tailwatch_on_recovery_failed' ) );
 	}
 
 	private function register_process_monitoring() {
@@ -57,18 +59,19 @@ class DatabaseOptimizerController {
 				'data_option'         => 'scan_dbtables',
 				'cancel_pause_key'    => 'default_dboptimize_scan',
 				'cancel_pause_option' => 'dboptimize_cancel_pause',
-				'stuck_threshold'     => 120, // 5 minutes.
+				'stuck_threshold'     => 120, // 2 minutes.
 				'max_retries'         => 3,
 				// Locks the optimizer feature itself, plus the backup feature
 				// because backup-with-optimize-before-backup runs db_optimize
 				// from inside a backup flow.
 				'locks_features'      => array( 'default_database_optimizer', 'default_backup_enable' ),
 				// Process types that, when running, prevent a user from starting
-				// a manual db_optimize. Note backup is NOT listed: backup may
-				// invoke db_optimize as its optimize-before-backup phase
-				// (handled by adoption logic), but a *manual* optimize while
-				// backup runs would clash with that phase.
+				// a manual db_optimize. The optimize-before-backup phase a backup
+				// runs itself starts without this check, and is resumed with
+				// that backup.
 				'cannot_start_while'  => array(
+					'backup',
+					'search_replace',
 					'files_integrity',
 					'migration',
 					'restore',
@@ -168,24 +171,48 @@ class DatabaseOptimizerController {
 			return false;
 		}
 
-		if ( isset( $current['process_run'] ) && 'db_backup' === $current['process_run'] ) {
+		// Re-tagged for the backup adopting it now, even when an earlier backup adopted it: the
+		// earlier one may have been cancelled, and its folder would leave this one waiting.
+		$backup_folder = $this->tailwatch_backup_folder_now();
+		if ( isset( $current['process_run'] ) && 'db_backup' === $current['process_run'] && ( $current['backup_folder'] ?? '' ) === $backup_folder ) {
 			return true;
 		}
-
-		$current['process_run'] = 'db_backup';
+		$current['process_run']   = 'db_backup';
+		$current['backup_folder'] = $backup_folder;
 		$this->update_db_optimization_data( $current );
 		return true;
+	}
+
+	/**
+	 * The folder of the backup run being started now: the newest run, which the backup has
+	 * just inserted before it starts or adopts this optimization.
+	 *
+	 * @return string
+	 */
+	private function tailwatch_backup_folder_now() {
+		$run = ( new BackupController() )->tailwatch_backup_run_state();
+		return is_array( $run ) && isset( $run['folderDate'] ) && is_scalar( $run['folderDate'] ) ? (string) $run['folderDate'] : '';
 	}
 
 	public function tailwatch_optimization_cancel_pause() {
 		$tailwatch_key = 'default_dboptimize_scan';
 		$option   = 'dboptimize_cancel_pause';
 
+		// By id, as update_db_optimization_cancel_pause() writes. Each run adds a row, and the
+		// garbage sweep never removes one left 'in-progress', so several can stand at once.
 		$db_model = new DBModel();
-		return $db_model->get_recent_data( $option, $tailwatch_key );
+		return $db_model->get_recent_data_by_id( $option, $tailwatch_key );
 	}
 
-	public function update_db_optimization_cancel_pause( array $options ) {
+	/**
+	 * Stores the optimization's status row.
+	 *
+	 * @param array $options            The row to store.
+	 * @param bool  $allow_state_change Resume only: put a paused optimization back to work.
+	 */
+	public function update_db_optimization_cancel_pause( array $options, $allow_state_change = false ) {
+		$options = $this->tailwatch_keep_stop_state( $options, $allow_state_change );
+
 		$tailwatch_key = 'default_dboptimize_scan';
 		$option   = 'dboptimize_cancel_pause';
 
@@ -195,6 +222,79 @@ class DatabaseOptimizerController {
 
 		$db_model = new DBModel();
 		$db_model->update_recent_row( $db_data, $tailwatch_key, $option );
+	}
+
+	/**
+	 * Listener for 'tailwatch_recovery_process_failed': recovery gave up on a stuck optimization.
+	 *
+	 * @param array $process_data The process recovery gave up on.
+	 * @return void
+	 */
+	public function tailwatch_on_recovery_failed( $process_data ) {
+		if ( is_array( $process_data ) && isset( $process_data['process_type'] ) && 'db_optimize' === $process_data['process_type'] ) {
+			$this->tailwatch_mark_run_failed( $process_data['process_id'] ?? null );
+		}
+	}
+
+	/**
+	 * Put a standalone optimization that stopped on an error into 'failed', so its screen stops
+	 * showing it running.
+	 *
+	 * Not one a backup started: the backup's own recovery runs this step again until it gets
+	 * through, and a failed row would make that step bail. Only a run still in progress is
+	 * converted, and only the one the failed process belongs to.
+	 *
+	 * @param string|null $process_id The process that failed.
+	 * @return void
+	 */
+	private function tailwatch_mark_run_failed( $process_id ) {
+		$row = $this->tailwatch_optimization_cancel_pause();
+		if ( ! is_array( $row ) || 'in-progress' !== ( $row['scan_state'] ?? '' ) || 'db_backup' === ( $row['process_run'] ?? '' ) ) {
+			return;
+		}
+		if ( ! empty( $process_id ) && ! empty( $row['process_id'] ) && $row['process_id'] !== $process_id ) {
+			return;
+		}
+
+		$timestamp = wp_next_scheduled( 'tailwatch_auto_db_optimize' );
+		if ( $timestamp ) {
+			wp_unschedule_event( $timestamp, 'tailwatch_auto_db_optimize' );
+		}
+
+		$row['scan_state']   = 'failed';
+		$row['cron_running'] = false;
+		$this->update_db_optimization_cancel_pause( $row );
+	}
+
+	/**
+	 * Keep a pause, cancel or finish from being undone by an older copy of this row.
+	 *
+	 * The live-log poll writes back the copy it read at its start. One read before the user
+	 * paused, or before the optimization finished, would put 'in-progress' back, and the
+	 * garbage sweep never removes an 'in-progress' row. A finished row is kept whole. Only
+	 * resume moves a stopped run back to work, and it says so.
+	 *
+	 * @param array $options            The row about to be stored.
+	 * @param bool  $allow_state_change Resume only.
+	 * @return array
+	 */
+	private function tailwatch_keep_stop_state( array $options, $allow_state_change ) {
+		if ( $allow_state_change || ! isset( $options['scan_state'] ) || 'in-progress' !== $options['scan_state'] ) {
+			return $options;
+		}
+
+		$current = $this->tailwatch_optimization_cancel_pause();
+		if ( ! is_array( $current ) || ! isset( $current['scan_state'] ) ) {
+			return $options;
+		}
+		if ( in_array( $current['scan_state'], array( 'completed', 'failed' ), true ) ) {
+			return $current;
+		}
+		if ( in_array( $current['scan_state'], array( 'pause', 'cancel' ), true ) ) {
+			$options['scan_state'] = $current['scan_state'];
+		}
+
+		return $options;
 	}
 
 	public function tailwatch_get_log_file_path() {
@@ -223,7 +323,23 @@ class DatabaseOptimizerController {
 			}
 
 			$dboptimize_state = $this->tailwatch_optimization_cancel_pause();
-			if ( false === $dboptimize_state['cron_running'] ) {
+			if ( ! is_array( $dboptimize_state ) ) {
+				return array(
+					'data'    => '',
+					'message' => __( 'There is no run to restart.', 'tailwatch' ),
+					'code'    => 409,
+				);
+			}
+			// An optimization that stopped on an error stays stopped: the screen asks for this
+			// while it polls, and a tick scheduled here would run the failed step again.
+			if ( in_array( $dboptimize_state['scan_state'] ?? '', array( 'failed', 'completed' ), true ) ) {
+				return array(
+					'data'    => '',
+					'message' => __( 'This run has stopped, so there is nothing to restart.', 'tailwatch' ),
+					'code'    => 409,
+				);
+			}
+			if ( false === ( $dboptimize_state['cron_running'] ?? null ) ) {
 				if ( ! wp_next_scheduled( 'tailwatch_auto_db_optimize' ) ) {
 					$cron_scheduled = wp_schedule_single_event( time() + 5, 'tailwatch_auto_db_optimize' );
 
@@ -287,7 +403,7 @@ class DatabaseOptimizerController {
 			}
 		} catch ( \Throwable $e ) {
 			Log::error(
-				$e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+				$e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				array(
 					'feature' => 'database_optimizer',
 					'action'  => 'database_optimizer_cron_if_failed_on_attempt',
@@ -306,11 +422,9 @@ class DatabaseOptimizerController {
 
 		if ( ! empty( $dboptimize_state['scan_state'] ) && ( 'pause' === $dboptimize_state['scan_state'] || 'cancel' === $dboptimize_state['scan_state'] ) ) {
 
-			// Handle process state based on cancel/pause.
 			$process_id = isset( $dboptimize_state['process_id'] ) ? $dboptimize_state['process_id'] : null;
 			if ( $process_id ) {
 				if ( 'cancel' === $dboptimize_state['scan_state'] ) {
-					// Mark as failed when cancelled.
 					$this->process_manager->mark_failed( $process_id, 'Database optimization cancelled by user' );
 				} elseif ( 'pause' === $dboptimize_state['scan_state'] ) {
 					$this->process_manager->update_state( $process_id, 'pause' );
@@ -336,18 +450,31 @@ class DatabaseOptimizerController {
 
 		$revisions_maintain = '1 Day';
 		if ( isset( $optimize_data['field_1']['sub_options']['field_16']['options'] ) ) {
+			$revisions_maintain = '';
 			foreach ( $optimize_data['field_1']['sub_options']['field_16']['options'] as $maintain_option ) {
 				if ( isset( $maintain_option['selected'] ) && true === $maintain_option['selected'] ) {
-					if ( 'Select Days' === $maintain_option['value'] && isset( $maintain_option['sub_options']['field_17']['options']['option']['value'] ) ) {
-						$revisions_field    = $maintain_option['sub_options']['field_17']['options']['option']['value'];
-						$revisions_maintain = $revisions_field . ' days';
-					} else {
-						$revisions_maintain = $maintain_option['value'];
-					}
+					$revisions_maintain = self::tailwatch_keep_period( $maintain_option );
 				}
 			}
 		}
 		return $revisions_maintain;
+	}
+
+	/**
+	 * How long a keep-for choice keeps data, as "N Day(s)", or '' when the choice cannot
+	 * be read, which keeps everything. A plain number of days is the choice itself; any
+	 * other option is answered by whoever offered it.
+	 *
+	 * @param array $maintain_option Selected keep-for option.
+	 * @return string
+	 */
+	public static function tailwatch_keep_period( $maintain_option ) {
+		$period = isset( $maintain_option['value'] ) && is_string( $maintain_option['value'] ) ? trim( $maintain_option['value'] ) : '';
+		if ( 1 !== preg_match( '/^[1-9]\d* days?$/i', $period ) ) {
+			$answer = apply_filters( 'tailwatch_db_optimizer_keep_period', '', $maintain_option );
+			$period = is_string( $answer ) ? trim( $answer ) : '';
+		}
+		return 1 === preg_match( '/^[1-9]\d* days?$/i', $period ) ? $period : '';
 	}
 
 	public function tailwatch_db_insert_data( $option, $key ) {
@@ -355,14 +482,12 @@ class DatabaseOptimizerController {
 		$json_data     = $db_model->get_recent_data( $option, $key );
 		$selected_data = array();
 
-		// Fields to skip
 		$fields_to_skip = array( 'field_15', 'field_16' );
 
 		$skip_field_1 = 'field_1';
 
 		if ( ! empty( $json_data['options'] ) ) {
 			foreach ( $json_data['options'] as $option_key => $option_value ) {
-				// Skip the specified fields, except for 'field_1' where we need to handle its sub-options.
 				if ( in_array( $option_key, $fields_to_skip ) ) {
 					continue;
 				}
@@ -374,7 +499,6 @@ class DatabaseOptimizerController {
 							continue;
 						}
 
-						// Check if the sub-option is selected.
 						if ( ! empty( $sub_value['values']['option']['selected'] ) && 1 === (int) $sub_value['values']['option']['selected'] ) {
 							$selected_data[ $sub_value['key'] ] = array(
 								'is_completed'   => false,
@@ -396,7 +520,6 @@ class DatabaseOptimizerController {
 				// Handle sub-options for fields other than 'field_1'.
 				if ( ! empty( $option_value['sub_options'] ) ) {
 					foreach ( $option_value['sub_options'] as $sub_key => $sub_value ) {
-						// Skip the specified sub-fields.
 						if ( in_array( $sub_key, $fields_to_skip ) ) {
 							continue;
 						}
@@ -529,6 +652,10 @@ class DatabaseOptimizerController {
 			$selected_data_json                 = $this->tailwatch_db_insert_data( $option, $key );
 			$selected_data_json['process_run']  = $process_run;
 			$selected_data_json['file_key']     = $unique_id;
+			if ( 'db_backup' === $process_run ) {
+				// Which backup this optimization runs for, so it never acts for another.
+				$selected_data_json['backup_folder'] = $this->tailwatch_backup_folder_now();
+			}
 
 			$process_id = $this->process_manager->get_or_create_process( 'db_optimize', 'tailwatch_auto_db_optimize' );
 
@@ -675,7 +802,7 @@ class DatabaseOptimizerController {
 
 	public function tailwatch_global_db_optimize_with_monitoring() {
 		$cancel_pause = $this->tailwatch_optimization_cancel_pause();
-		if ( isset( $cancel_pause['scan_state'] ) && ( $cancel_pause['scan_state'] === 'pause' || $cancel_pause['scan_state'] === 'cancel' ) ) {
+		if ( isset( $cancel_pause['scan_state'] ) && in_array( $cancel_pause['scan_state'], array( 'pause', 'cancel', 'failed' ), true ) ) {
 			return;
 		}
 
@@ -688,8 +815,9 @@ class DatabaseOptimizerController {
 		try {
 			$this->tailwatch_global_db_optimize();
 			$this->process_manager->heart_beat( $process_id );
-		} catch ( \Exception $e ) {
+		} catch ( \Throwable $e ) {
 			$this->process_manager->mark_failed( $process_id, $e->getMessage() );
+			$this->tailwatch_mark_run_failed( $process_id );
 
 			Log::error(
 				$e->getMessage(),
@@ -715,13 +843,19 @@ class DatabaseOptimizerController {
 			$cancel_pause['function_started']   = true;
 			$this->update_db_optimization_cancel_pause( $cancel_pause );
 
+			// The backup's row goes in its own variable: $cancel_pause is written back as this
+			// run's row when it finishes, so it must never hold the backup's fields or process id.
 			$backup_controller = new BackupController();
 			if ( 'db_backup' === $json_data['process_run'] ) {
-				$cancel_pause = $backup_controller->tailwatch_backup_cancel_pause_data();
-
-				if ( false === $cancel_pause['cron_running'] ) {
-					$cancel_pause['cron_running'] = true;
-					$backup_controller->update_backup_cancel_pause( $cancel_pause );
+				BackupController::tailwatch_set_run_owner( $json_data['backup_folder'] ?? '' );
+				try {
+					$backup_pause = $backup_controller->tailwatch_backup_cancel_pause_data();
+					if ( false === $backup_pause['cron_running'] ) {
+						$backup_pause['cron_running'] = true;
+						$backup_controller->update_backup_cancel_pause( $backup_pause );
+					}
+				} finally {
+					BackupController::tailwatch_clear_run_owner();
 				}
 			}
 
@@ -806,7 +940,6 @@ class DatabaseOptimizerController {
 					$cancel_pause['scan_state'] = 'completed';
 					$this->update_db_optimization_cancel_pause( $cancel_pause );
 
-					// Mark process as completed in process monitor.
 					if ( ! empty( $this->current_process_id ) ) {
 						$this->process_manager->mark_completed( $this->current_process_id );
 						$this->current_process_id = null;
@@ -814,7 +947,7 @@ class DatabaseOptimizerController {
 
 					// Log completion (also triggers notification via NotificationActions).
 					Log::info(
-						'Your database was successfully optimized. Unused data like revisions, spam comments, and transients were cleaned to improve performance.',
+						'Your database was successfully optimized. The unused data you chose to remove was cleaned up to improve performance.',
 						array(
 							'feature'   => 'database_optimizer',
 							'action'    => 'db_optimize_complete',
@@ -830,20 +963,27 @@ class DatabaseOptimizerController {
 				$live_logs->tailwatch_live_logs_completed( true, $this->tailwatch_get_log_file_path() );
 
 				if ( 'db_backup' === $json_data['process_run'] ) {
-					$database_backup = wp_next_scheduled( 'tailwatch_scan_db_tables_cron' );
-					if ( ! $database_backup ) {
-						$cancel_pause = $backup_controller->tailwatch_backup_cancel_pause_data();
+					// Only for the backup this optimization ran for, and only while it is the current run.
+					BackupController::tailwatch_set_run_owner( $json_data['backup_folder'] ?? '' );
+					try {
+						$database_backup = wp_next_scheduled( 'tailwatch_scan_db_tables_cron' );
+						if ( ! $database_backup && $backup_controller->tailwatch_run_is_current() ) {
+							$cancel_pause = $backup_controller->tailwatch_backup_cancel_pause_data();
 
-						if ( true === $cancel_pause['cron_running'] ) {
-							$cancel_pause['cron_running'] = false;
-							$backup_controller->update_backup_cancel_pause( $cancel_pause );
+							if ( true === $cancel_pause['cron_running'] ) {
+								$cancel_pause['cron_running'] = false;
+								$backup_controller->update_backup_cancel_pause( $cancel_pause );
+							}
+
+							$backup_data                       = $backup_controller->tailwatch_get_scan_backup_data();
+							$backup_data['optimize_completed'] = true;
+							$backup_controller->update_backup_data( $backup_data );
+
+							wp_schedule_single_event( time(), 'tailwatch_scan_db_tables_cron' );
+							CronKick::accelerate();
 						}
-
-						$backup_data                       = $backup_controller->tailwatch_get_scan_backup_data();
-						$backup_data['optimize_completed'] = true;
-						$backup_controller->update_backup_data( $backup_data );
-
-						wp_schedule_single_event( time() + 5, 'tailwatch_scan_db_tables_cron' );
+					} finally {
+						BackupController::tailwatch_clear_run_owner();
 					}
 				}
 			}
@@ -857,7 +997,7 @@ class DatabaseOptimizerController {
 			);
 		} catch ( \Throwable $e ) {
 			Log::error(
-				$e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+				$e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				array(
 					'feature' => 'database_optimizer',
 					'action'  => 'database_optimizer_process_failed',
@@ -975,6 +1115,18 @@ class DatabaseOptimizerController {
 
 			$scan_state = isset( $data['scan_state'] ) ? sanitize_text_field( $data['scan_state'] ) : '';
 			if ( in_array( $scan_state, array( 'pause', 'cancel' ), true ) ) {
+				$current_state = ( is_array( $existing_data ) && isset( $existing_data['scan_state'] ) ) ? $existing_data['scan_state'] : '';
+				// A finished optimization is not reopened or marked failed by a late click, and
+				// Pause only means something to one that is running.
+				if ( 'completed' === $current_state || ( 'pause' === $scan_state && 'in-progress' !== $current_state ) ) {
+					return array(
+						'data'    => array(),
+						'message' => ( 'completed' === $current_state )
+							? __( 'This run has already finished, so there is nothing to pause or cancel.', 'tailwatch' )
+							: __( 'Only a run that is in progress can be paused.', 'tailwatch' ),
+						'code'    => 409,
+					);
+				}
 
 				$existing_data['scan_state'] = $scan_state;
 				$this->update_db_optimization_cancel_pause( $existing_data );
@@ -983,7 +1135,6 @@ class DatabaseOptimizerController {
 				if ( $timestamp ) {
 					wp_unschedule_event( $timestamp, 'tailwatch_auto_db_optimize' );
 
-					// Handle process state based on cancel/pause.
 					$process_id = isset( $existing_data['process_id'] ) ? $existing_data['process_id'] : null;
 
 					if ( 'cancel' === $scan_state ) {
@@ -1076,7 +1227,7 @@ class DatabaseOptimizerController {
 			}
 		} catch ( \Throwable $e ) {
 			Log::error(
-				$e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+				$e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				array(
 					'feature' => 'database_optimizer',
 					'action'  => 'database_optimizer_cancel_pause_failed',
@@ -1214,8 +1365,6 @@ class DatabaseOptimizerController {
 					return array(
 						'is_completed' => true,
 						'scan_state'   => 'completed',
-						// 'progress'     => $existing_data['progress'],
-						// 'process_run'  => $optimize_data['process_run'],
 						'message'      => __( 'Database successfully optimized.', 'tailwatch' ),
 						'code'         => 200,
 					);
@@ -1274,12 +1423,20 @@ class DatabaseOptimizerController {
 			$existing_data = $this->tailwatch_optimization_cancel_pause();
 
 			if ( ! empty( $existing_data ) && ! empty( $existing_data['scan_state'] ) && 'pause' === $existing_data['scan_state'] ) {
+				// Resumed only while nothing that cannot run beside it is running or paused. A run
+				// serving a backup is resumed with that backup, which is not in its way.
+				$optimization  = $this->tailwatch_get_optimization_data();
+				$serves_backup = is_array( $optimization ) && 'db_backup' === ( $optimization['process_run'] ?? '' );
+				$blocked       = ( new ProcessGuard() )->ensure_can_start_process( 'db_optimize', $serves_backup ? array( 'backup' ) : array() );
+				if ( null !== $blocked ) {
+					return $blocked;
+				}
+
 				wp_schedule_single_event( time() + 10, 'tailwatch_auto_db_optimize' );
 
 				$existing_data['scan_state'] = 'in-progress';
-				$this->update_db_optimization_cancel_pause( $existing_data );
+				$this->update_db_optimization_cancel_pause( $existing_data, true );
 
-				// Update process state to in_progress when resumed.
 				$process_id = isset( $existing_data['process_id'] ) ? $existing_data['process_id'] : null;
 				if ( $process_id ) {
 					$this->process_manager->update_state( $process_id, 'in_progress' );
@@ -1316,7 +1473,7 @@ class DatabaseOptimizerController {
 			}
 		} catch ( \Throwable $e ) {
 			Log::error(
-				$e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+				$e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				array(
 					'feature' => 'database_optimizer',
 					'action'  => 'database_optimizer_resume_failed',

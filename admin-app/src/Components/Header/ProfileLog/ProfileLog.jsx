@@ -16,7 +16,7 @@ const getPlanStyle = (planName) => {
       bg: 'bg-gray-50',
       border: 'border-gray-200',
       label: 'Connect your Account',
-      sub: 'Connect a license to access all features',
+      sub: 'Link this site to the Tailwatch app and dashboard',
       pill: 'bg-teal-500 text-white',
       pillText: 'Connect',
       iconBg: 'bg-gray-100',
@@ -58,7 +58,7 @@ const getPlanStyle = (planName) => {
       bg: 'bg-orange-50',
       border: 'border-orange-200',
       label: `Current Plan: ${planName}`,
-      sub: 'Upgrade for more features',
+      sub: 'See what Tailwatch Pro adds',
       pill: 'bg-orange-500 text-white',
       pillText: 'Upgrade',
       iconBg: 'bg-orange-100',
@@ -71,7 +71,7 @@ const getPlanStyle = (planName) => {
     bg: 'bg-gray-50',
     border: 'border-gray-200',
     label: `Current Plan: ${planName}`,
-    sub: 'Upgrade your plan for more features',
+    sub: 'See what Tailwatch Pro adds',
     pill: 'bg-teal-500 text-white',
     pillText: 'Upgrade',
     iconBg: 'bg-gray-100',
@@ -123,7 +123,7 @@ const ProfileLog = () => {
 
   const handleLicenseClick = () => {
     setOpen(false);
-    navigate("/dashboard/settings/license");
+    navigate("/dashboard/account");
   };
 
   const renderProfileTrigger = () => {

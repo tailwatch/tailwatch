@@ -4,8 +4,8 @@
  *
  * WordPress core's wp-load.php probes both ABSPATH/wp-config.php AND
  * dirname(ABSPATH)/wp-config.php. Plugins that only look in ABSPATH silently
- * break on Bedrock / Roots-style installs where wp-config.php sits one
- * directory above ABSPATH for security hardening.
+ * break on installs that keep wp-config.php one directory above ABSPATH
+ * for security hardening.
  *
  * @package    Tailwatch
  * @subpackage Services
@@ -24,7 +24,7 @@ class WpConfigLocator {
 	 *
 	 * Mirrors WordPress core's own resolution order:
 	 *   1. ABSPATH/wp-config.php               (standard layout)
-	 *   2. dirname(ABSPATH)/wp-config.php      (Bedrock, Roots, hardened installs)
+	 *   2. dirname(ABSPATH)/wp-config.php      (hardened installs)
 	 *
 	 * @return string|null
 	 */

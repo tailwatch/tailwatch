@@ -91,7 +91,7 @@ const PushNotificationToggle = ({ onStatusChange, showLabel = true, labelText = 
 
   const handleConnectLicense = () => {
     setShowModal(false);
-    navigate("/dashboard/settings/license");
+    navigate("/dashboard/account");
   };
 
   const isLicenseDisconnected = isMobileDisabled === false;

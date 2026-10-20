@@ -3,7 +3,7 @@ import ActionButton from '../../../Components/Buttons/ActionButton';
 import { RiRestartFill } from "react-icons/ri";
 import ShowCanvas from '../../../Components/ShowCanvasButton/ShowCanvas';
 import { useBrokenLinkFeature } from '../../../Components/Hooks/Features/UseFeatures';
-const LinksButton = ({ isScanInProgress, isStarting, isPaused, isCompleted, handleInstantScan, handlePause, handleCancel, handleResume, toggleLogs, isLogsVisible, verifyStatus, isOperationInProgress, isCanceled, isPausing, isCanceling, resetAllStates,checkBrokenLinkStatus,featureEnable,parentEnable }) => {
+const LinksButton = ({ isScanInProgress, isStarting, isPaused, isCompleted, handleInstantScan, handlePause, handleCancel, handleResume, toggleLogs, isLogsVisible, verifyStatus, isOperationInProgress, isCanceled, isPausing, isCanceling, resetAllStates,checkBrokenLinkStatus,featureEnable,parentEnable, isFailed }) => {
   const {enableBrokenLink} = useBrokenLinkFeature();
 
   return (
@@ -20,7 +20,7 @@ const LinksButton = ({ isScanInProgress, isStarting, isPaused, isCompleted, hand
         {(isPaused || !verifyStatus) && (
           <ActionButton onClick={handleResume} isInProgress={isScanInProgress} isCompleted={isCompleted} isCanceled={isCanceled} defaultText="Resume Process" inProgressText="In Progress..." completedText="Completed" canceledText="Canceled" />
         )}
-        {(isCompleted || isCanceled) && (
+        {(isCompleted || isCanceled || isFailed) && (
           <div className='flex cursor-pointer' onClick={resetAllStates} role="button" >
             <RiRestartFill className='text-[25px] text-[#007980] hover:text-opacity-80' />
             <p className='pl-[5px] text-md text-gray-600 font-semibold'>Refresh</p>
@@ -29,9 +29,6 @@ const LinksButton = ({ isScanInProgress, isStarting, isPaused, isCompleted, hand
       </div>
 
       <div className="flex space-x-3">
-        {/* {!isOperationInProgress && !verifyStatus && !isCanceled && (
-          <ActionButton onClick={handleCancel} isCompleted={isCompleted} isDisabled={isCanceling} defaultText="Cancel" inProgressText="Canceling..." className="px-3 py-1" />
-        )} */}
         {(isScanInProgress || isPaused) && (
           <>
             <ActionButton onClick={handlePause} isInProgress={isPausing} isDisabled={!isScanInProgress || isCompleted || isPausing || isCanceling} defaultText="Pause" inProgressText="Pausing..." className="px-3 py-1 text-white rounded-md" />

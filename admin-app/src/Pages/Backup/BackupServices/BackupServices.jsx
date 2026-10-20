@@ -1,8 +1,40 @@
+import { readFeatureGate } from '../../../Components/Utils/featureGate';
 import axios from "axios";
 import { toast } from "react-toastify";
 import { alertService } from "../../../Components/AlertService/AlertService";
 import { CronHealer } from "../../../Components/CroneHealer/CronHealer";
+import { warnIfBlocked } from "../../../Components/Hooks/OwningProcess/warnIfBlocked";
 /* global tailwatch_ajax */
+
+// The site refused to start because the disk is too full. Said in the site's own words:
+// how much is free, how much a start needs, and what to do about it.
+const refusedForDiskSpace = async (payload) => {
+  if (payload?.code !== 507) {
+    return false;
+  }
+  await alertService.warning(
+    payload.message || "There is not enough free disk space to start a backup.",
+    "Not enough disk space"
+  );
+  return true;
+};
+
+// The site refused to start because a process is already running: a backup started in another
+// tab or still starting, or another module's process. A running backup is followed here, as if
+// this start had begun it. null when the answer is not such a refusal.
+const refusedForRunningProcess = async (payload, setScanCompleted, fetchLogs) => {
+  if (payload?.code !== 409 || payload?.data?.blocked_by_process !== true) {
+    return null;
+  }
+  const message = payload.message || 'A background process is currently running. Please wait for it to finish before starting a backup.';
+  await alertService.warning(message, 'Process in Progress');
+  if (payload.data.running_process === 'backup' && typeof fetchLogs === 'function') {
+    setScanCompleted(true);
+    fetchLogs();
+    return { followed: true };
+  }
+  return { followed: false };
+};
 
 export const instantScanning = async (
   setScanCompleted,
@@ -20,20 +52,19 @@ export const instantScanning = async (
       headers: { "Content-Type": "multipart/form-data" },
     });
 
-    if (response.data?.data?.code === 409 && response.data?.data?.data?.blocked_by_process === true) {
-      const message = response.data?.data?.message || 'A background process is currently running. Please wait for it to finish before changing this setting.';
-      const runningProcess = response.data?.data?.data?.running_process;
-      await alertService.warning(message, 'Process in Progress');
-      if (runningProcess === 'backup' && typeof fetchLogs === 'function') {
-        setScanCompleted(true);
-        fetchLogs();
+    const refused = await refusedForRunningProcess(response.data?.data, setScanCompleted, fetchLogs);
+    if (refused) {
+      if (refused.followed) {
         return true;
       }
       return;
     }
+    if (await refusedForDiskSpace(response.data?.data)) {
+      return false;
+    }
     const { database_optimize, optimize_skip } = response.data.data;
 
-    // Case 1:database_optimize, optimize_skip are true
+    // Case 1: database_optimize or optimize_skip is true
     if (database_optimize || optimize_skip) {
       setScanCompleted(true);
       fetchLogs();
@@ -55,7 +86,6 @@ export const instantScanning = async (
         optimizeSkipValue = true; // Skip optimization
       }
 
-      // new call execute
       const newFormData = new FormData();
       newFormData.append("action", "tailwatch_global_ajax_handler");
       newFormData.append(
@@ -71,9 +101,19 @@ export const instantScanning = async (
         headers: { "Content-Type": "multipart/form-data" },
       });
 
+      const refusedNow = await refusedForRunningProcess(newResponse.data?.data, setScanCompleted, fetchLogs);
+      if (refusedNow) {
+        if (refusedNow.followed) {
+          return true;
+        }
+        return;
+      }
+      if (await refusedForDiskSpace(newResponse.data?.data)) {
+        return false;
+      }
+
       const { optimize_skip: newInstantScan } = newResponse.data.data;
 
-      // if optimize_skip return true or false then execute this case
       if (newInstantScan === true || newInstantScan === false) {
         setScanCompleted(true);
         fetchLogs();
@@ -86,7 +126,7 @@ export const instantScanning = async (
         return false;
       }
     }
-    // Case 3: instant_scan is false, but database_optimize or optimize_skip is true
+    // Case 3: neither flag came back as an answer, so the backup did not start
     else {
       if (
         response.data.data.message ===
@@ -117,6 +157,57 @@ export const instantScanning = async (
 let cronScheduled = false;
 let isCronExecuting = false;
 let cronTimeoutId = null;
+
+/**
+ * How long the backup may show no movement before the server is asked to look at it.
+ *
+ * cron_running is written to false by the worker on its way out, so ONLY a tick that
+ * returns clears it. The failures this watchdog exists for — an out-of-memory kill, the
+ * OOM killer, a proxy cutting the request — never reach the way out, and leave the flag
+ * reading "running" forever. Worse, the branch below then CANCELS the pending recovery.
+ *
+ * The log cursor cannot be faked the same way: it only advances when a tick actually did
+ * something. Two minutes is comfortably longer than the slowest single part.
+ */
+const STALL_AFTER_MS = 120000;
+
+/**
+ * Minimum gap between two recovery requests, so a wedged run asks once a minute rather
+ * than on every poll.
+ */
+const RECOVER_EVERY_MS = 60000;
+
+let lastProgressMark = "";
+let lastProgressAt = Date.now();
+let lastRecoveryAt = 0;
+
+const noteBackupProgress = (lastLogIndex, progress) => {
+  const mark = `${lastLogIndex}:${progress}`;
+  if (mark !== lastProgressMark) {
+    lastProgressMark = mark;
+    lastProgressAt = Date.now();
+  }
+};
+
+/**
+ * Ask the server to revive the run when nothing has moved for a while.
+ *
+ * The client only reports "nothing is happening". Whether that means a dead worker is
+ * the server's call — it holds the heartbeat and the scheduled events, and it refuses
+ * when a slow-but-live tick is still checking in.
+ */
+const checkStalledBackup = async () => {
+  const now = Date.now();
+  if (now - lastProgressAt < STALL_AFTER_MS) {
+    return;
+  }
+  if (now - lastRecoveryAt < RECOVER_EVERY_MS) {
+    return;
+  }
+
+  lastRecoveryAt = now;
+  await executeCronIfFailed();
+};
 
 const executeCronIfFailed = async () => {
   if (isCronExecuting) {
@@ -179,7 +270,7 @@ export const fetchLogs = async (
   setErrorMessages,
   setIsPaused,
   setIsCanceled,
-  setOperationLoading, isLastLogIndex, setIsLastLogIndex
+  setOperationLoading, isLastLogIndex, setIsLastLogIndex, setIsFailed
 ) => {
   try {
     const formData = new FormData();
@@ -193,11 +284,12 @@ export const fetchLogs = async (
       headers: { "Content-Type": "multipart/form-data" },
     });
     
-    const { new_logs, is_completed, scan_state, cron_running, message, progress, function_completed, last_log_index, completion_timestamp, current_timestamp } = response.data.data;
+    const { new_logs, scan_state, cron_running, message, progress, function_completed, last_log_index, completion_timestamp, current_timestamp } = response.data.data;
     
 
     setIsLastLogIndex(last_log_index);
     setProgress(progress);
+    noteBackupProgress(last_log_index, progress);
     if (new_logs.length > 0) {
       setLogs((prevLogs) => [...prevLogs, ...new_logs]);
     }
@@ -214,7 +306,10 @@ export const fetchLogs = async (
       }
     }
 
-    if (is_completed && scan_state === "completed") {
+    // Finished once the status row says so. The log's own flag can lag a step behind, and
+    // none of the branches below would ask again.
+    if (scan_state === "completed") {
+      setProgress(100);
       setIsCompleted(true);
       setRenderKey((prevKey) => prevKey + 1);
       setRenderBackupDetail((prevKey) => prevKey + 1);
@@ -231,6 +326,32 @@ export const fetchLogs = async (
       setIsCanceled(true);
       setIsPaused(false);
       setOperationLoading(false);
+      return;
+    } else if (scan_state === "failed") {
+      // The site gave up on this backup — recovery exhausted its retries, or a tick died
+      // somewhere it could not come back from. A backup that failed has to say so, stop
+      // the poll and hand the button back.
+      //
+      // The console STAYS open, unlike a cancel. A cancel is something the operator did
+      // and already knows the reason for; a failure is the opposite, and the last few
+      // lines above are the only account of it they will get.
+      setIsScanInProgress(false);
+      setIsPaused(false);
+      setOperationLoading(false);
+      // Opened, not closed. Reaching this branch on the first round of a reload means the
+      // operator has come back to find out what happened, and the tail this call just
+      // loaded is the answer; a cancel closes the console because there is nothing in it
+      // the operator does not already know.
+      setIsLogsVisible(true);
+      if (typeof setIsFailed === "function") {
+        setIsFailed(true);
+      }
+      setLogs((prevLogs) => [
+        ...prevLogs,
+        "The backup stopped and could not be completed. Your previous backups are safe — start a new one when you are ready.",
+      ]);
+      setRenderKey((prevKey) => prevKey + 1);
+      setRenderBackupDetail((prevKey) => prevKey + 1);
       return;
     } else if (scan_state === null) {
       setIsScanInProgress(false);
@@ -255,7 +376,7 @@ export const fetchLogs = async (
             setErrorMessages,
             setIsPaused,
             setIsCanceled,
-            setOperationLoading, last_log_index, setIsLastLogIndex
+            setOperationLoading, last_log_index, setIsLastLogIndex, setIsFailed
           );
         }, 4000);
       } else {
@@ -263,10 +384,25 @@ export const fetchLogs = async (
       }
     }
 
-    if (scan_state !== "pause" && scan_state !== "cancel") {
+    // Only for a run that could still be revived. `failed` belongs with pause and cancel
+    // here: the site writes cron_running false on its way into that state and unschedules
+    // the worker hooks in the same breath, so a client that reads the flag at face value
+    // answers by scheduling the very cron the site just took away — trying to resurrect a
+    // backup it deliberately buried.
+    if (
+      scan_state !== "pause" &&
+      scan_state !== "cancel" &&
+      scan_state !== "failed"
+    ) {
       setTimeout(() => {
         checkCronExecution(message, cron_running);
       }, 15000);
+    }
+
+    // Independent of cron_running, and deliberately so: this is the path that catches a
+    // worker killed hard enough that it never got to say it had stopped.
+    if (scan_state === "in-progress") {
+      checkStalledBackup();
     }
   } catch (error) {
     setErrorMessages((prevErrors) => [...prevErrors, "Error Fetching logs"]);
@@ -297,7 +433,6 @@ export const fetchFolderFiles = async (
     if (response.data.data.code === 200 && response.data.data.data) {
       return response.data.data.data;
     } else {
-      // setErrorMessages((prevErrors)=>[...prevErrors, response.data.data.message ]);
       return [];
     }
   } catch (error) {
@@ -309,6 +444,16 @@ export const fetchFolderFiles = async (
     return [];
   }
 };
+/**
+ * Raised when something has changed the set of backups on disk.
+ *
+ * The progress panel and the list of backups are sibling screens with no state between
+ * them, and a cancel is handled entirely by the first one. The server prunes the cancelled
+ * run's partial folder, so without this the list goes on showing what it showed before
+ * until the operator navigates away and back.
+ */
+export const BACKUP_LIST_STALE_EVENT = "tailwatch:backup-list-stale";
+
 export const fetchBackupFiles = async (
   setErrorMessages,
   setPagination,
@@ -375,6 +520,10 @@ export const handleBackupAction = async ({
       if (scan_state === "cancel") {
         setIsScanInProgress(false);
         setIsCompleted(true);
+
+        // The run that was cancelled took its half-written folder with it, so whatever the
+        // list is showing is now out of date.
+        window.dispatchEvent(new Event(BACKUP_LIST_STALE_EVENT));
       } else if (scan_state === "pause") {
         setIsScanInProgress(false);
         setIsPaused(true);
@@ -415,6 +564,10 @@ export const verifyBackupStatus = async (
     const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
+    // A reply the gate let through is proof both switches are on. Read from every
+    // response, not only refusals, so these flags cannot latch to false and stay there.
+    readFeatureGate(response, setFeatureEnable, setParentEnable);
+
 
     if (response.data.success === true) {
       const { is_completed, progress, scan_state, scan_type, backup_downloading } = response.data.data;
@@ -463,6 +616,10 @@ export const fetchBackupDetails = async ({
         "Content-Type": "multipart/form-data",
       },
     });
+    // A reply the gate let through is proof both switches are on. Read from every
+    // response, not only refusals, so these flags cannot latch to false and stay there.
+    readFeatureGate(response, setFeatureEnable, setParentEnable);
+
 
     if (response.status === 200 && response.data.success) {
       const backupData = response.data.data.data;
@@ -481,8 +638,16 @@ export const fetchBackupDetails = async ({
   }
 };
 
+/**
+ * Per-file progress while a backup is being sent to remote storage.
+ *
+ * The site only asks for this once `backup_downloading` comes back true, and that is
+ * decided by the `tailwatch_get_backup_downloading_status` filter. The filter can answer
+ * true on an install that has no matching action, so this fails quietly: it returns null
+ * rather than throwing, and the backup screen shows no progress column instead of
+ * breaking on a missing property.
+ */
 export const getBackupFilesDownloadStatus = async () => {
-
   try {
     const formData = new FormData();
     formData.append("action", "tailwatch_global_ajax_handler");
@@ -493,9 +658,17 @@ export const getBackupFilesDownloadStatus = async () => {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
-    return response.data.data;
+    const payload = response?.data?.data;
+
+    // An action the dispatcher cannot route answers with something that has no `backups`
+    // in it. Treated as "nothing to report", never as a shape to read fields off.
+    if (!payload || typeof payload !== "object" || !Array.isArray(payload.backups)) {
+      return null;
+    }
+
+    return payload;
   } catch (error) {
-    throw error;
+    return null;
   }
 };
 
@@ -524,6 +697,7 @@ export const onResumeBackup = async ({
   setOperationLoading,
   isLastLogIndex,
   setIsLastLogIndex,
+  setIsFailed,
 }) => {
   const formData = new FormData();
   formData.append("action", "tailwatch_global_ajax_handler");
@@ -537,6 +711,10 @@ export const onResumeBackup = async ({
   if (response.data.success) {
     setIsScanInProgress(true);
     setIsFetchingLogs(true);
+    // A resumed run is live again, so last time's failure stops being the headline.
+    if (typeof setIsFailed === "function") {
+      setIsFailed(false);
+    }
     await checkBackupStatus();
     fetchLogs(
       setLogs,
@@ -553,15 +731,26 @@ export const onResumeBackup = async ({
       setIsCanceled,
       setOperationLoading,
       isLastLogIndex,
-      setIsLastLogIndex
+      setIsLastLogIndex,
+      setIsFailed
     );
   } else {
+    setIsScanInProgress(false);
+    setIsLogsVisible(false);
+    const payload = response.data?.data;
+    if (await warnIfBlocked(payload)) {
+      return;
+    }
+    // The run is not paused any more (finished, running, or gone): say so, and show what it is now.
+    if (payload?.code === 409) {
+      await alertService.warning(payload.message || "There is no paused backup to resume.", "Nothing to Resume");
+      await checkBackupStatus();
+      return;
+    }
     setErrorMessages((prevErrors) => [
       ...prevErrors,
       "Failed to resume the backup:",
     ]);
-    setIsScanInProgress(false);
-    setIsLogsVisible(false);
   }
 };
 
@@ -600,7 +789,9 @@ export const deleteBackupFolder = async ({
       return;
     }
 
-    if (response.data.data.code === 200) {
+    const result = response.data.data;
+
+    if (result.code === 200) {
       toast.success("Files Deleted Successfully");
       if (is_delete) {
         setCurrentPage(0);
@@ -612,9 +803,29 @@ export const deleteBackupFolder = async ({
         }
       }
       loadBackupFiles();
+      return;
+    }
+
+    // A backup can be refused rather than merely fail: an incremental backup that a
+    // newer one is built on is kept, because deleting it would leave that newer backup
+    // unrestorable. That is a decision the operator has to see the reason for, so the
+    // per-backup reasons are shown instead of a generic failure.
+    const reasons = Array.isArray(result.data?.failed_messages)
+      ? result.data.failed_messages
+      : [];
+
+    if (reasons.length > 0) {
+      await alertService.warning(
+        reasons.join("\n\n"),
+        result.code === 207 ? "Some backups were kept" : "Nothing was deleted"
+      );
     } else {
-      console.error("Failed to delete backup:", response.data.data.message);
-      toast.error("Failed to delete files");
+      toast.error(result.message || "Failed to delete files");
+    }
+
+    // A partial delete still changed the list.
+    if (result.code === 207) {
+      loadBackupFiles();
     }
   } catch (error) {
     console.error("Error deleting backup:", error);

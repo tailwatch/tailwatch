@@ -3,7 +3,6 @@
  * Unified Logger Class - PSR-3 Compatible
  *
  * Centralized logging system that combines activity and error logging.
- * Inspired by Monolog and Laravel's logging patterns, adapted for WordPress.
  *
  * @package    Tailwatch
  * @subpackage Logging
@@ -137,7 +136,6 @@ class Logger {
 	 * @return void
 	 */
 	private function setup_default_handlers() {
-		// Single DB read for both flags instead of two separate calls.
 		$logging_status   = $this->get_logging_status();
 		$activity_enabled = $logging_status['activity_logs_recording'];
 		$error_enabled    = $logging_status['error_logs_recording'];
@@ -164,7 +162,7 @@ class Logger {
 
 		/**
 		 * Filter to add custom log handlers.
-	     *
+		 *
 		 * @param array $handlers Array of log handlers.
 		 */
 		$this->handlers = apply_filters( 'tailwatch_log_handlers', $this->handlers );
@@ -182,7 +180,7 @@ class Logger {
 
 		/**
 		 * Filter to add custom log processors.
-	     *
+		 *
 		 * @param array $processors Array of log processors.
 		 */
 		$this->processors = apply_filters( 'tailwatch_log_processors', $this->processors );
@@ -191,14 +189,14 @@ class Logger {
 	/**
 	 * Get logging status for both activity and error logging.
 	 *
-	 * Hardcoded off in 1.0.0 — no user-facing toggle ships in this release.
+	 * Hardcoded off — no user-facing toggle ships.
 	 * Log:: call sites still execute (rate-limit + sanitize + notification
 	 * dispatch) but no DatabaseHandler is registered, so nothing is written
 	 * to the logs table.
 	 *
 	 * @return array {
-	 *     @type bool $activity_logs_recording Always false in 1.0.0.
-	 *     @type bool $error_logs_recording    Always false in 1.0.0.
+	 *     @type bool $activity_logs_recording Always false.
+	 *     @type bool $error_logs_recording    Always false.
 	 * }
 	 */
 	private function get_logging_status() {
@@ -409,7 +407,7 @@ class Logger {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 					$exception_data['file']  = sanitize_text_field( $value->getFile() );
 					$exception_data['line']  = absint( $value->getLine() );
-					$exception_data['trace'] = $value->getTraceAsString();
+					$exception_data['trace'] = Log::trace( $value );
 				}
 				$sanitized[ $sanitized_key ] = $exception_data;
 				$size                       += isset( $exception_data['trace'] ) ? strlen( $exception_data['trace'] ) : 0;
@@ -449,6 +447,32 @@ class Logger {
 	}
 
 	/**
+	 * Whether this request comes from a signed-out visitor, not a user, cron or the command line.
+	 *
+	 * @return bool
+	 */
+	private function is_visitor_request() {
+		if ( 'cli' === PHP_SAPI || wp_doing_cron() ) {
+			return false;
+		}
+		return ! function_exists( 'is_user_logged_in' ) || ! is_user_logged_in();
+	}
+
+	/**
+	 * Whether a push for this action may be sent.
+	 *
+	 * A visitor can repeat what they cause (an IP block, the email a password-reset request
+	 * sends) at will, so each such action shares the hourly push budget.
+	 *
+	 * @param string $action     Log action.
+	 * @param bool   $is_visitor Whether a signed-out visitor caused it.
+	 * @return bool
+	 */
+	private function push_allowed( $action, $is_visitor ) {
+		return ! $is_visitor || PushNotificationController::tailwatch_push_budget_allows( 'visitor_' . $action );
+	}
+
+	/**
 	 * Trigger notification if needed (decoupled from logging).
 	 *
 	 * Checks NotificationActions config to determine if notification should be sent.
@@ -474,8 +498,8 @@ class Logger {
 		}
 
 		try {
-			// Check if this action should trigger a notification.
-			if ( NotificationActions::should_notify( $action ) ) {
+			// Check if this action should trigger a notification. The entry is logged either way.
+			if ( NotificationActions::should_notify( $action ) && $this->push_allowed( $action, $this->is_visitor_request() ) ) {
 				self::$is_notifying = true;
 
 				$push_notification = new PushNotificationController();
@@ -561,7 +585,7 @@ class Logger {
 					}
 				}
 
-				// Use correct notification method (tailwatch_trigger_notification supports mobile push).
+				// tailwatch_trigger_notification() is the method that also delivers mobile push.
 				$push_notification->tailwatch_trigger_notification( $severity, $title, $error_detail, $meta_data );
 
 				self::$is_notifying = false;

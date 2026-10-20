@@ -5,6 +5,7 @@ name: Release
 #
 #   dry_run = true  -> build + validate + rehearse the SVN deploy, commit NOTHING
 #   dry_run = false -> actually publish to WordPress.org and create the GitHub release
+#                      (from main only)
 #
 # The version input must already be set in all four version files on the branch
 # you run this from (the "Verify" step fails otherwise).
@@ -30,10 +31,23 @@ on:
 permissions:
   contents: write
 
+# One push to WordPress.org at a time: a second release, or an assets update, waits
+# for the first instead of racing it to SVN.
+concurrency:
+  group: wordpress-org-svn
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      - name: Real releases run from main only
+        # A real release ships the branch it runs on. Dry runs may use any branch.
+        if: ${{ !inputs.dry_run && github.ref != 'refs/heads/main' }}
+        run: |
+          echo "::error::A real release must run from main; this run is on ${GITHUB_REF_NAME}."
+          exit 1
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -74,9 +88,10 @@ jobs:
 
       - name: Deploy to WordPress.org
         id: deploy
-        # A dry-run rehearsal (commits nothing) may run in any repo, so the dev mirror
-        # can fully test the pipeline. A REAL deploy is allowed ONLY from the production
-        # repo, so the dev mirror can never push to wp.org even by accident.
+        # A dry run commits nothing and may run in any repo that has the two SVN secrets:
+        # the deploy action checks them before it looks at dry-run. A REAL deploy is
+        # allowed ONLY from the production repo, so the dev mirror can never push to
+        # wp.org even by accident.
         if: ${{ inputs.dry_run || github.repository == 'tailwatch/tailwatch' }}
         # Pinned to the exact 2.3.0 commit SHA (not the moving @stable tag) so the
         # action code can never change under us. Bump deliberately when 10up releases.
@@ -98,9 +113,12 @@ jobs:
         run: |
           : > RELEASE_NOTES.md
           if [ -n "${MSG}" ]; then printf '%s\n\n' "${MSG}" >> RELEASE_NOTES.md; fi
+          # Only this version's entry: readme.txt keeps every version, newest first, so the
+          # entry ends at the next "= x.y.z =" heading (or the next "== Section ==").
           awk -v hdr="= ${V} =" '
+            { sub(/\r$/, "") }
             $0 == hdr { grab=1; next }
-            grab && (/^See changelog\.txt/ || /^== /) { exit }
+            grab && (/^= .* =$/ || /^== /) { exit }
             grab { print }
           ' readme.txt >> RELEASE_NOTES.md
           if ! grep -q "[^[:space:]]" RELEASE_NOTES.md; then echo "Release ${V}" > RELEASE_NOTES.md; fi
@@ -113,6 +131,8 @@ jobs:
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ inputs.version }}
+          # The tag goes on the commit this run built and shipped.
+          target_commitish: ${{ github.sha }}
           name: ${{ inputs.version }}
           body_path: RELEASE_NOTES.md
           files: ${{ env.ZIP_PATH }}

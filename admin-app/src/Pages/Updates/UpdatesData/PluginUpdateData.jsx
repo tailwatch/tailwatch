@@ -35,7 +35,7 @@ export const PluginUpdateData = ({ rowData, onRefetch, isSelected, onSelectChang
 
     const getCleanSlug = () => {
         if (rowData.plugin) {
-            // Convert slug from "akismet\/akismet.php" to "akismet/akismet.php"
+            // The slug arrives with its slash escaped ("folder\/file.php"); drop the backslashes.
             return rowData.plugin.replace(/\\/g, '');
         }
         return rowData.slug || '';
@@ -49,7 +49,7 @@ export const PluginUpdateData = ({ rowData, onRefetch, isSelected, onSelectChang
     const handleActivate = async () => {
         // Check if activation is blocked
         if (!rowData.can_activate) {
-            alertService.showError('Cannot Activate', rowData.activation_blocked_reason || 'Activation is not allowed');
+            alertService.error(rowData.activation_blocked_reason || 'Activation is not allowed', 'Cannot Activate');
             return;
         }
 
@@ -67,7 +67,7 @@ export const PluginUpdateData = ({ rowData, onRefetch, isSelected, onSelectChang
     const handleDeactivate = async () => {
         // Check if deactivation is blocked
         if (!rowData.can_deactivate) {
-            alertService.showError('Cannot Deactivate', rowData.deactivation_blocked_reason || 'Deactivation is not allowed');
+            alertService.error(rowData.deactivation_blocked_reason || 'Deactivation is not allowed', 'Cannot Deactivate');
             return;
         }
 
@@ -94,7 +94,7 @@ export const PluginUpdateData = ({ rowData, onRefetch, isSelected, onSelectChang
     const handleDelete = async () => {
         // Check if deletion is blocked
         if (!rowData.can_delete) {
-            alertService.showError('Cannot Delete', rowData.deletion_blocked_reason || 'Deletion is not allowed');
+            alertService.error(rowData.deletion_blocked_reason || 'Deletion is not allowed', 'Cannot Delete');
             return;
         }
 
