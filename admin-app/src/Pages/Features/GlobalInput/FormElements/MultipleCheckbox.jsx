@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { FaChevronDown, FaChevronUp } from 'react-icons/fa';
-import { GiCheckMark } from "react-icons/gi";
+import TickIcon from '../../../../Components/Checkbox/TickIcon';
 
 const MultipleCheckbox = ({ id, label, description, values, display, handleMultipleCheckboxChange }) => {      
   const optionsArray = Object.values(values);
@@ -32,7 +32,7 @@ const MultipleCheckbox = ({ id, label, description, values, display, handleMulti
         checked  ? '!bg-gradient-to-br !from-blue-50 !to-[#85cbcf] !border !border-[#85cbcf]' : '!bg-white !border-gray-300' }`}></span>      
       {checked && (
         <span className="absolute !bottom-[6px] !right-[-6px] !text-gray-500 !drop-shadow-md">
-          <GiCheckMark className="!w-6 !h-6" />
+          <TickIcon className="!w-6 !h-6" />
         </span>
       )}
     </div>

@@ -362,7 +362,7 @@ class GetCronJobDetailsController {
 				array(
 					'feature'  => 'cron_jobs',
 					'action'   => 'cron_jobs_list_retrieved_failed',
-					'detail'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'   => 'system',
 					'severity' => 'high',
 				)
@@ -524,7 +524,7 @@ class GetCronJobDetailsController {
 				array(
 					'feature'  => 'cron_jobs',
 					'action'   => 'cron_schedules_list_retrieved_failed',
-					'detail'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'   => 'system',
 					'severity' => 'high',
 				)

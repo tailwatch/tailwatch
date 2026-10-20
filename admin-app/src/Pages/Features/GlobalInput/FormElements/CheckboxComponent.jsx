@@ -1,6 +1,6 @@
 import React from 'react';
 import { Crown, Sparkles } from 'lucide-react';
-import { GiCheckMark } from "react-icons/gi";
+import TickIcon from '../../../../Components/Checkbox/TickIcon';
 
 
 // CustomCheckbox component for premium styling
@@ -12,7 +12,7 @@ const CustomCheckbox = ({ checked, disabled }) => (
     {/* Tick icon, half inside and half outside */}
     {checked && (
       <span className="absolute !bottom-[6px] !right-[-6px] !text-gray-500 !drop-shadow-md">
-        <GiCheckMark className="!w-6 !h-6" />
+        <TickIcon className="!w-6 !h-6" />
       </span>
     )}
   </div>

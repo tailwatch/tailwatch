@@ -2,12 +2,16 @@ import ActionButton from '../../../Components/Buttons/ActionButton';
 import { RiRestartFill } from "react-icons/ri";
 import ShowCanvas from '../../../Components/ShowCanvasButton/ShowCanvas';
 import { FiRefreshCw } from 'react-icons/fi';
-const BackupActions = ({ refreshing, siteSize, handleRefreshSiteSize, parentEnable, featureEnable, isScanInProgress, isStarting, isPaused, isCompleted, handleInstantScan, handlePauseBackup, handleCancelBackup, handleResumeBackup, toggleLogs, isLogsVisible, verifyStatus, isOperationInProgress, isCanceled, isPausing, isCanceling, resetAllStates, IsEnableBackup, featureId, checkBackupStatus }) => {
+const BackupActions = ({ refreshing, siteSize, handleRefreshSiteSize, parentEnable, featureEnable, isScanInProgress, isStarting, isPaused, isCompleted, isFailed, handleInstantScan, handlePauseBackup, handleCancelBackup, handleResumeBackup, toggleLogs, isLogsVisible, verifyStatus, isOperationInProgress, isCanceled, isPausing, isCanceling, resetAllStates, IsEnableBackup, featureId, checkBackupStatus }) => {
 
   return (
     <div>
       <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:justify-between sm:items-center">
         <div className="flex flex-wrap gap-2 items-center">
+          {/* A failed run leaves this button pressable and reading "Take Backup Now".
+              Completed and Canceled each disable it and rename themselves, because both
+              are states the operator arrived at on purpose and the next step is theirs to
+              choose. A failure is not: the only useful thing to offer is another go. */}
           {!isPaused && verifyStatus && (
             <>
               <ActionButton onClick={handleInstantScan} isInProgress={isScanInProgress} isCompleted={isCompleted} isCanceled={isCanceled} isDisabled={featureEnable === false || parentEnable === false} isFeatureEnable={IsEnableBackup} isLoading={isStarting} loadingText="Starting..." defaultText="Take Backup Now" inProgressText="In Progress..." completedText="Completed" canceledText="Canceled" />
@@ -15,7 +19,7 @@ const BackupActions = ({ refreshing, siteSize, handleRefreshSiteSize, parentEnab
           )}
           {!isScanInProgress && !isPaused && !isCompleted && !isCanceled && verifyStatus && (
             <ShowCanvas featureId={featureId} onClose={checkBackupStatus} />
-          )}         
+          )}
           {(isPaused || !verifyStatus) && (
             <ActionButton onClick={handleResumeBackup} isInProgress={isScanInProgress} isCompleted={isCompleted} isCanceled={isCanceled} isFeatureEnable={IsEnableBackup} defaultText="Resume Process" inProgressText="In Progress..." completedText="Completed" canceledText="Canceled" />
           )}
@@ -27,7 +31,7 @@ const BackupActions = ({ refreshing, siteSize, handleRefreshSiteSize, parentEnab
               <FiRefreshCw className="w-4 h-4 text-gray-600" />
             </button>
           </div>
-          {(isCompleted || isCanceled) && (
+          {(isCompleted || isCanceled || isFailed) && (
             <div className='flex cursor-pointer' onClick={resetAllStates} role="button" >
               <RiRestartFill className='text-[25px] text-[#007980] hover:text-opacity-80' />
               <p className='pl-[5px] text-md text-gray-600 font-semibold'>Refresh</p>

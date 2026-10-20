@@ -45,9 +45,18 @@ class ProcessManager {
 		// even if its controller didn't load). With plain replacement the
 		// fallback wipes out the controller's keys whenever it runs second.
 		// Merging preserves keys that either side contributed; later keys
-		// still win when both sides set the same key.
+		// still win when both sides set the same key, except the two lists,
+		// which add up: a type two modules declare (the manual and the
+		// automatic migration) must wait for what either one waits for.
 		if ( isset( self::$registered_processes[ $process_type ] ) && is_array( self::$registered_processes[ $process_type ] ) ) {
-			$config = array_merge( self::$registered_processes[ $process_type ], $config );
+			$existing = self::$registered_processes[ $process_type ];
+			$merged   = array_merge( $existing, $config );
+			foreach ( array( 'cannot_start_while', 'locks_features' ) as $list ) {
+				if ( isset( $existing[ $list ], $config[ $list ] ) && is_array( $existing[ $list ] ) && is_array( $config[ $list ] ) ) {
+					$merged[ $list ] = array_values( array_unique( array_merge( $existing[ $list ], $config[ $list ] ) ) );
+				}
+			}
+			$config = $merged;
 		}
 
 		self::$registered_processes[ $process_type ] = $config;
@@ -82,9 +91,9 @@ class ProcessManager {
 	 * enough that a crashed PHP process doesn't permanently block the type.
 	 *
 	 * If the transient lock cannot be acquired (already held by another
-	 * request), we fall through to the original behavior — the worst case is
-	 * the rare original race condition, which is no worse than before this
-	 * fix. The fast path (no contention) is unaffected.
+	 * request), the lookup and insert run without it: the worst case is the
+	 * rare race the lock exists for. The fast path (no contention) is
+	 * unaffected.
 	 *
 	 * @param string $process_type Process type (e.g. 'backup').
 	 * @param string $cron_hook    Hook name that initiated the process (used by recovery).

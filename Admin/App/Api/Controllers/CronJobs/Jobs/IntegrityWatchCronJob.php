@@ -24,7 +24,7 @@ use Tailwatch\Admin\App\Api\Logging\Log;
  * Class IntegrityWatchCronJob
  *
  * Cron job for Files Integrity feature:
- * - Schedules recurring scans based on the configured interval (Hourly, Every 3/6/12/24 Hours).
+ * - Schedules recurring scans based on the configured interval.
  * - On execute, clears stale garbage entries then starts a new monitoring run automatically.
  *
  */

@@ -18,6 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use Tailwatch\Admin\App\Api\Logging\Log;
 use Tailwatch\Admin\App\Api\Controllers\Hooks\HookControllers;
 use Tailwatch\Admin\App\Api\Controllers\Users\UserRolesController;
 
@@ -39,9 +40,9 @@ class OptionsModel {
 	}
 
 	/**
-	 * Handle plugin activation tasks.
+	 * Create or upgrade the plugin's database tables.
 	 *
-	 * Creates necessary database tables and sets default options.
+	 * Runs whenever the stored schema version differs from TAILWATCH_DB_VERSION.
 	 *
 	 * @return void
 	 */
@@ -73,7 +74,7 @@ class OptionsModel {
 		// so there is no user input on the SQL path.
 		$create_tables = array(
 			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared -- dbDelta requires literal table-name interpolation; both names derived from $wpdb->prefix + code-literal constants.
-			"CREATE TABLE $settings_table_name (
+			$settings_table_name => "CREATE TABLE $settings_table_name (
                 id INT NOT NULL AUTO_INCREMENT,
                 user_id INT,
                 child_of INT,
@@ -89,7 +90,7 @@ class OptionsModel {
                 KEY idx_process_monitor (`key`(50), `option`(100), date_modified)
             ) $charset_collate;",
 			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared -- dbDelta requires literal table-name interpolation; both names derived from $wpdb->prefix + code-literal constants.
-			"CREATE TABLE $logs_table_name (
+			$logs_table_name     => "CREATE TABLE $logs_table_name (
                 id INT NOT NULL AUTO_INCREMENT,
                 user_id INT,
                 child_of INT,
@@ -114,7 +115,9 @@ class OptionsModel {
                 KEY idx_logs_facet1 (`option`(50), facet_1(100), id)
             ) $charset_collate;",
 			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared -- dbDelta requires literal table-name interpolation; name = $wpdb->prefix + code-literal constant.
-			"CREATE TABLE $baseline_table (
+			// NO SQL comments inside these strings. dbDelta parses them line by line and
+			// turns anything it cannot read into a broken `ALTER TABLE ... ADD COLUMN --`.
+			$baseline_table      => "CREATE TABLE $baseline_table (
 				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 				file_path_hash CHAR(32) NOT NULL,
 				file_path TEXT NOT NULL,
@@ -134,7 +137,7 @@ class OptionsModel {
 				KEY idx_monitored (monitored_path)
 			) $charset_collate;",
 			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared -- dbDelta requires literal table-name interpolation; name = $wpdb->prefix + code-literal constant.
-			"CREATE TABLE $scans_table (
+			$scans_table         => "CREATE TABLE $scans_table (
 				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 				scan_id BIGINT UNSIGNED NOT NULL,
 				monitored_path VARCHAR(191) NOT NULL DEFAULT '',
@@ -160,6 +163,17 @@ class OptionsModel {
 			) $charset_collate;",
 		);
 
+		// dbDelta reads a line that starts with the word `key` as an index, so on a table that
+		// already exists the `key` column comes out as ALTER TABLE ... ADD `` (``), which MySQL
+		// rejects. The column is already there and dbDelta never drops a column it is not given,
+		// so its line is left out; a new table still gets the whole definition.
+		foreach ( array( $settings_table_name, $logs_table_name ) as $table ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- live schema check right before dbDelta.
+			if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table ) ) ) === $table ) {
+				$create_tables[ $table ] = preg_replace( '/^[ \t]*`key`[ \t].*\R/m', '', $create_tables[ $table ] );
+			}
+		}
+
 		// The version gate + lock at the top already decided a (re)build is needed.
 		// dbDelta re-parses every CREATE TABLE definition, diffs it against the live
 		// table, and applies only the differences (new tables, added columns/keys).
@@ -170,7 +184,28 @@ class OptionsModel {
 				dbDelta( $sql );
 			}
 
-			update_option( 'tailwatch_db_version', TAILWATCH_DB_VERSION, false );
+			// dbDelta reports nothing when a statement fails — an ADD COLUMN can be
+			// rejected outright (an index over the row-format key limit on older MySQL,
+			// a full disk, a permission) and the only visible sign is the column not
+			// being there. Stamping the version anyway would record the migration as
+			// complete and it would never be retried, leaving code that assumes those
+			// columns querying a table without them.
+			$columns = $wpdb->get_col( $wpdb->prepare( 'DESCRIBE %i', $baseline_table ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- reads the live schema right after dbDelta; a cached answer would defeat the check.
+			$missing = array_diff( array( 'file_path_hash', 'file_hash', 'file_modified' ), (array) $columns );
+
+			if ( empty( $missing ) ) {
+				update_option( 'tailwatch_db_version', TAILWATCH_DB_VERSION, false );
+			} else {
+				Log::error(
+					'A database upgrade did not complete and will be retried.',
+					array(
+						'feature' => 'backup',
+						'action'  => 'db_upgrade_incomplete',
+						'origin'  => 'system',
+						'missing' => implode( ', ', $missing ),
+					)
+				);
+			}
 		} finally {
 			// Always release the lock — even if a dbDelta call throws — so the next
 			// request can retry immediately instead of waiting for the transient TTL.
@@ -856,12 +891,12 @@ class OptionsModel {
 						'display_as_tabs'     => true,
 						'tab_config'          => array(
 							array(
-								'field_ids' => array( 'field_1', 'field_2', 'field_5', 'field_6' ), // 5xx errors
+								'field_ids' => array( 'field_1', 'field_2', 'field_5', 'field_6' ),
 								'tab_title' => '5xx Errors',
 								'tab_icon'  => 'alert',
 							),
 							array(
-								'field_ids' => array( 'field_4', 'field_7', 'field_8', 'field_9', 'field_10' ), // 4xx errors
+								'field_ids' => array( 'field_4', 'field_7', 'field_8', 'field_9', 'field_10' ),
 								'tab_title' => '4xx Errors',
 								'tab_icon'  => 'warning',
 							),
@@ -1290,14 +1325,14 @@ class OptionsModel {
 												'push_notification_description' => 'You will receive a notification on your mobile when the self-signed SSL certificate setting for SMTP is changed on your site.',
 												'type'     => 'checkbox',
 												'label'    => 'Allow Self-Signed Certificates',
-												'description' => 'Allow self-signed SSL certificates.',
+												'description' => 'Only for a mail server with a self-signed certificate. This turns off certificate checks for the connection.',
 												'placeholder' => '',
 												'required' => false,
 												'register' => '',
 												'values'   => array(
 													'option' => array(
 														'value' => '1',
-														'selected' => true,
+														'selected' => false,
 													),
 												),
 											),
@@ -1366,8 +1401,8 @@ class OptionsModel {
 								'key'         => 'upgrade_notice',
 								'id'          => 'upgrade_notice',
 								'type'        => 'info',
-								'label'       => 'Unlock more email providers with Tailwatch Pro',
-								'description' => 'Tailwatch Pro adds Gmail (OAuth2 / XOAUTH2) and additional managed SMTP providers so you can connect a Google account in one click instead of configuring SMTP credentials by hand.',
+								'label'       => 'Available in Tailwatch Pro',
+								'description' => 'Tailwatch Pro adds Gmail (OAuth2 / XOAUTH2), so you can connect a Google account in one click instead of configuring SMTP credentials by hand.',
 								'links'       => array(
 									array(
 										'url'  => 'https://wptailwatch.com/pricing/?utm_source=wp-plugins&utm_medium=wp-dash&utm_campaign=pro_upgrade&utm_content=upgrade_notice_smtp',
@@ -1505,8 +1540,8 @@ class OptionsModel {
 						'icon'                => 'Icon',
 						'title'               => 'Backup Vault',
 						'category'            => array( 'recovery' ),
-						'col'                 => '1', // 2
-						'description'         => 'Easily back up your full website files, database, or both, with scheduled backups to cloud or local storage. Features include automatic rotation, retention management, optimization, and one-click restoration. Monitor progress in real time with detailed logs and receive instant notifications on your smartphone.',
+						'col'                 => '1',
+						'description'         => 'Back up your whole website, files and database together, on a schedule. Features include automatic rotation, retention management, and an optional database optimization before each backup. Putting a backup back is a separate, separately switched control — see Restore & Migration. Monitor progress in real time with detailed logs and receive instant notifications on your smartphone.',
 						'verify_status'       => 'check_backup_details',
 						'recommended_feature' => true,
 						'mobile_notification' => true,
@@ -1602,14 +1637,67 @@ class OptionsModel {
 											),
 										),
 									),
+									'field_8'  => array(
+										'key'         => 'optimized_database',
+										'id'          => 'optimized_database',
+										'type'        => 'checkbox',
+										'label'       => 'Optimize Database Before Backup',
+										'description' => 'Run the Database Optimizer before each backup so the backup is smaller. It removes the items you have chosen in the Database Optimizer, such as expired transients, spam and trashed items.',
+										'placeholder' => '',
+										'required'    => true,
+										'register'    => '',
+										'values'      => array(
+											'option' => array(
+												'value'    => '',
+												'selected' => false,
+											),
+										),
+									),
+									'field_12' => array(
+										'key'         => 'backup_part_size',
+										'id'          => 'backup_part_size',
+										'type'        => 'select',
+										'label'       => 'Archive Part Size',
+										'description' => 'How much of your site goes into each zip. The finished file is smaller than this, often much smaller, because everything compresses on the way in — a 500 MB part of a plugins folder commonly lands near 200 MB. Larger parts mean fewer files to download when you move a site by hand. A part no longer has to be written in one go: if your host runs out of time, the backup carries the same part on in the next round rather than closing it short, so a slow server produces the same number of files as a fast one. Takes effect from the next backup.',
+										'placeholder' => '',
+										'required'    => true,
+										'register'    => '',
+										'values'      => array(
+											'option'  => array(
+												'label'    => '50 MB',
+												'value'    => '50',
+												'selected' => false,
+											),
+											'option2' => array(
+												'label'    => '100 MB',
+												'value'    => '100',
+												'selected' => false,
+											),
+											'option3' => array(
+												'label'    => '200 MB',
+												'value'    => '200',
+												'selected' => false,
+											),
+											'option4' => array(
+												'label'    => '400 MB',
+												'value'    => '400',
+												'selected' => false,
+											),
+											'option5' => array(
+												'label'    => '500 MB (recommended)',
+												'value'    => '500',
+												'selected' => true,
+											),
+										),
+									),
 								),
 							),
 							'upgrade_notice' => array(
 								'key'         => 'upgrade_notice',
 								'id'          => 'upgrade_notice',
 								'type'        => 'info',
-								'label'       => 'Unlock more with Tailwatch Pro',
-								'description' => 'Tailwatch Pro extends Backup Vault with: files-only and database-only backup modes; faster intervals (12-hour, 24-hour, and daily); custom retention (keep 2-9 or any custom number of backups); cloud storage integrations (Google Drive, Dropbox, AWS S3 Bucket, DigitalOcean Spaces); optimize-database-before-backup toggle; and one-click site restoration with pre-restore safety backup.',
+								'label'       => 'Available in Tailwatch Pro',
+								'description' => 'Tailwatch Pro adds files-only and database-only backups, restoring only the database or only the files of a backup, 12-hour and 24-hour schedules, and keeping 2 to 9 or any number of backups.',
 								'links'       => array(
 									array(
 										'url'  => 'https://wptailwatch.com/pricing/?utm_source=wp-plugins&utm_medium=wp-dash&utm_campaign=pro_upgrade&utm_content=upgrade_notice_backup',
@@ -1631,6 +1719,90 @@ class OptionsModel {
 				'date_created'  => current_time( 'mysql' ),
 				'date_modified' => current_time( 'mysql' ),
 				'is_active'     => 1,
+			),
+			// Restore & Migration — the recovery half of Backup Vault.
+			//
+			// Taking a backup and putting one back are different acts with opposite
+			// consequences: one only adds, the other overwrites the whole site. They get
+			// their own switches so an install can keep protecting itself while the ability
+			// to overwrite it stays off — which is where most sites should sit, most of the
+			// time. Putting restore under the backup toggle would have tied the two together
+			// backwards: you need to restore most on the day you turn backups off.
+			'default_site_migration'         => array(
+				'user_id'       => $user_id,
+				'child_of'      => 0,
+				'key'           => 'default_feature_settings',
+				'option'        => 'default_site_migration',
+				'value'         => wp_json_encode(
+					array(
+						'icon'                => 'Icon',
+						'title'               => 'Restore & Migration',
+						'category'            => array( 'recovery' ),
+						'description'         => 'Put a backup back onto this site, or move a whole site between two installs. A restore replaces this site\'s files and database with the contents of a backup, and rewrites the old addresses to this site\'s. A migration carries a backup between two installs — by hand, so it works even when the two sites cannot reach each other. Both are kept separate from taking backups, so a site can go on protecting itself without being overwritable.',
+						'verify_status'       => 'check_restore_migration',
+						'mobile_notification' => false,
+						'options'             => array(
+							'field_1' => array(
+								'key'               => 'enable_restore',
+								'id'                => 'enable_restore',
+								'push_notification' => false,
+								'type'              => 'checkbox',
+								'label'             => 'Allow Restoring',
+								'description'       => 'Let a backup be put back onto this site. Everything is replaced — files, database, and the addresses inside it — and it cannot be undone, so take a fresh backup first if you may want the current site back. The licence and the dashboard connection are carried across the swap.',
+								'placeholder'       => '',
+								'required'          => true,
+								'register'          => '',
+								'values'            => array(
+									'option' => array(
+										'value'    => '',
+										'selected' => true,
+									),
+								),
+							),
+							'field_2' => array(
+								'key'               => 'enable_migration',
+								'id'                => 'enable_migration',
+								'push_notification' => false,
+								'type'              => 'checkbox',
+								'label'             => 'Allow Migration',
+								'description'       => 'Move a site between two installs. This site can describe one of its backups so it can be carried elsewhere, and can take in a backup carried here from another site. Nothing on this site changes until you restore what arrives, which is a separate step.',
+								'placeholder'       => '',
+								'required'          => true,
+								'register'          => '',
+								'values'            => array(
+									'option' => array(
+										'value'    => '',
+										'selected' => true,
+									),
+								),
+							),
+							'upgrade_notice' => array(
+								'key'         => 'upgrade_notice',
+								'id'          => 'upgrade_notice',
+								'type'        => 'info',
+								'label'       => 'Available in Tailwatch Pro',
+								'description' => 'Migrating by hand works between any two sites and is included here in full. Tailwatch Pro adds the automatic transfer: the two sites move the backup between themselves over a signed connection, with nothing to download or upload, and the source sends it when the destination cannot fetch it.',
+								'links'       => array(
+									array(
+										'url'  => 'https://wptailwatch.com/pricing/?utm_source=wp-plugins&utm_medium=wp-dash&utm_campaign=pro_upgrade&utm_content=upgrade_notice_migration',
+										'text' => 'Upgrade Now',
+									),
+								),
+								'values'      => array(
+									'option' => array(
+										'value'    => '',
+										'selected' => true,
+									),
+								),
+							),
+						),
+					)
+				),
+				'type'          => 'json',
+				'type_state'    => 'inactive',
+				'date_created'  => current_time( 'mysql' ),
+				'date_modified' => current_time( 'mysql' ),
+				'is_active'     => 0,
 			),
 			// Malware Guard — promotional entry, no settings, renders as info card.
 			'default_malware_scan'           => array(
@@ -1820,7 +1992,7 @@ class OptionsModel {
 						'icon'                => 'Icon',
 						'title'               => 'Database Optimizer',
 						'category'            => array( 'optimization' ),
-						'description'         => 'Easily change your WordPress database table prefix in seconds to prevent automated SQL injection attacks. Secure your database and optimize it by removing unnecessary data such as post revisions, orphaned metadata, trashed items, expired transients, and log entries. Schedule automated cleanups to keep your site fast and efficient without using phpMyAdmin or writing any SQL queries manually.',
+						'description'         => 'Optimize your database by removing unnecessary data such as orphaned metadata, trashed items, expired transients, and log entries. Schedule automated cleanups to keep your site fast and efficient without using phpMyAdmin or writing any SQL queries manually.',
 						'verify_status'       => 'check_db_optimize',
 						'mobile_notification' => true,
 						'recommended_feature' => true,
@@ -2068,8 +2240,8 @@ class OptionsModel {
 										'key'         => 'keep_revision',
 										'id'          => 'keep_revision',
 										'type'        => 'select',
-										'label'       => 'Keep Revisions for days',
-										'description' => 'Post revisions and logs older than the selected number of days will be removed automatically to optimized the database performance.',
+										'label'       => 'Keep data for',
+										'description' => 'Only items older than the selected number of days are cleaned up, which keeps the database fast.',
 										'placeholder' => '',
 										'required'    => true,
 										'register'    => '',
@@ -2086,8 +2258,8 @@ class OptionsModel {
 								'key'         => 'upgrade_notice',
 								'id'          => 'upgrade_notice',
 								'type'        => 'info',
-								'label'       => 'Unlock more with Tailwatch Pro',
-								'description' => 'Tailwatch Pro extends Database Optimizer with additional cleanup types (Post Revisions, All Transients), faster intervals (12-hour, 24-hour), and longer revision-retention options (2 Days, 7 Days, or any custom number of days).',
+								'label'       => 'Available in Tailwatch Pro',
+								'description' => 'Tailwatch Pro adds Post Revisions and All Transients clean-up, 12-hour and 24-hour schedules, and keeping data for 2 or 7 days or any number of days.',
 								'links'       => array(
 									array(
 										'url'  => 'https://wptailwatch.com/pricing/?utm_source=wp-plugins&utm_medium=wp-dash&utm_campaign=pro_upgrade&utm_content=upgrade_notice_db_optimizer',
@@ -2121,8 +2293,8 @@ class OptionsModel {
 						'icon'                => 'Icon',
 						'title'               => 'File Integrity Watch',
 						'category'            => array( 'security' ),
-						'col'                 => '1', // 2
-						'description'         => 'Track every file change on your website in real time. Automatically scan modified files for malware at set intervals, compare before-and-after versions, and store change history for up to 24 hours or more. Detect unauthorized changes instantly and receive notifications directly on your smartphone.',
+						'col'                 => '1',
+						'description'         => 'Track every file change on your website in real time. Scan at set intervals, compare before-and-after versions, and keep a recent history of changes. Detect unauthorized changes instantly and receive notifications directly on your smartphone.',
 						'verify_status'       => 'check_file_integrity',
 						'recommended_feature' => true,
 						'mobile_notification' => true,
@@ -2248,8 +2420,8 @@ class OptionsModel {
 								'key'         => 'upgrade_notice',
 								'id'          => 'upgrade_notice',
 								'type'        => 'info',
-								'label'       => 'Unlock more with Tailwatch Pro',
-								'description' => 'Tailwatch Pro extends File Integrity Watch with faster scan intervals (hourly, every 3 hours, every 6 hours), longer history retention (18/24/30 hours and indefinite), and automatic suspicious-file scanning with auto-quarantine of detected threats.',
+								'label'       => 'Available in Tailwatch Pro',
+								'description' => 'Tailwatch Pro adds hourly, 3-hour and 6-hour scans, keeping history for 18, 24 or 30 hours or for good, and scanning changed files for malware with quarantine of detected threats.',
 								'links'       => array(
 									array(
 										'url'  => 'https://wptailwatch.com/pricing/?utm_source=wp-plugins&utm_medium=wp-dash&utm_campaign=pro_upgrade&utm_content=upgrade_notice_file_integrity',
@@ -2354,8 +2526,8 @@ class OptionsModel {
 								'key'         => 'upgrade_notice',
 								'id'          => 'upgrade_notice',
 								'type'        => 'info',
-								'label'       => 'Unlock more with Tailwatch Pro',
-								'description' => 'Tailwatch Pro extends Hardening Audit with faster audit intervals (every 6 hours, every 12 hours) and longer report retention (48/60/72 hours and indefinite).',
+								'label'       => 'Available in Tailwatch Pro',
+								'description' => 'Tailwatch Pro adds 6-hour and 12-hour audits, and keeping reports for 48, 60 or 72 hours or for good.',
 								'links'       => array(
 									array(
 										'url'  => 'https://wptailwatch.com/pricing/?utm_source=wp-plugins&utm_medium=wp-dash&utm_campaign=pro_upgrade&utm_content=upgrade_notice_hardening_audit',
@@ -2430,9 +2602,9 @@ class OptionsModel {
 				'value'         => wp_json_encode(
 					array(
 						'icon'               => 'Icon',
-						'title'              => 'User Management',
+						'title'              => 'Advanced User Management',
 						'category'           => array( 'optimization' ),
-						'description'        => 'Securely manage all WordPress users with password-free logins, inactivity alerts, role assignments, login-as-another-user with audit trail, and full control over login limits and redirects.',
+						'description'        => 'Securely manage all WordPress users with password-free logins, inactivity alerts, login-as-another-user with audit trail, and full control over login limits and redirects.',
 						'is_upgrade_feature' => true,
 						'options'            => array(),
 					)
@@ -2544,8 +2716,8 @@ class OptionsModel {
 								'key'         => 'upgrade_notice',
 								'id'          => 'upgrade_notice',
 								'type'        => 'info',
-								'label'       => 'Unlock more with Tailwatch Pro',
-								'description' => 'Tailwatch Pro extends Broken Links with faster scan frequencies including daily, every 3 days, and weekly options for tighter link-health monitoring.',
+								'label'       => 'Available in Tailwatch Pro',
+								'description' => 'Tailwatch Pro adds daily, every-3-days and weekly scans.',
 								'links'       => array(
 									array(
 										'url'  => 'https://wptailwatch.com/pricing/?utm_source=wp-plugins&utm_medium=wp-dash&utm_campaign=pro_upgrade&utm_content=upgrade_notice_broken_links',
@@ -2630,8 +2802,8 @@ class OptionsModel {
 								'key'         => 'upgrade_notice',
 								'id'          => 'upgrade_notice',
 								'type'        => 'info',
-								'label'       => 'Unlock more with Tailwatch Pro',
-								'description' => 'Tailwatch Pro extends Security Keys Rotation with faster rotation schedules, including daily and weekly options for tighter session-hijack protection.',
+								'label'       => 'Available in Tailwatch Pro',
+								'description' => 'Tailwatch Pro adds daily and weekly rotation.',
 								'links'       => array(
 									array(
 										'url'  => TAILWATCH_PRICING_URL . '?utm_source=wp-plugins&utm_medium=wp-dash&utm_campaign=pro_upgrade&utm_content=upgrade_notice_security_keys',
@@ -2790,7 +2962,7 @@ class OptionsModel {
 						'icon'                => 'Icon',
 						'title'               => 'Cron Jobs',
 						'category'            => array( 'optimization' ),
-						'col'                 => '1', // 3
+						'col'                 => '1',
 						'description'         => 'Manage all your WordPress cron jobs from one place. View, edit, pause, delete, or run tasks instantly, with critical updates delivered via email and mobile app notifications.',
 						'verify_status'       => 'check_cron_job',
 						'options'             => array(
@@ -3070,8 +3242,8 @@ class OptionsModel {
 								'key'         => 'upgrade_notice',
 								'id'          => 'upgrade_notice',
 								'type'        => 'info',
-								'label'       => 'Unlock country blocking with Tailwatch Pro',
-								'description' => 'Tailwatch Pro lets you block or allow visitors by country, applied to login forms or your entire site, on top of the free IP whitelist and blacklist.',
+								'label'       => 'Available in Tailwatch Pro',
+								'description' => 'Tailwatch Pro adds allowing and blocking visitors by country, on login forms or your entire site, alongside the IP whitelist and blacklist here.',
 								'links'       => array(
 									array(
 										'url'  => 'https://wptailwatch.com/pricing/?utm_source=wp-plugins&utm_medium=wp-dash&utm_campaign=pro_upgrade&utm_content=upgrade_notice_geoblock',
@@ -3094,7 +3266,7 @@ class OptionsModel {
 				'date_modified' => current_time( 'mysql' ),
 				'is_active'     => 0,
 			),
-			// Login Defender (Login Defender) Feature
+			// Login Defender Feature
 			'default_login_defender_management' => array(
 				'user_id'       => $user_id,
 				'child_of'      => 0,
@@ -3105,7 +3277,7 @@ class OptionsModel {
 						'icon'                => 'Icon',
 						'title'               => 'Login Defender',
 						'category'            => array( 'security' ),
-						'description'         => 'Protect your site from brute-force attacks with customizable rules based on usernames, IP addresses, and login behavior. Configure limits, block durations, and lockout scopes while maintaining full control over every login attempt. Receive instant alerts via email and mobile notifications.',
+						'description'         => 'Protect your site from brute-force attacks by limiting failed logins from each IP address. Configure attempt limits and block durations while keeping full control over every login attempt. Receive instant alerts via email and mobile notifications.',
 						'verify_status'       => 'check_login_defender_management',
 						'recommended_feature' => true,
 						'display_as_tabs'     => true,
@@ -3360,7 +3532,7 @@ class OptionsModel {
 								'values'      => array(
 									'option' => array(
 										'value'    => '',
-										'selected' => true,
+										'selected' => false,
 									),
 								),
 							),
@@ -3376,7 +3548,7 @@ class OptionsModel {
 								'values'      => array(
 									'option' => array(
 										'value'    => '',
-										'selected' => true,
+										'selected' => false,
 									),
 								),
 							),
@@ -3442,11 +3614,27 @@ class OptionsModel {
 
 		$current_batch = array_slice( $insert_rows, $last_inserted_index, $batch_size );
 
-		// Insert the current batch into the database
 		if ( ! empty( $current_batch ) ) {
 			foreach ( $current_batch as $row ) {
-				// Ensure user_id is set for each row
 				$row['user_id'] = $user_id;
+
+				// This walk is index-based, so without this probe it would re-insert a row
+				// that something else already created. Remote provisioning seeds
+				// site_settings/plugin_activation before the wizard ever runs, and a
+				// second copy of that row would shadow the stored licence: get_value()
+				// returns the first match, which would be the empty default.
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table; per-row existence probe during initialization.
+				$already_present = $wpdb->get_var(
+					$wpdb->prepare(
+						'SELECT id FROM %i WHERE `key` = %s AND `option` = %s LIMIT 1',
+						$table_name,
+						$row['key'],
+						$row['option']
+					)
+				);
+				if ( $already_present ) {
+					continue;
+				}
 
                 // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Batch insertion during plugin initialization
 				$wpdb->insert( $table_name, $row );
@@ -3479,7 +3667,7 @@ class OptionsModel {
 					'type_state'    => 'active',
 					'date_created'  => current_time( 'mysql' ),
 					'date_modified' => current_time( 'mysql' ),
-					'is_active'     => 1, // Convert boolean true to integer 1 for database
+					'is_active'     => 1,
 				)
 			);
 		} else {
@@ -3861,6 +4049,8 @@ class OptionsModel {
 				$this->tailwatch_refresh_fields_metadata( $default_value['options'], $stored_value['options'], $changed );
 			}
 
+			$this->tailwatch_refresh_upgrade_card( $default_value, $stored_value, $changed );
+
 			if ( $changed ) {
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- writes back only when a presentational string changed; mirrors the backfill's single-row update.
 				$wpdb->update(
@@ -3939,6 +4129,31 @@ class OptionsModel {
 					$this->tailwatch_refresh_fields_metadata( $value_node['sub_options'], $stored[ $field_key ]['values'][ $value_key ]['sub_options'], $changed );
 				}
 			}
+		}
+	}
+
+	/**
+	 * Refresh the upgrade card's wording on a stored feature row: the visible card while it
+	 * is this plugin's own (an add-on may take it over, marking it pro_managed), and the
+	 * copy an add-on keeps aside to put back. Only the label and description change.
+	 *
+	 * @param array $default_value Canonical default feature value.
+	 * @param array $stored_value  Stored feature value (modified by reference).
+	 * @param bool  $changed       Set true when any wording was updated.
+	 * @return void
+	 */
+	private function tailwatch_refresh_upgrade_card( array $default_value, array &$stored_value, &$changed ) {
+		if ( ! isset( $default_value['options']['upgrade_notice'] ) || ! is_array( $default_value['options']['upgrade_notice'] ) ) {
+			return;
+		}
+		$card = $default_value['options']['upgrade_notice'];
+
+		if ( isset( $stored_value['options']['upgrade_notice'] ) && is_array( $stored_value['options']['upgrade_notice'] )
+			&& empty( $stored_value['options']['upgrade_notice']['pro_managed'] ) ) {
+			$this->tailwatch_apply_presentational_updates( $card, $stored_value['options']['upgrade_notice'], array( 'label', 'description' ), $changed );
+		}
+		if ( isset( $stored_value['_pro_archived_upgrade_notice'] ) && is_array( $stored_value['_pro_archived_upgrade_notice'] ) ) {
+			$this->tailwatch_apply_presentational_updates( $card, $stored_value['_pro_archived_upgrade_notice'], array( 'label', 'description' ), $changed );
 		}
 	}
 

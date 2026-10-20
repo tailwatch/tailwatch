@@ -10,6 +10,8 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { FormProvider } from "./Components/Context/FormContext.jsx";
 import { FeaturesDataProvider } from './Components/Context/FeaturesDataContext';
+import { SavedProSettingsProvider } from './Components/Context/SavedProSettingsContext.jsx';
+import ProcessLock from './Components/ProcessLock/ProcessLock';
 import { UserProvider } from './Components/Context/UserContext.jsx';
 import { ErrorModalProvider } from './Components/ErrorModal/ErrorModalContext';
 import ErrorModal from './Components/ErrorModal/ErrorModal';
@@ -39,6 +41,7 @@ function MainAppContent({ isLoadingSpinner }) {
   return (
     <UserProvider>
       <FeaturesDataProvider>
+        <SavedProSettingsProvider>
         <FormProvider>
             <div className="flex h-screen bg-gray-100">
               <div className="h-full flex-shrink-0">
@@ -47,6 +50,10 @@ function MainAppContent({ isLoadingSpinner }) {
               <div className="flex-1 flex flex-col transition-all duration-300 ease-in-out overflow-hidden">
                 <div className="h-full overflow-y-auto overflow-x-hidden">
                   <div className="bg-white shadow-md h-full overflow-auto custom-scroll-bar">
+                    {/* Renders nothing — it only redirects. It has to sit outside the
+                        outlet to run on every screen, which is also why it must not draw:
+                        anything it rendered here would land above the page's own header. */}
+                    <ProcessLock />
                     <Outlet />
                   </div>
                 </div>
@@ -54,6 +61,7 @@ function MainAppContent({ isLoadingSpinner }) {
             </div>
             <ToastContainer position="top-center" autoClose={5000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover style={{ width: "auto", minWidth: "200px", maxWidth: "800px" }} />
         </FormProvider>
+        </SavedProSettingsProvider>
       </FeaturesDataProvider>
     </UserProvider>
   );

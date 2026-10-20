@@ -21,7 +21,7 @@ class FilesPermissionController {
 		$hook_controller->add_action_hook( 'template_redirect', array( $this, 'restrict_author_archive_access' ) );
 
 		// Header and Meta cleanup
-		// Centralized header management (fixes duplication issue)
+		// Centralized header management.
 		$hook_controller->add_filter_hook( 'wp_headers', array( $this, 'handle_headers' ), 999 );
 
 		// Strip PHP-emitted X-Powered-By header at the PHP runtime layer
@@ -209,9 +209,9 @@ class FilesPermissionController {
 			// response. This works when the web server's core HTTP filter
 			// respects PHP's header table (common on configs with
 			// "ServerTokens Prod" or PHP-FPM behind nginx with
-			// "fastcgi_pass_header" disabled). On configs like default XAMPP
-			// (ServerTokens Full), Apache's core filter re-adds Server after
-			// PHP runs — in that case server-level config is the only fix.
+			// "fastcgi_pass_header" disabled). On configs with "ServerTokens
+			// Full", Apache's core filter re-adds Server after PHP runs — in
+			// that case server-level config is the only fix.
 			header_remove( 'Server' );
 		}
 	}
@@ -259,7 +259,6 @@ class FilesPermissionController {
 
 	/**
 	 * Remove meta tags from wp_head
-	 * Renamed from remove_headers_and_meta to reflect actual purpose
 	 */
 	public function remove_meta_tags() {
 		$get_feature = $this->get_features_options();
@@ -331,10 +330,10 @@ class FilesPermissionController {
 	 * whitespace is significant.
 	 *
 	 * <script>, <style>, <pre> and <textarea> blocks are set aside before any whitespace is
-	 * touched and restored verbatim afterwards (the established Minify_HTML approach): collapsing
-	 * whitespace inside them would break preformatted text, textarea values, inline JavaScript
-	 * (a line // comment could swallow the next statement) and JSON-LD. Any PCRE failure returns
-	 * the buffer unchanged so the page is never blanked or broken.
+	 * touched and restored verbatim afterwards: collapsing whitespace inside them would break
+	 * preformatted text, textarea values, inline JavaScript (a line // comment could swallow the
+	 * next statement) and JSON-LD. Any PCRE failure returns the buffer unchanged so the page is
+	 * never blanked or broken.
 	 *
 	 * @param string $buffer Full page HTML.
 	 * @return string
@@ -517,14 +516,14 @@ class FilesPermissionController {
 	public function disable_xmlrpc_completely() {
 		$get_feature = $this->get_features_options();
 
-		// Using same field as htaccess rule for consistency: field_7
+		// field_7 is the XML-RPC toggle; handle_headers() reads the same field.
 		if ( $get_feature && isset( $get_feature['field_7']['options']['option']['selected'] )
 			&& $get_feature['field_7']['options']['option']['selected'] ) {
 
 			// Method 1: Completely disable XML-RPC
 			add_filter( 'xmlrpc_enabled', '__return_false' );
 
-			// Method 2: X-Pingback header removal is now handled in handle_headers()
+			// Method 2: the X-Pingback header is removed in handle_headers().
 
 			// Method 3: Remove RSD link
 			remove_action( 'wp_head', 'rsd_link' );
@@ -825,7 +824,7 @@ class FilesPermissionController {
 			return true; // No usable filesystem API (e.g. FTP without stored credentials).
 		}
 
-		// The directory must be a local directory to host a .htaccess; offloaded storage (e.g. S3)
+		// The directory must be a local directory to host a .htaccess; offloaded object storage
 		// is not an Apache-served local directory and is left untouched.
 		if ( ! $wp_filesystem->is_dir( $target_dir ) ) {
 			return true;
@@ -960,7 +959,7 @@ class FilesPermissionController {
 			$url,
 			array(
 				'timeout'   => 10,
-				'sslverify' => false,
+				'sslverify' => apply_filters( 'https_local_ssl_verify', false ), // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Core WordPress filter for local loopback SSL verification.
 			)
 		);
 

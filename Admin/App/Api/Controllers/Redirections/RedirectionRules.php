@@ -97,7 +97,7 @@ class RedirectionRules {
 			exit;
 		} catch ( \Throwable $e ) {
 			Log::error(
-				$e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+				$e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				array(
 					'feature' => 'redirections',
 					'action'  => 'redirection_rule_processing_failed',
@@ -153,7 +153,7 @@ class RedirectionRules {
 			return $target_url;
 		} catch ( \Throwable $e ) {
 			Log::error(
-				$e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+				$e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				array(
 					'feature' => 'redirections',
 					'action'  => 'redirection_rule_processing_failed',
@@ -179,7 +179,7 @@ class RedirectionRules {
 			return $location;
 		} catch ( \Throwable $e ) {
 			Log::error(
-				$e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+				$e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				array(
 					'feature' => 'redirections',
 					'action'  => 'redirection_rule_processing_failed',
@@ -404,7 +404,7 @@ class RedirectionRules {
 			return false;
 		} catch ( \Throwable $e ) {
 			Log::error(
-				$e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+				$e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				array(
 					'feature' => 'redirections',
 					'action'  => 'redirection_rule_processing_failed',

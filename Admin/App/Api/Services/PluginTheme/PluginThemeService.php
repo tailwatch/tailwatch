@@ -54,9 +54,9 @@ class PluginThemeService {
 				include_once ABSPATH . 'wp-admin/includes/plugin.php';
 
 				// Resolve slug -> installed plugin file. Handles folder-based plugins
-				// ("akismet"), single-file plugins by basename ("hello"), and the
+				// ("my-plugin"), single-file plugins by basename ("single"), and the
 				// canonical WP.org slug carried in the update_plugins transient
-				// ("hello-dolly" -> "hello.php").
+				// ("single-file" -> "single.php").
 				$plugin_file = PluginManagerService::get_plugin_file_by_slug( $slug );
 				$is_installed = ( null !== $plugin_file );
 
@@ -365,7 +365,7 @@ class PluginThemeService {
 			}
 
 			// Check if installation failed.
-			// Some plugins (e.g., wp-file-manager) have nested ZIPs which cause Plugin_Upgrader to return false
+			// Some plugin packages have nested ZIPs, which cause Plugin_Upgrader to return false
 			// even though the files were extracted to wp-content/upgrade/ folder.
 			$installation_failed = is_wp_error( $result ) || false === $result || null === $result;
 

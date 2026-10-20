@@ -152,7 +152,7 @@ class ProcessMonitoringController {
 
 	private function get_state_label( $state ) {
 		$labels = array(
-			'pending'     => 'Pending',
+			'pending'     => 'Queued',
 			'in_progress' => 'In Progress',
 			'stuck'       => 'Stuck',
 			'failed'      => 'Failed',
@@ -300,8 +300,10 @@ class ProcessMonitoringController {
 		$last_heartbeat       = (int) get_gmt_from_date( $process_data['last_heartbeat'], 'U' );
 		$time_since_heartbeat = time() - $last_heartbeat;
 
-		// Stuck if no heartbeat for 5+ minutes (300 seconds).
-		return $time_since_heartbeat >= 300;
+		// Each process type has its own threshold (migration and restore allow 10 minutes).
+		$threshold = isset( $process_data['config']['stuck_threshold'] ) ? (int) $process_data['config']['stuck_threshold'] : 300;
+
+		return $time_since_heartbeat >= ( $threshold > 0 ? $threshold : 300 );
 	}
 
 	private function has_issues( $processes ) {

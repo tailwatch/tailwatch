@@ -151,8 +151,11 @@ class DBModel {
 
 		$table_name = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 
+		// Oldest first, with `id` as the tie-breaker. Without an ORDER BY the row
+		// order is whatever the storage engine returns, which callers that pick
+		// "the oldest" (backup retention) or index [0] cannot rely on.
 		$sql = $wpdb->prepare(
-			'SELECT * FROM %i WHERE `key` = %s AND `option` = %s',
+			'SELECT * FROM %i WHERE `key` = %s AND `option` = %s ORDER BY `date_created` ASC, `id` ASC',
 			$table_name,
 			$key,
 			$option
@@ -294,21 +297,55 @@ class DBModel {
 	public function update_rows( $db_data, $where, $table = TAILWATCH_DB_TABLE_NAME, $table_with_prefix = false ) {
 		global $wpdb;
 		$db_table_name = $table_with_prefix ? $table : $wpdb->prefix . $table;
-        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Updating custom table. No caching for write operations.
 		$result = $wpdb->update( $db_table_name, $db_data, $where ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table, no WP cache API.
 		return $result !== false;
 	}
 
 	/**
-	 * Update the most recent row matching criteria.
+	 * The most recently INSERTED row for a key and option, decoded.
 	 *
-	 * Updates the latest entry for a given key and option.
+	 * The counterpart to get_recent_data(), which orders on `date_created`. Both exist
+	 * because the two orderings are not the same question and a caller has to choose:
+	 * "the newest by its stamp" or "the one written last". Anything that also WRITES
+	 * through update_recent_row() wants this one, so it reads back what it wrote.
 	 *
-	 * @param array  $db_data Data to update.
-	 * @param string $key     Key to match.
-	 * @param string $option  Option to match.
-	 * @param string $table   Optional. Table name constant. Default TAILWATCH_DB_TABLE_NAME.
-	 * @return bool True on success, false on failure or if no row found.
+	 * @param string $option Option to match.
+	 * @param string $key    Key to match.
+	 * @param string $table  Optional. Table name constant. Default TAILWATCH_DB_TABLE_NAME.
+	 * @return array|null Decoded value, or null when there is no such row.
+	 */
+	public function get_recent_data_by_id( $option, $key, $table = TAILWATCH_DB_TABLE_NAME ) {
+		global $wpdb;
+		$table_name = $wpdb->prefix . $table;
+
+		// By id, deliberately, because update_recent_row() writes by id. A reader ordered
+		// on `date_created` and a writer ordered on `id` can disagree about which row is
+		// the current one, and then a process reads one row and writes its progress into
+		// another. `date_created` is a varchar written by several paths, so it is not even
+		// reliably ordered; the id is the only thing that says which row was made last.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table; most-recent row by insertion order.
+		$result = $wpdb->get_row( $wpdb->prepare(
+			'SELECT * FROM %i WHERE `key` = %s AND `option` = %s ORDER BY `id` DESC LIMIT 1',
+			$table_name,
+			$key,
+			$option
+		), ARRAY_A );
+
+		if ( empty( $result ) ) {
+			return null;
+		}
+
+		return isset( $result['value'] ) ? json_decode( $result['value'], true ) : $result;
+	}
+
+	/**
+	 * Update the most recent row for a key and option.
+	 *
+	 * @param array  $db_data Columns to write.
+	 * @param string $key     Row key.
+	 * @param string $option  Row option.
+	 * @param string $table   Optional. Table name constant.
+	 * @return bool
 	 */
 	public function update_recent_row( $db_data, $key, $option, $table = TAILWATCH_DB_TABLE_NAME ) {
 		global $wpdb;
@@ -324,12 +361,110 @@ class DBModel {
 
 		if ( $recent_id ) {
 			$where = array( 'id' => $recent_id );
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Updating custom table. No caching for write operations.
 			$result = $wpdb->update( $db_table_name, $db_data, $where ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table, no WP cache API.
 			return $result !== false;
 		}
 
 		return false;
+	}
+
+	/**
+	 * The newest row of one backup run, found by the `type` both of its rows carry
+	 * ('backup_<folderDate>').
+	 *
+	 * A row that does not carry the label (written before runs were labelled, or by a caller
+	 * that labels its rows its own way) still counts as the run's when it is the newest row
+	 * and its value names the same folder. A newer run's row never does: it names its own.
+	 *
+	 * @param string $option      Row option.
+	 * @param string $key         Row key.
+	 * @param string $folder_date The run's folder name.
+	 * @param string $table       Optional. Table name constant.
+	 * @return array|null Row with `id` and `value`, or null when the run has no such row.
+	 */
+	public function get_run_row( $option, $key, $folder_date, $table = TAILWATCH_DB_TABLE_NAME ) {
+		global $wpdb;
+		$folder_date = (string) $folder_date;
+		if ( '' === $folder_date ) {
+			return null;
+		}
+		$table_name = $wpdb->prefix . $table;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table; one run's newest row.
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				'SELECT id, `value` FROM %i WHERE `key` = %s AND `option` = %s AND `type` = %s ORDER BY id DESC LIMIT 1',
+				$table_name,
+				$key,
+				$option,
+				'backup_' . $folder_date
+			),
+			ARRAY_A
+		);
+		if ( ! empty( $row ) ) {
+			return $row;
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table; newest row, for a run whose rows do not carry the label.
+		$newest = $wpdb->get_row(
+			$wpdb->prepare(
+				'SELECT id, `value` FROM %i WHERE `key` = %s AND `option` = %s ORDER BY id DESC LIMIT 1',
+				$table_name,
+				$key,
+				$option
+			),
+			ARRAY_A
+		);
+		if ( empty( $newest ) ) {
+			return null;
+		}
+		$value = json_decode( (string) $newest['value'], true );
+		if ( ! is_array( $value ) || ! isset( $value['folderDate'] ) || (string) $value['folderDate'] !== $folder_date ) {
+			return null;
+		}
+		return array(
+			'id'    => $newest['id'],
+			'value' => $newest['value'],
+		);
+	}
+
+	/**
+	 * Update one backup run's newest row, and never another run's.
+	 *
+	 * @param array  $db_data     Columns to write.
+	 * @param string $key         Row key.
+	 * @param string $option      Row option.
+	 * @param string $folder_date The run's folder name.
+	 * @param string $table       Optional. Table name constant.
+	 * @return bool False when the run has no row (nothing was written), true otherwise.
+	 */
+	public function update_run_row( $db_data, $key, $option, $folder_date, $table = TAILWATCH_DB_TABLE_NAME ) {
+		global $wpdb;
+		$row = $this->get_run_row( $option, $key, $folder_date, $table );
+		if ( null === $row ) {
+			return false;
+		}
+		$result = $wpdb->update( $wpdb->prefix . $table, $db_data, array( 'id' => (int) $row['id'] ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table, no WP cache API.
+		return false !== $result;
+	}
+
+	/**
+	 * Delete one backup run's newest row, and never another run's.
+	 *
+	 * @param string $key         Row key.
+	 * @param string $option      Row option.
+	 * @param string $folder_date The run's folder name.
+	 * @param string $table       Optional. Table name constant.
+	 * @return bool True when the run's row was found and deleted.
+	 */
+	public function delete_run_row( $key, $option, $folder_date, $table = TAILWATCH_DB_TABLE_NAME ) {
+		global $wpdb;
+		$row = $this->get_run_row( $option, $key, $folder_date, $table );
+		if ( null === $row ) {
+			return false;
+		}
+		$result = $wpdb->delete( $wpdb->prefix . $table, array( 'id' => (int) $row['id'] ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table, no WP cache API.
+		return ! empty( $result );
 	}
 
 	/**
@@ -354,7 +489,6 @@ class DBModel {
 
 		if ( $recent_id ) {
 			$where = array( 'id' => $recent_id );
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Deleting from custom table. Caching not applicable for delete operations.
 			$result = $wpdb->delete( $db_table_name, $where ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table, no WP cache API.
 			return $result !== false;
 		}
@@ -377,7 +511,6 @@ class DBModel {
 		}
 
 		$where_format = array_fill( 0, count( $where ), '%s' );
-        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Deleting from custom table. Caching not applicable for delete operations.
 		$result = $wpdb->delete( $table_name, $where, $where_format ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table, no WP cache API.
 
 		return $result !== false;
@@ -400,7 +533,6 @@ class DBModel {
 			return false;
 		}
 
-        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Deleting from custom table. Caching not applicable for delete operations.
 		$delete_result = $wpdb->delete( $table_name, $where ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table, no WP cache API.
 		return $delete_result !== false;
 	}
@@ -469,7 +601,6 @@ class DBModel {
 			return false;
 		}
 
-		// Validate log ID.
 		$log_id = absint( $log_id );
 		if ( 0 === $log_id ) {
 			return false;
@@ -494,19 +625,31 @@ class DBModel {
 			return false;
 		}
 
-		// Return log entry data if it's a unified log.
 		return $log_entry;
 	}
 
 	/**
 	 * Get feature value by ID.
 	 *
-	 * @param int $id Row ID.
+	 * @param int         $id  Row ID.
+	 * @param string|null $key When set, the row must also have this `key`, so an id can
+	 *                         only resolve to a row of the kind the caller works on.
 	 * @return string|null Value column content or null.
 	 */
-	public function get_feature_value( $id ) {
+	public function get_feature_value( $id, $key = null ) {
 		global $wpdb;
 		$table_name = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
+		if ( null !== $key ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table; value lookup by id within one key.
+			return $wpdb->get_var(
+				$wpdb->prepare(
+					'SELECT value FROM %i WHERE id = %d AND `key` = %s',
+					$table_name,
+					$id,
+					$key
+				)
+			);
+		}
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table; value lookup by id.
 		$value = $wpdb->get_var(
 			$wpdb->prepare(
@@ -554,16 +697,6 @@ class DBModel {
 		return $value;
 	}
 
-	/**
-	 * Count rows matching ( key, option, optional type_state ).
-	 *
-	 * @param string|null $key        Log key (required for non-zero result).
-	 * @param string|null $option     Log option (required for non-zero result).
-	 * @param string|null $type_state Optional state filter.
-	 * @param string      $table      Table-name constant; defaults to logs table.
-	 * @param bool        $distinct   COUNT(DISTINCT `option`) when true, else COUNT(*).
-	 * @return int
-	 */
 	/**
 	 * Fetch logs with dynamic facet filtering + pagination. Column names come only
 	 * from the code-literal whitelist below (never request input); every value binds
@@ -664,6 +797,16 @@ class DBModel {
 		return $out;
 	}
 
+	/**
+	 * Count rows matching ( key, option, optional type_state ).
+	 *
+	 * @param string|null $key        Log key (required for non-zero result).
+	 * @param string|null $option     Log option (required for non-zero result).
+	 * @param string|null $type_state Optional state filter.
+	 * @param string      $table      Table-name constant; defaults to logs table.
+	 * @param bool        $distinct   COUNT(DISTINCT `option`) when true, else COUNT(*).
+	 * @return int
+	 */
 	public function get_logs_count_by_type( $key = null, $option = null, $type_state = null, $table = TAILWATCH_DB_LOGS_TABLE_NAME, $distinct = false ) {
 		global $wpdb;
 		$table_name = $wpdb->prefix . $table;
@@ -1111,22 +1254,27 @@ class DBModel {
 		delete_option( 'tailwatch_cta_id' );
 		delete_option( 'tailwatch_auth_header_key' );
 
-		$like_pattern = $wpdb->esc_like( 'tailwatch_cta_secret_' ) . '%';
+		// Sweep the rotating secrets AND the admin-pairing rows: tailwatch_cta_user_*
+		// rows left behind after a disconnect would be orphaned permanently, because
+		// the next mint only cleans the pairing for a still-present cta_id.
+		foreach ( array( 'tailwatch_cta_secret_', 'tailwatch_cta_user_' ) as $prefix ) {
+			$like_pattern = $wpdb->esc_like( $prefix ) . '%';
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Core options table; CTA-secret cleanup.
-		$options = $wpdb->get_results(
-			$wpdb->prepare(
-				'SELECT option_name FROM %i WHERE option_name LIKE %s',
-				$wpdb->options,
-				$like_pattern
-			),
-			ARRAY_A
-		);
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Core options table; pairing-key cleanup.
+			$options = $wpdb->get_results(
+				$wpdb->prepare(
+					'SELECT option_name FROM %i WHERE option_name LIKE %s',
+					$wpdb->options,
+					$like_pattern
+				),
+				ARRAY_A
+			);
 
-		if ( is_array( $options ) ) {
-			foreach ( $options as $option ) {
-				if ( isset( $option['option_name'] ) ) {
-					delete_option( $option['option_name'] );
+			if ( is_array( $options ) ) {
+				foreach ( $options as $option ) {
+					if ( isset( $option['option_name'] ) ) {
+						delete_option( $option['option_name'] );
+					}
 				}
 			}
 		}
@@ -1165,6 +1313,10 @@ class DBModel {
 					continue;
 				}
 				update_option( 'tailwatch_token_revoked_' . $jti, true, false );
+				// A pair is tracked under its access token's id; its refresh token's id adds '_refresh'.
+				if ( '_refresh' !== substr( $jti, -8 ) ) {
+					update_option( 'tailwatch_token_revoked_' . $jti . '_refresh', true, false );
+				}
 			}
 		}
 	}

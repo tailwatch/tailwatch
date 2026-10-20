@@ -47,7 +47,7 @@ class ThemeManagerService {
 
 		// Check if theme exists.
 		$theme = wp_get_theme( $theme_slug );
-		if ( ! $theme->exists() ) {
+		if ( ! self::is_installed_theme( $theme_slug ) || ! $theme->exists() ) {
 			return array(
 				'success' => false,
 				'error'   => 'Theme not found.',
@@ -134,7 +134,7 @@ class ThemeManagerService {
 		$theme_slug = sanitize_text_field( $theme_slug );
 
 		$theme = wp_get_theme( $theme_slug );
-		if ( ! $theme->exists() ) {
+		if ( ! self::is_installed_theme( $theme_slug ) || ! $theme->exists() ) {
 			return array(
 				'success' => false,
 				'error'   => 'Theme not found.',
@@ -178,7 +178,7 @@ class ThemeManagerService {
 
 			// WP core relies on $wp_filesystem->delete($dir, true) which can partially
 			// succeed — some files unlinked, others left behind due to file locks
-			// (Windows/XAMPP, antivirus), read-only flags, or ownership mismatches on
+			// (Windows, antivirus), read-only flags, or ownership mismatches on
 			// shared hosts. That leaves a half-deleted folder that WP's header parser
 			// later flags as a broken theme. Verify what's on disk and run a fallback
 			// recursive cleanup if anything remains.
@@ -327,12 +327,29 @@ class ThemeManagerService {
 	}
 
 	/**
+	 * Whether a slug names an installed theme: a stylesheet WordPress lists, never a path.
+	 *
+	 * WordPress's wp_get_theme() reports any existing directory as a theme, so a slug such as
+	 * `../uploads` would otherwise reach switch_theme() or delete_theme().
+	 *
+	 * @param string $theme_slug Theme stylesheet.
+	 *
+	 * @return bool
+	 */
+	private static function is_installed_theme( $theme_slug ) {
+		if ( '' === $theme_slug || 0 !== validate_file( $theme_slug ) ) {
+			return false;
+		}
+		return array_key_exists( $theme_slug, wp_get_themes( array( 'errors' => null ) ) );
+	}
+
+	/**
 	 * Recursively delete a directory as a fallback to WP core's delete_theme().
 	 *
 	 * Runs WP_Filesystem first so FTP/SSH transports on managed hosts still work,
 	 * then falls back to native PHP with chmod + unlink. The second pass mops up
 	 * cases where a transient file lock on the first pass has resolved by the
-	 * time we re-enter (common on Windows/XAMPP with antivirus or editor handles).
+	 * time we re-enter (common on Windows with antivirus or editor handles).
 	 *
 	 * Guardrail: refuses to operate outside wp-content so a bad caller can never
 	 * recurse into something dangerous.
@@ -342,13 +359,28 @@ class ThemeManagerService {
 	 * @return void
 	 */
 	private static function force_recursive_delete( string $dir ): void {
-		if ( ! is_dir( $dir ) ) {
+		if ( ! is_dir( $dir ) || is_link( $dir ) ) {
 			return;
 		}
 
-		$allowed = wp_normalize_path( trailingslashit( WP_CONTENT_DIR ) );
-		$target  = wp_normalize_path( trailingslashit( $dir ) );
-		if ( 0 !== strpos( $target, $allowed ) ) {
+		$real = realpath( $dir );
+		if ( false === $real ) {
+			return;
+		}
+		$real   = wp_normalize_path( $real );
+		$inside = false;
+		foreach ( (array) ( $GLOBALS['wp_theme_directories'] ?? array( get_theme_root() ) ) as $root ) {
+			$root_real = realpath( $root );
+			if ( false === $root_real ) {
+				continue;
+			}
+			$root_real = wp_normalize_path( $root_real );
+			if ( $real !== $root_real && 0 === strpos( $real . '/', trailingslashit( $root_real ) ) ) {
+				$inside = true;
+				break;
+			}
+		}
+		if ( ! $inside ) {
 			return;
 		}
 

@@ -25,7 +25,7 @@ const WhiteListip = ({widget, limit, isGeoLicense}) => {
                 <LoaderSkeleton count="0" />
             ) : (
                 <div className='space-y-4'>
-                    {(featureEnable === false || parentEnable === false || isLicenseConnect === true) && (<InfoBar type="info" message={isLicenseConnect ? "License not connected. Please connect your license to use this feature." : "Please Configure your Settings First"} />)}
+                    {(featureEnable === false || parentEnable === false || isLicenseConnect === true) && (<InfoBar type="info" message={isLicenseConnect ? "You don't have permission to change these settings." : "Please Configure your Settings First"} />)}
                     <GeoLicenseNotice isGeoLicense={isGeoLicense} />
                     {widget && (
                         <ActionButton defaultText="Add to Whitelist" isDisabled={featureEnable === false || parentEnable === false || isLicenseConnect === true || ipManagement?.isActiveState === '0' } onClick={handleAddToBlacklist} />

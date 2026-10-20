@@ -1,6 +1,7 @@
 <?php
 namespace Tailwatch\Admin\App\Api\Services;
 
+use Tailwatch\Admin\App\Api\Controllers\Backup\BackupController;
 use Tailwatch\Admin\App\Api\Models\RecoveryLogModel;
 use Tailwatch\Admin\App\Api\Models\DBModel;
 use Tailwatch\Admin\App\Api\Logging\Log;
@@ -101,7 +102,7 @@ class RecoveryService {
 			}
 		}
 
-		// Step 3: Check if we can retry (max 3 attempts).
+		// Step 3: Check if we can retry (the process type's max_retries, default 3).
 		if ( ! $this->processManager->can_retry( $process_id ) ) {
 			$this->debug_trace( sprintf(
 				'[TAILWATCH Recovery] attempt_recovery: MAX RETRIES reached — ID: %s | Type: %s | Retries: %d',
@@ -135,7 +136,7 @@ class RecoveryService {
 		// Step 4: Calculate stuck duration and preserve original heartbeat for logging.
 		$original_heartbeat = $process_data['last_heartbeat'];
 		$last_heartbeat     = strtotime( $original_heartbeat );
-		// Use current_time('timestamp') \u2014 WordPress local timezone \u2014 to match how
+		// Use current_time('timestamp') — WordPress local timezone — to match how
 		// heartbeats are stored via current_time('mysql'). Using time() (UTC) here
 		// gives a wrong/negative duration on servers where WP timezone != UTC.
 		$now            = current_time( 'timestamp' ); // phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- Local wallclock seconds for scheduling comparisons.
@@ -151,20 +152,41 @@ class RecoveryService {
 			$process_data['current_cron'] ?? 'n/a'
 		) );
 
-		// Step 5: Prepare for recovery attempt.
-		$retry_attempt      = $retry_count + 1;
+		// Step 5: Decide whether this attempt costs a retry.
+		//
+		// A tick killed by the host clock — max_execution_time, an nginx proxy timeout,
+		// the OOM killer — looks exactly like a genuine failure from here, and counting
+		// both the same way is what makes a SLOW host abort a backup that was progressing
+		// perfectly well on every single tick. It is also why the backup type carries
+		// max_retries = 10.
+		//
+		// The discriminator is whether the worker checked in since we last recovered it.
+		// A process that heartbeats is running; it just did not finish inside one request,
+		// so resuming it is a continuation and not a new attempt. A genuinely wedged
+		// process never heartbeats, so it still burns retries and still gives up.
+		//
+		// Two independent counters rather than decrementing to compensate, which would lose
+		// the correction if the process died between the decrement and the write.
+		$current_metadata      = $process_data['metadata'] ?? array();
+		$last_recovery_beat    = $current_metadata['last_recovery_heartbeat'] ?? '';
+		$made_progress         = '' !== $last_recovery_beat
+			&& strtotime( (string) $process_data['last_heartbeat'] ) > strtotime( (string) $last_recovery_beat );
+		$retry_attempt         = $made_progress ? $retry_count : $retry_count + 1;
+		$resume_count          = (int) ( $current_metadata['resume_count'] ?? 0 );
+		if ( $made_progress ) {
+			++$resume_count;
+		}
 		$recovery_timestamp = current_time( 'mysql' );
 
 		// Step 6: Perform process-specific recovery.
 		$recovery_result = $this->recover_by_process_type( $process_data );
 
 		// Step 7: Prepare updated process data (SINGLE UPDATE).
-		$current_metadata  = $process_data['metadata'] ?? array();
 		$recovery_attempts = $current_metadata['recovery_attempts'] ?? array();
 
-		// Add this attempt to history.
 		$recovery_attempts[] = array(
 			'attempt'        => $retry_attempt,
+			'was_resume'     => $made_progress,
 			'timestamp'      => $recovery_timestamp,
 			'action'         => $recovery_result['action'] ?? 'Unknown',
 			'success'        => $recovery_result['success'],
@@ -181,10 +203,13 @@ class RecoveryService {
 			array(
 				'last_recovery_attempt' => $recovery_timestamp,
 				'recovery_attempts'     => $recovery_attempts,
+				// The heartbeat as this recovery leaves it (it writes its own time above). The
+				// NEXT recovery counts only a later one - the worker checking in - as progress.
+				'last_recovery_heartbeat' => $recovery_timestamp,
+				'resume_count'            => $resume_count,
 			)
 		);
 
-		// Update state based on recovery result.
 		if ( $recovery_result['success'] ) {
 			$process_data['state'] = 'pending'; // Recovery succeeded, ready to run.
 		} else {
@@ -274,8 +299,7 @@ class RecoveryService {
 	 * For every OTHER process type we trust the current_cron field that was
 	 * recorded by ProcessManager::get_or_create_process(). This means new
 	 * process types — including ones added by the pro plugin — automatically
-	 * recover without any change to this file. The pro plugin no longer has
-	 * to be referenced from the free plugin.
+	 * recover without any change to this file.
 	 *
 	 * If current_cron is missing or empty (very old process row, or row
 	 * created with a non-cron sentinel like 'manual_start' for a non-backup
@@ -325,10 +349,10 @@ class RecoveryService {
 
 	private function recover_backup_process() {
 		try {
-			// Get current backup data from wp_tw_settings.
+			// Get current backup data from wp_tw_settings. By id, as the backup writes it.
 			$dbModel      = new DBModel();
-			$backup_data  = $dbModel->get_recent_data( 'scan_backp', 'default_backup_scan' );
-			$cancel_pause = $dbModel->get_recent_data( 'backup_cancel_pause', 'default_backup_scan' );
+			$backup_data  = $dbModel->get_recent_data_by_id( 'scan_backp', 'default_backup_scan' );
+			$cancel_pause = $dbModel->get_recent_data_by_id( 'backup_cancel_pause', 'default_backup_scan' );
 
 			if ( empty( $backup_data ) ) {
 				return array(
@@ -339,11 +363,11 @@ class RecoveryService {
 				);
 			}
 
-			if ( ! empty( $cancel_pause ) && isset( $cancel_pause['scan_state'] ) && in_array( $cancel_pause['scan_state'], array( 'pause', 'cancel', 'failed' ), true ) ) {
+			if ( ! empty( $cancel_pause ) && isset( $cancel_pause['scan_state'] ) && in_array( $cancel_pause['scan_state'], array( 'pause', 'cancel', 'failed', 'completed' ), true ) ) {
 				return array(
 					'success' => false,
 					'action'  => 'None',
-					'message' => __( 'Backup is paused, cancelled, or failed', 'tailwatch' ),
+					'message' => __( 'Backup is paused, cancelled, failed, or already finished', 'tailwatch' ),
 					'details' => 'Recovery not scheduled due to terminal/paused state',
 				);
 			}
@@ -362,8 +386,9 @@ class RecoveryService {
 				);
 			}
 
-			// A "Files Only" backup has no database phase; keep the DB branches off it.
-			$db_in_scope = ( 'Files Only' !== $backup_type );
+			// A type that holds no database has no database phase; keep the DB branches off it.
+			$parts       = BackupController::tailwatch_backup_type_parts( $backup_type );
+			$db_in_scope = null === $parts || $parts['database'];
 
 			$cron_to_schedule = null;
 
@@ -386,7 +411,6 @@ class RecoveryService {
 				$cron_to_schedule = 'tailwatch_backup_daily_scan';
 			}
 
-			// Schedule the cron.
 			if ( ! wp_next_scheduled( $cron_to_schedule ) ) {
 				wp_schedule_single_event( time() + 10, $cron_to_schedule );
 
@@ -409,7 +433,7 @@ class RecoveryService {
 				'success' => false,
 				'action'  => 'Exception occurred',
 				'message' => __( 'An error occurred.', 'tailwatch' ),
-				'details' => $e->getTraceAsString(),
+				'details' => Log::trace( $e ),
 			);
 		}
 	}

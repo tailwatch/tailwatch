@@ -1,6 +1,8 @@
 <?php
 namespace Tailwatch\Admin\App\Api\Models;
 
+use Tailwatch\Admin\App\Api\Services\Backup\RestoreDatabase;
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
@@ -15,28 +17,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 class BackupModel {
 
 	/**
-	 * Get all backup records by key and option.
-	 *
-	 * @param string $key    The key to filter by.
-	 * @param string $option The option to filter by.
-	 * @return array Array of backup records.
-	 */
-	public function get_all_backups( $key, $option ) {
-		global $wpdb;
-		$db_table_name = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
-
-		$query = $wpdb->prepare(
-			'SELECT id, value FROM %i WHERE `key` = %s AND `option` = %s ORDER BY id ASC',
-			$db_table_name,
-			$key,
-			$option
-		);
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared -- Custom table; $query built via $wpdb->prepare() above.
-		return $wpdb->get_results( $query, ARRAY_A );
-	}
-
-	/**
 	 * Get paginated backup folders with decoded JSON data.
 	 *
 	 * @param string $tailwatch_key The key to filter by.
@@ -48,36 +28,31 @@ class BackupModel {
 	public function get_all_backup_folders( $tailwatch_key, $option, $limit = 10, $offset = 0, $exclude_process_runs = array() ) {
 		global $wpdb;
 		$table_name = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
+		$skip       = $this->tailwatch_rows_of_runs( $table_name, $tailwatch_key, $option, $exclude_process_runs );
 
-		// NOT LIKE fragment for $exclude_process_runs. `process_run` lives
-		// inside the JSON `value` column; match the compact JSON shape
-		// `"process_run":"<value>"` portably (no JSON_EXTRACT). Each clause
-		// is its own $wpdb->prepare() so the fragment is already escaped
-		// and the outer prepare() has a fixed placeholder count.
-		$exclude_clauses_sql = '';
-		if ( is_array( $exclude_process_runs ) && ! empty( $exclude_process_runs ) ) {
-			foreach ( $exclude_process_runs as $process_run ) {
-				if ( ! is_string( $process_run ) || '' === $process_run ) {
-					continue;
-				}
-				$pattern = '%' . $wpdb->esc_like( '"process_run":"' . $process_run . '"' ) . '%';
-				// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Each clause is its own $wpdb->prepare() call; the result is concatenated as an already-escaped SQL fragment into the main query below.
-				$exclude_clauses_sql .= ' AND ' . $wpdb->prepare( '`value` NOT LIKE %s', $pattern );
-			}
+		if ( empty( $skip ) ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table; the list is read fresh on each request.
+			$results = $wpdb->get_results(
+				$wpdb->prepare(
+					'SELECT id, value FROM %i WHERE `option` = %s AND `key` = %s ORDER BY `date_created` DESC LIMIT %d OFFSET %d',
+					$table_name,
+					$option,
+					$tailwatch_key,
+					$limit,
+					$offset
+				),
+				ARRAY_A
+			);
+		} else {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table; the list is read fresh on each request.
+			$results = $wpdb->get_results(
+				$wpdb->prepare(
+					'SELECT id, value FROM %i WHERE `option` = %s AND `key` = %s AND id NOT IN (' . implode( ', ', array_fill( 0, count( $skip ), '%d' ) ) . ') ORDER BY `date_created` DESC LIMIT %d OFFSET %d',
+					array_merge( array( $table_name, $option, $tailwatch_key ), $skip, array( $limit, $offset ) )
+				),
+				ARRAY_A
+			);
 		}
-
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
-		// Reason: Custom table; $exclude_clauses_sql is a pre-prepared fragment
-		// (each clause built via $wpdb->prepare() above), safe to concatenate.
-		$results = $wpdb->get_results( $wpdb->prepare(
-			'SELECT id, value FROM %i WHERE `option` = %s AND `key` = %s' . $exclude_clauses_sql . ' ORDER BY `date_created` DESC LIMIT %d OFFSET %d',
-			$table_name,
-			$option,
-			$tailwatch_key,
-			$limit,
-			$offset
-		), ARRAY_A );
-		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
 
 		$folders_data = array();
 
@@ -101,35 +76,110 @@ class BackupModel {
 	 * @param string $option   The option to filter by.
 	 * @return int Total count of backup folders.
 	 */
-	public function get_all_backup_folders_count( $tailwatch_key, $option, $exclude_process_runs = array() ) {
+	public function get_all_backup_folders_count( $tailwatch_key, $option, $exclude_process_runs = array(), $only_types = null ) {
 		global $wpdb;
 		$table_name = $wpdb->prefix . TAILWATCH_DB_TABLE_NAME;
 
-		// Same exclude semantics as get_all_backup_folders — `total` must match
-		// the number of rows the page query actually returns.
-		$exclude_clauses_sql = '';
-		if ( is_array( $exclude_process_runs ) && ! empty( $exclude_process_runs ) ) {
-			foreach ( $exclude_process_runs as $process_run ) {
-				if ( ! is_string( $process_run ) || '' === $process_run ) {
-					continue;
+		// The caller may restrict the count to the folders it can actually see on disk.
+		// Without this the total is a raw row count while the LIST is reconciled against
+		// the filesystem, so a row whose folder is gone — after a migration, a manual
+		// delete, a run that never finished — would add a page that renders empty.
+		$names = null;
+		if ( is_array( $only_types ) ) {
+			$names = array();
+			foreach ( $only_types as $name ) {
+				if ( is_string( $name ) && '' !== $name ) {
+					$names[] = $name;
 				}
-				$pattern = '%' . $wpdb->esc_like( '"process_run":"' . $process_run . '"' ) . '%';
-				// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Each clause is its own $wpdb->prepare() call; the result is concatenated as an already-escaped SQL fragment into the main query below.
-				$exclude_clauses_sql .= ' AND ' . $wpdb->prepare( '`value` NOT LIKE %s', $pattern );
+			}
+
+			if ( empty( $names ) ) {
+				// An empty allow-list means nothing on disk, which is a real answer.
+				return 0;
 			}
 		}
 
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
-		// Reason: Custom table; $exclude_clauses_sql is a pre-prepared fragment
-		// (each clause built via $wpdb->prepare() above), safe to concatenate.
-		$count = (int) $wpdb->get_var( $wpdb->prepare(
-			'SELECT COUNT(*) FROM %i WHERE `option` = %s AND `key` = %s' . $exclude_clauses_sql,
-			$table_name,
-			$option,
-			$tailwatch_key
-		) );
-		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
-		return $count;
+		// Same exclusions as get_all_backup_folders — `total` must match the number of rows
+		// the page query actually returns.
+		$skip = $this->tailwatch_rows_of_runs( $table_name, $tailwatch_key, $option, $exclude_process_runs );
+
+		if ( null === $names && empty( $skip ) ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table; the count is read fresh on each request.
+			$count = $wpdb->get_var(
+				$wpdb->prepare(
+					'SELECT COUNT(*) FROM %i WHERE `option` = %s AND `key` = %s',
+					$table_name,
+					$option,
+					$tailwatch_key
+				)
+			);
+		} elseif ( null === $names ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table; the count is read fresh on each request.
+			$count = $wpdb->get_var(
+				$wpdb->prepare(
+					'SELECT COUNT(*) FROM %i WHERE `option` = %s AND `key` = %s AND id NOT IN (' . implode( ', ', array_fill( 0, count( $skip ), '%d' ) ) . ')',
+					array_merge( array( $table_name, $option, $tailwatch_key ), $skip )
+				)
+			);
+		} elseif ( empty( $skip ) ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table; the count is read fresh on each request.
+			$count = $wpdb->get_var(
+				$wpdb->prepare(
+					'SELECT COUNT(*) FROM %i WHERE `option` = %s AND `key` = %s AND `type` IN (' . implode( ', ', array_fill( 0, count( $names ), '%s' ) ) . ')',
+					array_merge( array( $table_name, $option, $tailwatch_key ), $names )
+				)
+			);
+		} else {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table; the count is read fresh on each request.
+			$count = $wpdb->get_var(
+				$wpdb->prepare(
+					'SELECT COUNT(*) FROM %i WHERE `option` = %s AND `key` = %s AND `type` IN (' . implode( ', ', array_fill( 0, count( $names ), '%s' ) ) . ') AND id NOT IN (' . implode( ', ', array_fill( 0, count( $skip ), '%d' ) ) . ')',
+					array_merge( array( $table_name, $option, $tailwatch_key ), $names, $skip )
+				)
+			);
+		}
+
+		return (int) $count;
+	}
+
+	/**
+	 * Ids of the rows these runs left, which the backup list does not show.
+	 *
+	 * `process_run` lives inside the JSON `value`; its compact JSON shape
+	 * `"process_run":"<value>"` is matched portably (no JSON_EXTRACT). A row without a value
+	 * has no run to read, so any exclusion leaves it out as well.
+	 *
+	 * @param string $table_name    Table name.
+	 * @param string $tailwatch_key The key to filter by.
+	 * @param string $option        The option to filter by.
+	 * @param array  $process_runs  Runs whose rows are left out.
+	 * @return int[]
+	 */
+	private function tailwatch_rows_of_runs( $table_name, $tailwatch_key, $option, $process_runs ) {
+		global $wpdb;
+
+		$ids = array();
+		foreach ( (array) $process_runs as $process_run ) {
+			if ( ! is_string( $process_run ) || '' === $process_run ) {
+				continue;
+			}
+			$pattern = '%' . $wpdb->esc_like( '"process_run":"' . $process_run . '"' ) . '%';
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table; read fresh for the query that follows.
+			$found = $wpdb->get_col(
+				$wpdb->prepare(
+					'SELECT id FROM %i WHERE `option` = %s AND `key` = %s AND ( `value` LIKE %s OR `value` IS NULL )',
+					$table_name,
+					$option,
+					$tailwatch_key,
+					$pattern
+				)
+			);
+			foreach ( (array) $found as $id ) {
+				$ids[ (int) $id ] = true;
+			}
+		}
+
+		return array_keys( $ids );
 	}
 
 	/**
@@ -158,7 +208,41 @@ class BackupModel {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Database backup requires real-time table list.
 		$results = $wpdb->get_results( 'SHOW TABLES', ARRAY_N );
 
-		return array_column( $results, 0 );
+		return array_values( array_filter( array_column( $results, 0 ), array( $this, 'is_backable_table' ) ) );
+	}
+
+	/**
+	 * Whether a table is the site's data rather than the restore's own workings.
+	 *
+	 * A restore leaves the database it replaced behind as `<table>_twold` so it can be put
+	 * back, and builds the incoming copy under `twstg_` before the cutover. Both are this
+	 * plugin's machinery, not content — and a plain SHOW TABLES would sweep them into the
+	 * next backup as though they were.
+	 *
+	 * That makes the following restore fail outright. With `wp_users` and `wp_users_twold`
+	 * both in the dump, the cutover's single RENAME ends up with two moves competing for
+	 * the same destination name — `wp_users` -> `wp_users_twold` from one pair, and
+	 * `twstg_wp_users_twold` -> `wp_users_twold` from the other. MySQL refuses the whole
+	 * statement, which is reported as "the database cutover failed" AFTER the files have
+	 * already been replaced: the worst moment to stop, and the site is left inconsistent.
+	 *
+	 * The retained generation also gets dropped on the way past, so the undo point is gone
+	 * as well. Filtering here covers every consumer at once, and it also stops a backup
+	 * carrying a second full copy of the database for no reason.
+	 *
+	 * @param string $table Table name from SHOW TABLES.
+	 * @return bool
+	 */
+	private function is_backable_table( $table ) {
+		$table = (string) $table;
+
+		if ( 0 === strpos( $table, RestoreDatabase::STAGING_PREFIX ) ) {
+			return false;
+		}
+
+		$suffix = RestoreDatabase::OLD_SUFFIX;
+
+		return substr( $table, -strlen( $suffix ) ) !== $suffix;
 	}
 
 	/**
@@ -172,17 +256,57 @@ class BackupModel {
 		global $wpdb;
 
 		if ( $exclude_transients && $table_name === $wpdb->options ) {
+			list( $transient, $site_transient )        = $this->transient_like_patterns();
+			list( $secret_key, $header_key, $pairing ) = $this->api_secret_rows();
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Database backup; count non-transient options.
 			return (int) $wpdb->get_var( $wpdb->prepare(
-				'SELECT COUNT(*) FROM %i WHERE option_name NOT LIKE %s AND option_name NOT LIKE %s',
+				'SELECT COUNT(*) FROM %i WHERE option_name NOT LIKE %s AND option_name NOT LIKE %s AND option_name NOT IN ( %s, %s ) AND option_name NOT LIKE %s',
 				$table_name,
-				'_transient_%',
-				'_site_transient_%'
+				$transient,
+				$site_transient,
+				$secret_key,
+				$header_key,
+				$pairing
 			) );
 		}
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Database backup; row count.
 		return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i', $table_name ) );
+	}
+
+	/**
+	 * LIKE patterns for the transient rows a backup leaves out of the options table.
+	 *
+	 * Escaped: `_` is a single-character wildcard in LIKE, so an unescaped pattern would
+	 * also match ordinary options such as `xtransientxname`.
+	 *
+	 * @return array{0: string, 1: string} Transient pattern, site-transient pattern.
+	 */
+	private function transient_like_patterns() {
+		global $wpdb;
+
+		return array(
+			$wpdb->esc_like( '_transient_' ) . '%',
+			$wpdb->esc_like( '_site_transient_' ) . '%',
+		);
+	}
+
+	/**
+	 * The option rows that sign and authenticate the Connect API, which no dump carries.
+	 *
+	 * Anyone holding a dump could mint working API tokens with them. A restore does not
+	 * need them from the dump: it carries the live values across.
+	 *
+	 * @return array{0: string, 1: string, 2: string} App secret, auth header key, pairing-secret LIKE pattern.
+	 */
+	private function api_secret_rows() {
+		global $wpdb;
+
+		return array(
+			'tailwatch_app_secret_key',
+			'tailwatch_auth_header_key',
+			$wpdb->esc_like( 'tailwatch_cta_secret_' ) . '%',
+		);
 	}
 
 	/**
@@ -207,10 +331,12 @@ class BackupModel {
 		// wraps the whole query section.
 		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, PluginCheck.Security.DirectDB.UnescapedDBParameter
 		if ( $exclude_transients && $table_name === $wpdb->options ) {
+			list( $transient, $site_transient )        = $this->transient_like_patterns();
+			list( $secret_key, $header_key, $pairing ) = $this->api_secret_rows();
 			return $wpdb->get_results( $wpdb->prepare(
-				'SELECT * FROM %i WHERE option_name NOT LIKE %s AND option_name NOT LIKE %s ' . $order_by_sql . ' LIMIT %d, %d',
+				'SELECT * FROM %i WHERE option_name NOT LIKE %s AND option_name NOT LIKE %s AND option_name NOT IN ( %s, %s ) AND option_name NOT LIKE %s ' . $order_by_sql . ' LIMIT %d, %d',
 				array_merge(
-					array( $table_name, '_transient_%', '_site_transient_%' ),
+					array( $table_name, $transient, $site_transient, $secret_key, $header_key, $pairing ),
 					$order_by_args,
 					array( $safe_offset, $safe_chunk_size )
 				)
@@ -331,24 +457,51 @@ class BackupModel {
 		// uses a literal %d (int PK) or %s (string PK) so the query is fully prepared (no
 		// interpolation). Output is byte-identical to backtick-escaping the column.
 		if ( $is_options ) {
+			list( $transient, $site_transient )        = $this->transient_like_patterns();
+			list( $secret_key, $header_key, $pairing ) = $this->api_secret_rows();
 			if ( $first ) {
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Database backup; keyset options first page.
 				return $wpdb->get_results( $wpdb->prepare(
-					'SELECT * FROM %i WHERE option_name NOT LIKE %s AND option_name NOT LIKE %s ORDER BY %i ASC LIMIT %d',
-					$table_name, '_transient_%', '_site_transient_%', $pk_col, $safe_chunk
+					'SELECT * FROM %i WHERE option_name NOT LIKE %s AND option_name NOT LIKE %s AND option_name NOT IN ( %s, %s ) AND option_name NOT LIKE %s ORDER BY %i ASC LIMIT %d',
+					$table_name,
+					$transient,
+					$site_transient,
+					$secret_key,
+					$header_key,
+					$pairing,
+					$pk_col,
+					$safe_chunk
 				), ARRAY_A );
 			}
 			if ( $pk_is_int ) {
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Database backup; keyset options page (int PK).
 				return $wpdb->get_results( $wpdb->prepare(
-					'SELECT * FROM %i WHERE option_name NOT LIKE %s AND option_name NOT LIKE %s AND %i > %d ORDER BY %i ASC LIMIT %d',
-					$table_name, '_transient_%', '_site_transient_%', $pk_col, $cursor, $pk_col, $safe_chunk
+					'SELECT * FROM %i WHERE option_name NOT LIKE %s AND option_name NOT LIKE %s AND option_name NOT IN ( %s, %s ) AND option_name NOT LIKE %s AND %i > %d ORDER BY %i ASC LIMIT %d',
+					$table_name,
+					$transient,
+					$site_transient,
+					$secret_key,
+					$header_key,
+					$pairing,
+					$pk_col,
+					$cursor,
+					$pk_col,
+					$safe_chunk
 				), ARRAY_A );
 			}
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Database backup; keyset options page (string PK).
 			return $wpdb->get_results( $wpdb->prepare(
-				'SELECT * FROM %i WHERE option_name NOT LIKE %s AND option_name NOT LIKE %s AND %i > %s ORDER BY %i ASC LIMIT %d',
-				$table_name, '_transient_%', '_site_transient_%', $pk_col, $cursor, $pk_col, $safe_chunk
+				'SELECT * FROM %i WHERE option_name NOT LIKE %s AND option_name NOT LIKE %s AND option_name NOT IN ( %s, %s ) AND option_name NOT LIKE %s AND %i > %s ORDER BY %i ASC LIMIT %d',
+				$table_name,
+				$transient,
+				$site_transient,
+				$secret_key,
+				$header_key,
+				$pairing,
+				$pk_col,
+				$cursor,
+				$pk_col,
+				$safe_chunk
 			), ARRAY_A );
 		}
 

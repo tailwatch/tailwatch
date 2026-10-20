@@ -247,7 +247,6 @@ class LiveLogsController {
 						$min_backup_rate = 1024 * 1024 / 2; // 0.5 MB/s as a minimum reasonable speed
 						$backup_rate     = max( $backup_rate, $min_backup_rate );
 
-						// Estimate remaining time
 						$estimated_remaining = $backup_rate > 0 ? ceil( $remaining_size / $backup_rate ) : 300;
 
 						// Add a small buffer (e.g., 30 seconds) for finalization
@@ -271,11 +270,10 @@ class LiveLogsController {
 					$estimated_remaining  = max( 30, $total_estimated_time - $elapsed_time );
 				} else {
 					// Default fallback for early stages
-					$estimated_remaining = max( 120, min( $elapsed_time * 5, 600 ) ); // Reduced from 1800s cap
+					$estimated_remaining = max( 120, min( $elapsed_time * 5, 600 ) );
 				}
 				break;
 
-			// Other cases (database_optimizer, etc.) remain unchanged
 			case 'database_optimizer':
 				if ( $progress >= 10 ) {
 					$total_estimated_time = ( $elapsed_time * 100 ) / $progress;
@@ -337,28 +335,60 @@ class LiveLogsController {
 
 		switch ( $feature_type ) {
 			case 'create_backup':
+				// Only the progress is this poll's to write. Its copy of the row was read before
+				// the backup folder was measured and the log was read, and a tick that finished
+				// in between has written state the copy does not have.
 				$backup_controller = new BackupController();
-				$backup_controller->update_backup_cancel_pause( $get_progress );
+				$current           = $backup_controller->tailwatch_backup_cancel_pause_data();
+				if ( is_array( $current ) && isset( $get_progress['progress'] ) ) {
+					$current['progress'] = $get_progress['progress'];
+					$backup_controller->update_backup_cancel_pause( $current );
+				}
 				break;
 			case 'database_optimizer':
+				// Only the progress, onto the row as it is now - as for create_backup above.
 				$database_clean = new DatabaseOptimizerController();
-				$database_clean->update_db_optimization_cancel_pause( $get_progress );
+				$current        = $database_clean->tailwatch_optimization_cancel_pause();
+				if ( is_array( $current ) && isset( $get_progress['progress'] ) ) {
+					$current['progress'] = $get_progress['progress'];
+					$database_clean->update_db_optimization_cancel_pause( $current );
+				}
 				break;
 			case 'search_replace':
+				// Only the progress, onto the row as it is now - as for create_backup above.
 				$search_replace = new SearchReplaceController();
-				$search_replace->update_search_replace_cancel_pause( $get_progress );
+				$current        = $search_replace->search_replace_cancel_pause_data();
+				if ( is_array( $current ) && isset( $get_progress['progress'] ) ) {
+					$current['progress'] = $get_progress['progress'];
+					$search_replace->update_search_replace_cancel_pause( $current );
+				}
 				break;
 			case 'files_integrity':
+				// Only the progress, onto the row as it is now - as for create_backup above.
 				$files_integrity = new IntegrityWatchController();
-				$files_integrity->update_files_integrity_cancel_pause( $get_progress );
+				$current         = $files_integrity->get_files_integrity_progress();
+				if ( is_array( $current ) && isset( $get_progress['progress'] ) ) {
+					$current['progress'] = $get_progress['progress'];
+					$files_integrity->update_files_integrity_cancel_pause( $current );
+				}
 				break;
 			case 'hardening_audit':
+				// Only the progress, onto the row as it is now - as for create_backup above.
 				$hardening_audit = new HardeningAuditController();
-				$hardening_audit->update_cancel_pause_data( $get_progress );
+				$current         = $hardening_audit->get_cancel_pause_data();
+				if ( is_array( $current ) && isset( $get_progress['progress'] ) ) {
+					$current['progress'] = $get_progress['progress'];
+					$hardening_audit->update_cancel_pause_data( $current );
+				}
 				break;
 			case 'broken_links':
+				// Only the progress, onto the row as it is now - as for create_backup above.
 				$broken_links = new BrokenLinkStatus();
-				$broken_links->update_broken_link_cancel_pause( $get_progress );
+				$current      = $broken_links->broken_link_cancel_pause_data();
+				if ( is_array( $current ) && isset( $get_progress['progress'] ) ) {
+					$current['progress'] = $get_progress['progress'];
+					$broken_links->update_broken_link_cancel_pause( $current );
+				}
 				break;
 			default:
 				break;

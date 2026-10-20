@@ -194,12 +194,7 @@ class GetTablesOptimizerController {
 			if ( isset( $db_data['field_1']['sub_options']['field_16']['options'] ) ) {
 				foreach ( $db_data['field_1']['sub_options']['field_16']['options'] as $maintain_option ) {
 					if ( isset( $maintain_option['selected'] ) && true === $maintain_option['selected'] ) {
-						if ( 'Select Days' === $maintain_option['value'] && isset( $maintain_option['sub_options']['field_17']['options']['option']['value'] ) ) {
-							$revisions_field    = $maintain_option['sub_options']['field_17']['options']['option']['value'];
-							$revisions_maintain = $revisions_field . ' days';
-						} else {
-							$revisions_maintain = $maintain_option['value'];
-						}
+						$revisions_maintain = DatabaseOptimizerController::tailwatch_keep_period( $maintain_option );
 					}
 				}
 			}

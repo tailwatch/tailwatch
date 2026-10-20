@@ -73,7 +73,6 @@ class ProcessRecoveryController {
 		// Register custom cron schedule for recovery monitoring (every 3 minutes).
 		$hook_controller->add_filter_hook( 'cron_schedules', array( $this, 'add_recovery_cron_schedule' ) );
 
-		// Schedule background recovery monitoring cron.
 		$this->schedule_recovery_cron();
 
 		// Hook for background recovery cron (runs every 3 minutes).
@@ -90,12 +89,10 @@ class ProcessRecoveryController {
 	}
 
 	public function run_recovery_monitor() {
-		// Only run in admin area.
 		if ( ! is_admin() ) {
 			return;
 		}
 
-		// Only run if user can manage options (admin).
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return;
 		}
@@ -105,27 +102,36 @@ class ProcessRecoveryController {
 	}
 
 	public function add_recovery_cron_schedule( $schedules ) {
-		// tailwatch_-prefixed name is the canonical one (PrefixAllGlobals). The bare
-		// `every_3_minutes` key is retained as an alias for one release cycle
-		// so pre-existing scheduled events continue to reschedule successfully;
-		// remove the alias after that cycle.
+		// An event left on an older, unprefixed schedule name is moved to this one by
+		// schedule_recovery_cron().
 		$schedules['tailwatch_every_3_minutes'] = array(
 			'interval' => 180,
 			'display'  => 'Every 3 Minutes',
 		);
-		$schedules['every_3_minutes'] = $schedules['tailwatch_every_3_minutes'];
 
 		return $schedules;
 	}
 
 	private function schedule_recovery_cron() {
-		// Check if WP Cron is enabled.
-		if ( defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON ) {
-			return; // Don't schedule if WP Cron is disabled.
+		// DISABLE_WP_CRON is deliberately NOT checked here. It turns off WordPress's own
+		// page-load TRIGGER; it does not empty the queue. The recommended production setup
+		// — the one this constant exists for — is a system crontab calling wp-cron.php,
+		// and under it scheduled events run perfectly well, as CronHealthService tells the
+		// user ('That is fine if your host runs a system cron'). Skipping the schedule would
+		// leave precisely the best-configured sites without the watchdog that recovers every
+		// other cron, with only the admin_init tier, which needs somebody to be looking at
+		// wp-admin.
+		//
+		// An event on a site whose cron genuinely never fires costs one array entry and
+		// runs the moment cron is repaired. Not scheduling it costs the whole watchdog.
+		$event = wp_get_scheduled_event( 'tailwatch_process_recovery_monitor' );
+		if ( $event && 'tailwatch_every_3_minutes' !== $event->schedule ) {
+			// WordPress keeps rescheduling an event at the interval stored with it, so one
+			// left on an older schedule name would never move over by itself.
+			wp_clear_scheduled_hook( 'tailwatch_process_recovery_monitor' );
+			$event = false;
 		}
-
-		// Check if already scheduled.
-		if ( ! wp_next_scheduled( 'tailwatch_process_recovery_monitor' ) ) {
+		if ( ! $event ) {
 			wp_schedule_event( time(), 'tailwatch_every_3_minutes', 'tailwatch_process_recovery_monitor' );
 		}
 	}
@@ -151,7 +157,6 @@ class ProcessRecoveryController {
 				)
 			);
 		} finally {
-			// Always release lock even if error occurs.
 			delete_transient( $lock_key );
 		}
 	}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { FaCheck } from "react-icons/fa";
-import DOMPurify from "dompurify";
+import { safeHtml } from "../Utils/HelperFunctions/safeHtml";
 import InfoBar from "../InfoBar/InfoBar";
 
 const LogsScreen = ({
@@ -13,6 +13,14 @@ const LogsScreen = ({
   isCompleted,
   cancelMessage,
   successMessage,
+  // Whether a quiet run should raise the "Process is in progress. Don't panic" notice.
+  //
+  // On by default, because for every module that streams logs from a site that is still
+  // serving pages, silence IS the surprising thing. A restore is the exception: the site
+  // is behind its maintenance gate for most of one, so quiet is expected there and the
+  // restore screen explains it in its own words. Two notices about the same silence, one
+  // of them saying "don't panic", is worse than either alone.
+  showStallNotice = true,
 }) => {
   const [isCopied, setIsCopied] = useState(false);
   const [isProgressing, setIsProgressing] = useState(false);
@@ -26,7 +34,7 @@ const LogsScreen = ({
     overscan: 5,
   });
 
-  // ✅ Deduplicate only when new logs arrive
+  // Deduplicate only when new logs arrive
   useEffect(() => {
     if (logs.length === 0) return;
     const uniqueLogsSet = new Set(logs);
@@ -47,18 +55,19 @@ const LogsScreen = ({
     }
   }, [isPaused, isCanceled, isCompleted]);
 
-  // ✅ Check if logs have stopped — but only while the process is actively running.
+  // Check if logs have stopped — but only while the process is actively running,
+  // and only where the resulting notice would actually be shown.
   useEffect(() => {
-    if (isPaused || isCanceled || isCompleted) return;
+    if (!showStallNotice || isPaused || isCanceled || isCompleted) return;
     const interval = setInterval(() => {
       if (Date.now() - lastLogTimeRef.current > 10000) {
         setIsProgressing(true);
       }
     }, 2000);
     return () => clearInterval(interval);
-  }, [isPaused, isCanceled, isCompleted]);
+  }, [showStallNotice, isPaused, isCanceled, isCompleted]);
 
-  // ✅ Auto-scroll to bottom when new logs arrive
+  // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
     if (logs.length > 0) {
       requestAnimationFrame(() => {
@@ -67,7 +76,6 @@ const LogsScreen = ({
     }
   }, [logs.length]);
 
-  // ✅ Copy logs to clipboard
   const handleCopyLogs = () => {
     navigator.clipboard.writeText(logs.join("\n")).then(() => {
       setIsCopied(true);
@@ -79,7 +87,7 @@ const LogsScreen = ({
     <div className="mt-4 mb-2">
       {isLogsVisible && (
         <div>
-          {!isCanceled && !isCompleted && !isPaused && isProgressing && (
+          {showStallNotice && !isCanceled && !isCompleted && !isPaused && isProgressing && (
             <InfoBar type="progress" message="Process is in progress. Don't panic" />
           )}
 
@@ -168,7 +176,7 @@ const LogsScreen = ({
                               overflow: "hidden",
                               boxSizing: "border-box",
                             }}
-                            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(logHtml) }}
+                            dangerouslySetInnerHTML={{ __html: safeHtml(logHtml) }}
                           />
                         </li>
                       );

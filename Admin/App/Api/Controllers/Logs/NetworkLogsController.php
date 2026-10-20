@@ -2,33 +2,6 @@
 /**
  * Network / AJAX Request Logger
  *
- * Records lightweight METADATA for API-style WordPress traffic — REST API,
- * admin-ajax, cron, and XML-RPC — so the dashboard can surface recent internal
- * requests, their status, and timing.
- *
- * ## Design: WordPress-native capture, no raw bodies
- *
- * This intentionally does NOT read `php://input`, does NOT dump raw
- * `$_POST`/`$_GET`/`$_COOKIE`, and does NOT buffer or store request/response
- * BODIES. Those patterns capture arbitrary payloads (and are exactly what
- * plugin review flags). Instead:
- *
- *  - REST requests are captured through the official `rest_post_dispatch`
- *    filter, which hands us a fully parsed {@see WP_REST_Request} (route,
- *    method, params, headers) and the {@see WP_HTTP_Response} — no superglobal
- *    or stream reads at all. This is the same hook Query Monitor uses.
- *  - admin-ajax / cron / XML-RPC are captured on `shutdown` (they have no
- *    dispatch filter). Only the sanitized `action` and the request params are
- *    read from the superglobals, each passed through `sanitize_text_field` +
- *    `wp_unslash` and then redacted.
- *
- * All captured params/headers are run through a redaction pass that strips
- * credential, token, and nonce values before anything is stored, cookie VALUES
- * are never captured (names only), and every value is length-capped.
- *
- * Persistence reuses the shared monitoring-log pipeline (tw_logs). The feature
- * is opt-in (default off) and disclosed in readme.txt.
- *
  * @package    Tailwatch
  * @subpackage Controllers/Logs
  */
@@ -43,9 +16,32 @@ use Tailwatch\Admin\App\Api\Controllers\Features\OptionsController;
 use Tailwatch\Admin\App\Api\Services\IpService;
 
 /**
- * Class NetworkLogsController
+ * Records lightweight METADATA for API-style WordPress traffic — REST API,
+ * admin-ajax, cron, and XML-RPC — so the dashboard can surface recent internal
+ * requests, their status, and timing.
  *
- * Captures metadata for API-style traffic via WordPress-native hooks.
+ * ## Design: WordPress-native capture, no raw bodies
+ *
+ * This intentionally does NOT read `php://input`, does NOT dump raw
+ * `$_POST`/`$_GET`/`$_COOKIE`, and does NOT buffer or store request/response
+ * BODIES. Those patterns capture arbitrary payloads (and are exactly what
+ * plugin review flags). Instead:
+ *
+ *  - REST requests are captured through the official `rest_post_dispatch`
+ *    filter, which hands us a fully parsed {@see WP_REST_Request} (route,
+ *    method, params, headers) and the {@see WP_HTTP_Response} — no superglobal
+ *    or stream reads at all.
+ *  - admin-ajax / cron / XML-RPC are captured on `shutdown` (they have no
+ *    dispatch filter). Only the sanitized `action` and the request params are
+ *    read from the superglobals, each passed through `sanitize_text_field` +
+ *    `wp_unslash` and then redacted.
+ *
+ * All captured params/headers are run through a redaction pass that strips
+ * credential, token, and nonce values before anything is stored, cookie VALUES
+ * are never captured (names only), and every value is length-capped.
+ *
+ * Persistence reuses the shared monitoring-log pipeline (tw_logs). The feature
+ * is opt-in (default off) and disclosed in readme.txt.
  */
 class NetworkLogsController {
 
@@ -67,6 +63,11 @@ class NetworkLogsController {
 		'x-wp-nonce',
 		'x-api-key',
 		'x-auth-token',
+		'x-tailwatch-auth-key',
+		'x-tailwatch-authorization',
+		'x-tailwatch-header-key',
+		'x-tailwatch-refresh-token',
+		'x-tailwatch-route',
 	);
 
 	/**
@@ -111,6 +112,10 @@ class NetworkLogsController {
 		'api_key',
 		'private_key',
 		'client_secret',
+		'license_key',
+		'licensekey',
+		'header_key',
+		'headerkey',
 		'authorization',
 		'credential',
 		'session',
@@ -204,9 +209,9 @@ class NetworkLogsController {
 
 		$route = (string) $request->get_route();
 
-		// Skip Tailwatch's own Connect REST traffic (tailwatch/v1) so the log is
-		// not flooded with the plugin's own dashboard / mobile-app calls.
-		if ( 0 === strpos( $route, '/tailwatch/' ) ) {
+		// Skip Tailwatch's own REST traffic (tailwatch/v1, and the add-on's tailwatchpro/v1)
+		// so the log is not flooded with the plugin's own dashboard / app / scan calls.
+		if ( 0 === strpos( $route, '/tailwatch/' ) || 0 === strpos( $route, '/tailwatchpro/' ) ) {
 			return $result;
 		}
 
@@ -227,6 +232,20 @@ class NetworkLogsController {
 		);
 
 		return $result;
+	}
+
+	/**
+	 * Whether a request is one of Tailwatch's own screens talking to the site.
+	 *
+	 * Its admin-ajax actions are all for signed-in users; the action name alone is chosen by
+	 * whoever sends the request, so a signed-out or XML-RPC request naming one is logged.
+	 *
+	 * @param string $action  Sanitized `action` of the request.
+	 * @param bool   $is_ajax Whether this is an admin-ajax request.
+	 * @return bool
+	 */
+	private function is_own_screen_request( $action, $is_ajax ) {
+		return $is_ajax && is_user_logged_in() && 0 === strpos( $action, 'tailwatch_' );
 	}
 
 	/**
@@ -262,6 +281,11 @@ class NetworkLogsController {
 		// a nonce is structurally inapplicable; the value is sanitized before use.
 		// phpcs:ignore WordPress.Security.NonceVerification -- passive request logging, not a state-changing action.
 		$action = isset( $_REQUEST['action'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['action'] ) ) : '';
+
+		// Tailwatch's own screen requests are not recorded, as with its REST traffic.
+		if ( $this->is_own_screen_request( $action, $is_ajax ) ) {
+			return;
+		}
 
 		// phpcs:ignore WordPress.Security.NonceVerification -- passive request logging; values sanitized + redacted below.
 		$get_params = ! empty( $_GET ) ? map_deep( wp_unslash( $_GET ), 'sanitize_text_field' ) : array();
@@ -342,7 +366,7 @@ class NetworkLogsController {
 
 		// Log entries persist under the 'default_network_logs' group, matching the
 		// feature option. The Database Optimizer prunes this same group in
-		// tailwatch_clean_network_logs, so retention continues to apply.
+		// tailwatch_clean_network_logs, so retention applies to it.
 		$monitoring = new MonitoringLogController();
 		$monitoring->tailwatch_send_log_report(
 			$data,
@@ -395,11 +419,52 @@ class NetworkLogsController {
 			if ( $this->is_sensitive_key( (string) $key, $exact, $contains ) ) {
 				$out[ $key ] = '[redacted]';
 			} else {
-				$out[ $key ] = $this->truncate_value( (string) $value );
+				$out[ $key ] = $this->redact_encoded( (string) $value );
+			}
+		}
+
+		// A {key: "smtp_password", value: "..."} pair names its secret in a sibling field.
+		if ( array_key_exists( 'value', $out ) && ! is_array( $out['value'] ) ) {
+			foreach ( array( 'key', 'id', 'name', 'register', 'field' ) as $label ) {
+				if ( isset( $data[ $label ] ) && is_scalar( $data[ $label ] ) && $this->is_sensitive_key( (string) $data[ $label ], $exact, $contains ) ) {
+					$out['value'] = '[redacted]';
+					break;
+				}
 			}
 		}
 
 		return $out;
+	}
+
+	/**
+	 * Redact a value that carries fields of its own: JSON, or form-encoded pairs.
+	 *
+	 * Plugins often post a whole form as one string, so a secret can sit inside a value
+	 * whose own name is harmless. A JSON-looking value that cannot be read is not stored.
+	 *
+	 * @param string $value Field value.
+	 *
+	 * @return string
+	 */
+	private function redact_encoded( $value ) {
+		$trimmed = ltrim( $value );
+		if ( '' !== $trimmed && ( '{' === $trimmed[0] || '[' === $trimmed[0] ) ) {
+			$decoded = json_decode( $value, true );
+			if ( ! is_array( $decoded ) ) {
+				return '[redacted]';
+			}
+			return $this->truncate_value( (string) wp_json_encode( $this->redact_fields( $decoded ) ) );
+		}
+
+		if ( 1 === preg_match( '/^[^=&\s]+=[^&\s]*(?:&[^=&\s]+=[^&\s]*)*$/', $value ) ) {
+			$pairs = array();
+			wp_parse_str( $value, $pairs );
+			if ( ! empty( $pairs ) ) {
+				return $this->truncate_value( http_build_query( $this->redact_fields( $pairs ) ) );
+			}
+		}
+
+		return $this->truncate_value( $value );
 	}
 
 	/**
@@ -444,11 +509,14 @@ class NetworkLogsController {
 		 *
 		 * @param string[] $names Lowercased header names.
 		 */
-		$sensitive = apply_filters( 'tailwatch_network_log_sensitive_headers', self::$sensitive_headers );
+		$sensitive = array_map(
+			array( $this, 'header_name' ),
+			(array) apply_filters( 'tailwatch_network_log_sensitive_headers', self::$sensitive_headers )
+		);
 
 		$out = array();
 		foreach ( $headers as $name => $value ) {
-			if ( in_array( strtolower( (string) $name ), $sensitive, true ) ) {
+			if ( in_array( $this->header_name( $name ), $sensitive, true ) ) {
 				$out[ $name ] = '[redacted]';
 			} else {
 				$out[ $name ] = $this->truncate_value( (string) $value );
@@ -456,6 +524,18 @@ class NetworkLogsController {
 		}
 
 		return $out;
+	}
+
+	/**
+	 * One spelling for a header name: WP_REST_Request lowercases names and turns
+	 * hyphens into underscores.
+	 *
+	 * @param string $name Header name.
+	 *
+	 * @return string
+	 */
+	private function header_name( $name ) {
+		return str_replace( '_', '-', strtolower( (string) $name ) );
 	}
 
 	/**

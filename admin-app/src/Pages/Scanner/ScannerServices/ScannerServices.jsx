@@ -1,7 +1,9 @@
+import { readFeatureGate } from '../../../Components/Utils/featureGate';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { CronHealer } from '../../../Components/CroneHealer/CronHealer';
 import { alertService } from "../../../Components/AlertService/AlertService";
+import { plainText } from "../../../Components/Utils/HelperFunctions/safeHtml";
 /* global tailwatch_ajax */
 
 let cronScheduled = false;
@@ -171,7 +173,7 @@ const buildScanLogsRequest = (lastLogIndex) => {
 
   const requestConfig = {
     headers: { "Content-Type": "multipart/form-data" },
-    timeout: 30000, // 30 second timeout
+    timeout: 30000,
   };
 
   return { formData, requestConfig };
@@ -243,10 +245,7 @@ const parseResponseData = (response) => {
     const errorMessages = [];
 
     for (const match of htmlErrorMatches) {
-      const errorMessage = match[1]
-        .replace(/<[^>]+>/g, "")
-        .replace(/&#039;/g, "'")
-        .trim();
+      const errorMessage = plainText(match[1]).trim();
       if (errorMessage) {
         errorMessages.push(errorMessage);
       }
@@ -267,7 +266,7 @@ const parseResponseData = (response) => {
         parsedData = null;
       }
     } else {
-      // Fallback to original regex method
+      // Fallback: match a JSON object at the end of the text
       const jsonMatch = response.data.match(/\{.*\}$/s);
       if (jsonMatch) {
         try {
@@ -454,7 +453,6 @@ export const fetchLogs = async (
 ) => {
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-  // Helper function to handle scan failure
   const handleScanFailure = (errorType, errorDetails, shouldRetry = false) => {
     console.error(`[Scan Error - Attempt ${attempt}/${maxRetries}]`, errorType, errorDetails);
 
@@ -599,7 +597,6 @@ export const fetchLogs = async (
         break;
 
       case 'NONE':
-        // No action needed
         break;
     }
 
@@ -722,6 +719,10 @@ export const verifyScannerStatus = async ({ setVerifyLoading, setProgress, setSc
     const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
+    // A reply the gate let through is proof both switches are on. Read from every
+    // response, not only refusals, so these flags cannot latch to false and stay there.
+    readFeatureGate(response, setFeatureEnable, setParentEnable);
+
     if (response.data.success === true) {
       const { is_completed, progress, scan_state, scan_type, files_intergrity, malware_scanner, website_backup } = response.data.data;
       setProgress(progress);

@@ -21,6 +21,7 @@ use Tailwatch\Admin\App\Api\Services\Common\HistoryService;
 use Tailwatch\Admin\App\Api\Controllers\PluginTheme\PluginThemeController;
 use Tailwatch\Admin\App\Api\Controllers\Base\BaseController;
 use Tailwatch\Admin\App\Api\Logging\Log;
+use Tailwatch\Admin\App\Api\Services\ProcessGuard;
 
 /**
  * Class ThemeController
@@ -118,6 +119,11 @@ class ThemeController extends BaseController {
 		$denied = $this->tailwatch_require_capability( 'update_themes' );
 		if ( null !== $denied ) {
 			return $denied;
+		}
+
+		$blocked = ( new ProcessGuard() )->ensure_site_can_change();
+		if ( null !== $blocked ) {
+			return $blocked;
 		}
 
 		$theme_slug     = null;
@@ -423,6 +429,11 @@ class ThemeController extends BaseController {
 			return $denied;
 		}
 
+		$blocked = ( new ProcessGuard() )->ensure_site_can_change();
+		if ( null !== $blocked ) {
+			return $blocked;
+		}
+
 		$theme_slug = null;
 		$theme_name = null;
 
@@ -606,6 +617,11 @@ class ThemeController extends BaseController {
 		$denied = $this->tailwatch_require_capability( 'delete_themes' );
 		if ( null !== $denied ) {
 			return $denied;
+		}
+
+		$blocked = ( new ProcessGuard() )->ensure_site_can_change();
+		if ( null !== $blocked ) {
+			return $blocked;
 		}
 
 		$theme_slug = null;
@@ -927,6 +943,11 @@ class ThemeController extends BaseController {
 		$denied = $this->tailwatch_require_capability( 'update_themes' );
 		if ( null !== $denied ) {
 			return $denied;
+		}
+
+		$blocked = ( new ProcessGuard() )->ensure_site_can_change();
+		if ( null !== $blocked ) {
+			return $blocked;
 		}
 
 		$theme_slug       = null;

@@ -123,4 +123,28 @@ class Log {
 	public static function debug( $message, array $context = array() ) {
 		Logger::get_instance()->debug( $message, $context );
 	}
+
+	/**
+	 * A stack trace without argument values, for log messages.
+	 *
+	 * The native getTraceAsString() prints each call's arguments, so a failure during sign-in or on
+	 * a request carrying a password would store it. Files, lines and function names are
+	 * enough to debug.
+	 *
+	 * @param \Throwable $e Exception.
+	 * @return string
+	 */
+	public static function trace( $e ) {
+		if ( ! $e instanceof \Throwable ) {
+			return '';
+		}
+		$lines = array();
+		foreach ( $e->getTrace() as $i => $frame ) {
+			$where   = isset( $frame['file'] ) ? $frame['file'] . '(' . ( isset( $frame['line'] ) ? (int) $frame['line'] : 0 ) . ')' : '[internal function]';
+			$call    = ( $frame['class'] ?? '' ) . ( $frame['type'] ?? '' ) . ( $frame['function'] ?? '' );
+			$lines[] = '#' . $i . ' ' . $where . ': ' . $call . '()';
+		}
+		$lines[] = '#' . count( $lines ) . ' {main}';
+		return implode( "\n", $lines );
+	}
 }

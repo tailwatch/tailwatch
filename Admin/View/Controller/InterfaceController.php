@@ -34,11 +34,18 @@ class InterfaceController {
 		$hook_controllers->add_action_hook( 'admin_enqueue_scripts', array( $this, 'enqueue_dashboard_script' ), 20 );
 		$hook_controllers->add_action_hook( 'admin_menu', array( $this, 'add_tailwatch_page' ) );
 
+		// admin_menu never fires in the Network Admin, the only dashboard a super
+		// administrator manages a network from. Backup, restore and the optimizer act on
+		// the whole install and require manage_network_options to dispatch, so the page
+		// has to exist where the person holding that capability works.
+		if ( is_multisite() ) {
+			$hook_controllers->add_action_hook( 'network_admin_menu', array( $this, 'add_tailwatch_network_page' ) );
+		}
+
 		// Hide the WordPress admin toolbar on the Tailwatch React app screen.
 		// This filter is registered at plugins_loaded time, BEFORE init priority 0
 		// where _wp_admin_bar_init() decides whether the toolbar will render.
-		// (An earlier implementation tried to do this from admin_init, but
-		// admin_init runs AFTER init — too late to suppress the toolbar.)
+		// admin_init runs AFTER init, which is too late to suppress the toolbar.
 		$hook_controllers->add_filter_hook( 'show_admin_bar', array( $this, 'hide_admin_bar_on_tailwatch' ) );
 
 		// Remove third-party admin notices on the Tailwatch full-screen React screen ONLY.
@@ -59,8 +66,7 @@ class InterfaceController {
 	 *
 	 * Scope: runs ONLY on the Tailwatch top-level screen and returns immediately on every
 	 * other admin screen, so other plugins' notices display normally everywhere else. This
-	 * clears only the Tailwatch canvas - the compliant, non-global pattern used by
-	 * WooCommerce Admin and Yoast on their own screens.
+	 * clears only the Tailwatch canvas.
 	 *
 	 * @return void
 	 */
@@ -129,6 +135,27 @@ class InterfaceController {
 	}
 
 	/**
+	 * Add the same page to the Network Admin on multisite.
+	 *
+	 * Gated on manage_network_options rather than manage_options: every sub-site
+	 * administrator holds the latter, and this screen is the one from which the whole
+	 * install can be backed up, restored and optimised.
+	 *
+	 * @return void
+	 */
+	public function add_tailwatch_network_page() {
+		add_menu_page(
+			'Tailwatch Security',
+			'Tailwatch Security',
+			'manage_network_options',
+			'tailwatch',
+			array( $this, 'tailwatch_option_page' ),
+			TAILWATCH_URI . 'Admin/View/Static/images/tailwatch-shield-icon.svg',
+			78
+		);
+	}
+
+	/**
 	 * Get all files from a directory with a specific extension.
 	 *
 	 * @param string $dir       Directory path.
@@ -179,21 +206,19 @@ class InterfaceController {
 	 * @return void
 	 */
 	public function enqueue_dashboard_script( $hook_suffix ) {
-		// Define directories
 		$js_directory  = TAILWATCH_DIR . 'Admin/View/Static/js/';
 		$css_directory = TAILWATCH_DIR . 'Admin/View/Static/css/';
 
 		$js_files  = $this->get_all_files( $js_directory, 'js' );
 		$css_files = $this->get_all_files( $css_directory, 'css' );
 
-		if ( $hook_suffix === 'toplevel_page_tailwatch' ) {
+		// The Network Admin screen is the same page under WordPress's own network suffix.
+		if ( 'toplevel_page_tailwatch' === $hook_suffix || 'toplevel_page_tailwatch-network' === $hook_suffix ) {
 			// Hide all WordPress admin notices and errors for clean React interface
 			$this->hide_admin_notices();
 
-			// Enqueue WordPress media uploader
 			wp_enqueue_media();
 
-			// Enqueue all JavaScript files
 			foreach ( $js_files as $index => $js_file ) {
 				wp_enqueue_script(
 					'tailwatch-dashboard-js-' . $index,
@@ -204,24 +229,22 @@ class InterfaceController {
 				);
 			}
 
-			// Localize script
 			if ( ! empty( $js_files ) ) {
 				wp_localize_script(
 					'tailwatch-dashboard-js-0',
 					'tailwatch_ajax',
 					array(
-						'ajax_url'  => admin_url( 'admin-ajax.php' ),
-						'nonce'     => wp_create_nonce( 'tailwatch_ajax_nonce' ),
-						'version'   => TAILWATCH_VERSION,
-						'admin_url' => admin_url(),
-						'base_url'  => TAILWATCH_GET_SITE_URL,
-						'asset_url' => TAILWATCH_URI . 'Admin/View/Static/images/',
-						'urls'      => self::get_service_urls(),
+						'ajax_url'   => admin_url( 'admin-ajax.php' ),
+						'nonce'      => wp_create_nonce( 'tailwatch_ajax_nonce' ),
+						'version'    => TAILWATCH_VERSION,
+						'admin_url'  => admin_url(),
+						'base_url'   => TAILWATCH_GET_SITE_URL,
+						'asset_url'  => TAILWATCH_URI . 'Admin/View/Static/images/',
+						'urls'       => self::get_service_urls(),
 					)
 				);
 			}
 
-			// Enqueue all CSS files
 			foreach ( $css_files as $index => $css_file ) {
 				wp_enqueue_style( 'tailwatch-dashboard-css-' . $index, $css_file, array(), TAILWATCH_VERSION );
 			}

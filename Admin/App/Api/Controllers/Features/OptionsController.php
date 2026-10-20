@@ -72,15 +72,16 @@ class OptionsController {
 			return;
 		}
 
-		// Clear specific variants (true/false/1/0) for the given key+option
+		// Clear specific variants (true/false/1/0, each with and without the pro plugin
+		// running) for the given key+option
 		if ( $is_active === null ) {
-			foreach ( array( true, false, 1, 0 ) as $variant ) {
+			foreach ( array( true, false, 1, 0, '1_solo', '_solo', '0_solo' ) as $variant ) {
 				unset( self::$request_cache[ "{$key}_{$option}_{$variant}" ] );
 			}
 			return;
 		}
 
-		unset( self::$request_cache[ "{$key}_{$option}_{$is_active}" ] );
+		unset( self::$request_cache[ "{$key}_{$option}_{$is_active}" ], self::$request_cache[ "{$key}_{$option}_{$is_active}_solo" ] );
 	}
 
 	/**
@@ -107,14 +108,19 @@ class OptionsController {
 			return array();
 		}
 
+		// What the pro plugin added is read only while it is running, so the two readings
+		// are cached apart.
+		$pro_running = (bool) has_filter( 'tailwatch_options_processed_field' );
+		$variant     = $pro_running ? $is_active : $is_active . '_solo';
+
 		// Level 1: Check request cache first (fastest - in-memory array).
-		$request_key = "{$key}_{$option}_{$is_active}";
+		$request_key = "{$key}_{$option}_{$variant}";
 		if ( isset( self::$request_cache[ $request_key ] ) ) {
 			return self::$request_cache[ $request_key ];
 		}
 
 		// Level 2: Check persistent transient cache.
-		$cached_data = $this->cache->get_cache( $key, $option, $is_active );
+		$cached_data = $this->cache->get_cache( $key, $option, $variant );
 		if ( false !== $cached_data ) {
 			// Store in request cache for subsequent calls in same page load.
 			self::$request_cache[ $request_key ] = $cached_data;
@@ -141,7 +147,7 @@ class OptionsController {
 		// Check if the result is null (feature disabled or not configured).
 		if ( null === $result ) {
 			// Cache the empty result to prevent repeated DB queries.
-			$this->cache->set_cache( $key, $option, $is_active, $extracted_data, 3600 );
+			$this->cache->set_cache( $key, $option, $variant, $extracted_data, 3600 );
 			// Store in request cache too.
 			self::$request_cache[ $request_key ] = $extracted_data;
 			return $extracted_data;
@@ -153,12 +159,12 @@ class OptionsController {
 		// Check if data exists and 'files' or 'options' index exists.
 		if ( ! empty( $data ) ) {
 			$fields         = isset( $data['files'] ) ? $data['files'] : ( isset( $data['options'] ) ? $data['options'] : array() );
-			$extracted_data = $this->process_fields( $fields );
+			$extracted_data = $this->process_fields( $fields, ! $pro_running );
 		}
 
 		// Store in both caches.
 		self::$request_cache[ $request_key ] = $extracted_data;
-		$this->cache->set_cache( $key, $option, $is_active, $extracted_data, 3600 );
+		$this->cache->set_cache( $key, $option, $variant, $extracted_data, 3600 );
 
 		return $extracted_data;
 	}
@@ -166,11 +172,19 @@ class OptionsController {
 	/**
 	 * Process fields recursively to extract options.
 	 *
-	 * @param array $fields Array of field data to process.
+	 * Fields and options the pro plugin marked as its own are left out while it is not
+	 * running, so a feature never runs an option only it provides.
+	 *
+	 * @param array     $fields         Array of field data to process.
+	 * @param bool|null $skip_pro_added Leave out pro-marked nodes; null decides by whether
+	 *                                  the pro plugin is running.
 	 *
 	 * @return array Processed and extracted field options.
 	 */
-	public function process_fields( $fields ) {
+	public function process_fields( $fields, $skip_pro_added = null ) {
+		if ( null === $skip_pro_added ) {
+			$skip_pro_added = ! has_filter( 'tailwatch_options_processed_field' );
+		}
 		$extracted = array();
 
 		foreach ( $fields as $field_key => $field_data ) {
@@ -187,6 +201,9 @@ class OptionsController {
 				if ( ! empty( $field_data['pro_managed'] ) && ! has_filter( 'tailwatch_options_processed_field' ) ) {
 					continue;
 				}
+				if ( $skip_pro_added && self::is_pro_added( $field_data ) ) {
+					continue;
+				}
 
 				$key  = $field_data['key'];
 				$type = $field_data['type'];
@@ -195,6 +212,9 @@ class OptionsController {
 
 				if ( isset( $field_data['values'] ) && is_array( $field_data['values'] ) ) {
 					foreach ( $field_data['values'] as $value_key => $value_data ) {
+						if ( $skip_pro_added && self::is_pro_added( $value_data ) ) {
+							continue;
+						}
 						if ( isset( $value_data['value'], $value_data['selected'] ) ) {
 							$options[ $value_key ] = array(
 								'value'    => $value_data['value'],
@@ -203,7 +223,7 @@ class OptionsController {
 
 							// Recursively process sub-options if they exist.
 							if ( isset( $value_data['sub_options'] ) ) {
-								$options[ $value_key ]['sub_options'] = $this->process_fields( $value_data['sub_options'] );
+								$options[ $value_key ]['sub_options'] = $this->process_fields( $value_data['sub_options'], $skip_pro_added );
 							}
 						}
 					}
@@ -238,13 +258,13 @@ class OptionsController {
 
 				// Recursively process sub-options if they exist.
 				if ( isset( $field_data['sub_options'] ) ) {
-					$extracted[ $field_key ]['sub_options'] = $this->process_fields( $field_data['sub_options'] );
+					$extracted[ $field_key ]['sub_options'] = $this->process_fields( $field_data['sub_options'], $skip_pro_added );
 				}
 
 				/**
 				 * Extension point — lets a separately-shipped add-on
 				 * merge additional metadata into the processed shape
-				 * (for example, lock state derived from license tier).
+				 * (for example, a lock state the add-on manages).
 				 *
 				 * The free plugin intentionally outputs the minimal
 				 * shape above. Any add-on that needs to augment a
@@ -268,5 +288,16 @@ class OptionsController {
 		}
 
 		return $extracted;
+	}
+
+	/**
+	 * Whether a field or option node was added by the pro plugin.
+	 *
+	 * @param mixed $node Field or option node.
+	 * @return bool
+	 */
+	private static function is_pro_added( $node ) {
+		return is_array( $node )
+			&& ( ! empty( $node['pro_extension_id'] ) || ( isset( $node['is_pro_added'] ) && true === $node['is_pro_added'] ) );
 	}
 }

@@ -3,6 +3,7 @@ import axios from "axios";
 import {updateLocalStorage} from '../../../Components/Utils/HelperFunctions/LocalStorageHelper';
 import Modal from "../../../Components/Modal/Modal";
 import { toast } from 'react-toastify' ;
+import { warnIfBlocked } from "../../../Components/Hooks/OwningProcess/warnIfBlocked";
 /* global tailwatch_ajax */
 
 const ResumeModal = ({
@@ -28,6 +29,7 @@ const ResumeModal = ({
   setOperationLoading,
   isLastLogIndex,
   setIsLastLogIndex,
+  setIsFailed,
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -52,9 +54,9 @@ const ResumeModal = ({
           fetchLogsActive: true,          
         });
         setIsScanInProgress(true);
-        fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setIsPausing, setIsResuming, setIsPaused, setIsCanceled, setInfoRevertChange, setIsCanceling, setOperationLoading, isLastLogIndex, setIsLastLogIndex);
-      } else {
-        toast.error('Failed to resume ');        
+        fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setIsPausing, setIsResuming, setIsPaused, setIsCanceled, setInfoRevertChange, setIsCanceling, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setIsFailed);
+      } else if (!(await warnIfBlocked(response.data?.data))) {
+        toast.error('Failed to resume ');
       }
     } catch (error) {      
       toast.error("Network error");

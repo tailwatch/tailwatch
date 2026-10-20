@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import axios from "axios";
 import Modal from "../../../Components/Modal/Modal";
+import { warnIfBlocked } from "../../../Components/Hooks/OwningProcess/warnIfBlocked";
 /* global tailwatch_ajax */
 
 const ResumeModal = ({
@@ -23,6 +24,7 @@ const ResumeModal = ({
     setRenderKey,
     isLastLogIndex,
     setIsLastLogIndex,
+    setIsFailed,
 }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isResuming, setIsResuming] = useState(false);
@@ -46,9 +48,11 @@ const ResumeModal = ({
             if (response.data.success) {
                 setIsScanInProgress(true);
                 setIsFetchingLogs(true);
-                fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setErrorMessages, setIsPaused, setIsCanceled, setRenderKey, setOperationLoading, isLastLogIndex, setIsLastLogIndex);
+                fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setErrorMessages, setIsPaused, setIsCanceled, setRenderKey, setOperationLoading, isLastLogIndex, setIsLastLogIndex, undefined, undefined, setIsFailed);
             } else {
-                setErrorMessages((prevErrors) => [...prevErrors, "Failed to resume the hardening audit"]);
+                if (!(await warnIfBlocked(response.data?.data))) {
+                    setErrorMessages((prevErrors) => [...prevErrors, "Failed to resume the hardening audit"]);
+                }
                 setIsScanInProgress(false);
                 setIsLogsVisible(false);
             }

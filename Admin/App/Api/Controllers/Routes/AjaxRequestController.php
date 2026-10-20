@@ -18,6 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use Tailwatch\Admin\App\Api\Services\NetworkActionGate;
 use Tailwatch\Admin\App\Api\Controllers\Hooks\HookControllers;
 
 /**
@@ -99,6 +100,15 @@ class AjaxRequestController {
 
 			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above
 			$action_type = sanitize_text_field( wp_unslash( $_POST['action_type'] ) );
+
+			// On multisite `manage_options` above is a PER-SITE capability that every
+			// subsite administrator holds, so it does not gate the actions that act on the
+			// whole network — the shared file tree, the shared database, the plugin's own
+			// configuration. Those need the network capability.
+			if ( ! NetworkActionGate::allows( $action_type ) ) {
+				wp_send_json_error( __( 'This action affects the whole network and requires a network administrator.', 'tailwatch' ) );
+				return;
+			}
 
 			$dispatcher = new ActionDispatcher();
 

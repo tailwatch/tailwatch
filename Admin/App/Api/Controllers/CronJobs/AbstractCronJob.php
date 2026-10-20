@@ -212,9 +212,9 @@ abstract class AbstractCronJob {
 	/**
 	 * Convert interval string to seconds.
 	 *
-	 * Supports multiple interval formats:
-	 * - Standard format: 'Every 12 Hours', '1 Day', 'Weekly', etc.
-	 * - Underscore format: '1_day', '3_days', '1_week', etc. (used by Theme/Plugin/Core auto-updates)
+	 * Converts the intervals this plugin offers. Any other interval is converted by
+	 * whoever offers it, through `tailwatch_cron_interval_seconds`; one nobody converts
+	 * runs at this job's own default.
 	 *
 	 * @param string $interval_string Interval string (e.g., 'Every 12 Hours', '1 Day', '1_day').
 	 *
@@ -226,10 +226,7 @@ abstract class AbstractCronJob {
 			'Every 30 Minutes' => 30 * MINUTE_IN_SECONDS,
 
 			// Hourly intervals (standard format).
-			'Hourly'         => HOUR_IN_SECONDS,
 			'Every 1 Hour'   => HOUR_IN_SECONDS,
-			'Every 3 Hours'  => 3 * HOUR_IN_SECONDS,
-			'Every 6 Hours'  => 6 * HOUR_IN_SECONDS,
 			'Every 12 Hours' => 12 * HOUR_IN_SECONDS,
 			'Every 24 Hours' => DAY_IN_SECONDS,
 
@@ -245,7 +242,6 @@ abstract class AbstractCronJob {
 
 			// Weekly intervals (standard format).
 			'Weekly'         => WEEK_IN_SECONDS,
-			'7 Days'         => WEEK_IN_SECONDS,
 
 			// Bi-weekly (standard format).
 			'15 Days'        => 15 * DAY_IN_SECONDS,
@@ -263,7 +259,16 @@ abstract class AbstractCronJob {
 			'3_months'       => 90 * DAY_IN_SECONDS,
 		);
 
-		return isset( $intervals[ $interval_string ] ) ? $intervals[ $interval_string ] : 12 * HOUR_IN_SECONDS;
+		if ( is_string( $interval_string ) && isset( $intervals[ $interval_string ] ) ) {
+			return $intervals[ $interval_string ];
+		}
+
+		$answer = apply_filters( 'tailwatch_cron_interval_seconds', 0, $interval_string );
+		if ( is_numeric( $answer ) && (int) $answer >= MINUTE_IN_SECONDS ) {
+			return (int) $answer;
+		}
+
+		return isset( $intervals[ $this->default_interval ] ) ? $intervals[ $this->default_interval ] : 12 * HOUR_IN_SECONDS;
 	}
 
 	/**
@@ -312,7 +317,7 @@ abstract class AbstractCronJob {
 	 * @param bool $force When true, run regardless of context. Used by
 	 *                    CronJobManager::schedule_all() at activation, where
 	 *                    scheduling must happen even without an admin request
-	 *                    (e.g. WP-CLI activation on a front-end-only site).
+	 *                    (e.g. activation from the command line on a front-end-only site).
 	 * @return void
 	 */
 	public function maybe_schedule( $force = false ) {

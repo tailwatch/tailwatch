@@ -67,6 +67,7 @@ class HardeningAuditController {
 
 		$hook_controller = new HookControllers();
 		$hook_controller->add_action_hook( self::CRON_HOOK, array( $this, 'tailwatch_run_hardening_audit_with_monitoring' ) );
+		$hook_controller->add_action_hook( 'tailwatch_recovery_process_failed', array( $this, 'tailwatch_on_recovery_failed' ) );
 
 		// Layer-2 fallback so ProcessStatusService can verify our state from
 		// our own scan_state field even when the ProcessManager row is stale
@@ -182,41 +183,36 @@ class HardeningAuditController {
 	}
 
 	/**
-	 * Resolve the configured retention window (e.g. "7 Days") to seconds,
-	 * used by the maintenance cron to prune old audit reports.
+	 * Resolve the configured retention window to seconds, used by the maintenance cron to
+	 * prune old audit reports. "N Hours" is read here; any other option is answered by
+	 * whoever offered it.
 	 *
-	 * Returns 0 for "Keep All Data" — sentinel meaning "never prune". The
-	 * caller (`tailwatch_prune_hardening_audit_reports`) treats 0 as a
-	 * skip-prune signal so an arbitrarily-large bound isn't compared
-	 * against `date_created` (and so we never accidentally delete
-	 * everything if the value parses unexpectedly).
+	 * Returns 0 - never prune - when the choice cannot be read or is answered with 0, so an
+	 * unexpected value never turns into deleting reports.
 	 *
-	 * @return int Seconds, or 0 for "Keep All Data".
+	 * @return int Seconds, or 0 to keep every report.
 	 */
 	public function get_report_retention_seconds() {
-		$options  = $this->get_features_options();
-		$selected = '24 Hours';
+		$options = $this->get_features_options();
+		$field   = isset( $options['field_1']['sub_options']['field_3']['options'] ) ? $options['field_1']['sub_options']['field_3']['options'] : null;
 
-		if ( ! empty( $options['field_1']['sub_options']['field_3']['options'] ) && is_array( $options['field_1']['sub_options']['field_3']['options'] ) ) {
-			foreach ( $options['field_1']['sub_options']['field_3']['options'] as $option ) {
-				if ( ! empty( $option['selected'] ) && isset( $option['value'] ) ) {
-					$selected = (string) $option['value'];
-					break;
+		// Not configured: this plugin's default.
+		if ( empty( $field ) || ! is_array( $field ) ) {
+			return 24 * HOUR_IN_SECONDS;
+		}
+
+		foreach ( $field as $option ) {
+			if ( ! empty( $option['selected'] ) && isset( $option['value'] ) ) {
+				$selected = (string) $option['value'];
+				if ( 1 === preg_match( '/^([1-9]\d*) Hours?$/', trim( $selected ), $matches ) ) {
+					return (int) $matches[1] * HOUR_IN_SECONDS;
 				}
+				$answer = apply_filters( 'tailwatch_hardening_audit_retention_seconds', 0, $selected );
+				return ( is_numeric( $answer ) && (int) $answer > 0 ) ? (int) $answer : 0;
 			}
 		}
 
-		switch ( $selected ) {
-			case '30 Hours':
-				return 30 * HOUR_IN_SECONDS;
-			case '24 Hours':
-				return 24 * HOUR_IN_SECONDS;
-			default:
-				// Unknown retention values fall through to the filter so
-				// extensions can supply seconds for retention buckets they add.
-				// Defaults to 24 hours when no listener is registered.
-				return (int) apply_filters( 'tailwatch_hardening_audit_retention_seconds', 24 * HOUR_IN_SECONDS, $selected );
-		}
+		return 0;
 	}
 
 	// Route-layer payload helpers.
@@ -266,13 +262,93 @@ class HardeningAuditController {
 		return $db_model->get_recent_data( self::CANCEL_PAUSE_OPTION, self::STATE_KEY );
 	}
 
-	public function update_cancel_pause_data( array $data ) {
+	/**
+	 * Stores the audit's status row.
+	 *
+	 * @param array $data               The row to store.
+	 * @param bool  $allow_state_change Resume only: put a paused audit back to work.
+	 */
+	public function update_cancel_pause_data( array $data, $allow_state_change = false ) {
+		$data = $this->tailwatch_keep_stop_state( $data, $allow_state_change );
+
 		$db_model = new DBModel();
 		$db_model->update_recent_row(
 			array( 'value' => wp_json_encode( $data ) ),
 			self::STATE_KEY,
 			self::CANCEL_PAUSE_OPTION
 		);
+	}
+
+	/**
+	 * Listener for 'tailwatch_recovery_process_failed': recovery gave up on a stuck audit.
+	 *
+	 * @param array $process_data The process recovery gave up on.
+	 * @return void
+	 */
+	public function tailwatch_on_recovery_failed( $process_data ) {
+		if ( is_array( $process_data ) && isset( $process_data['process_type'] ) && self::PROCESS_TYPE === $process_data['process_type'] ) {
+			$this->tailwatch_mark_run_failed( $process_data['process_id'] ?? null );
+		}
+	}
+
+	/**
+	 * Put an audit that stopped on an error into 'failed', so its screen stops showing it running.
+	 *
+	 * Only an audit still in progress is converted, and only the one the failed process belongs
+	 * to, so a newer audit is never touched.
+	 *
+	 * @param string|null $process_id The process that failed.
+	 * @return void
+	 */
+	private function tailwatch_mark_run_failed( $process_id ) {
+		$row = $this->get_cancel_pause_data();
+		if ( ! is_array( $row ) || 'in-progress' !== ( $row['scan_state'] ?? '' ) ) {
+			return;
+		}
+		if ( ! empty( $process_id ) && ! empty( $row['process_id'] ) && $row['process_id'] !== $process_id ) {
+			return;
+		}
+
+		$timestamp = wp_next_scheduled( self::CRON_HOOK );
+		if ( $timestamp ) {
+			wp_unschedule_event( $timestamp, self::CRON_HOOK );
+		}
+
+		$row['scan_state']   = 'failed';
+		$row['cron_running'] = false;
+		$this->update_cancel_pause_data( $row );
+	}
+
+	/**
+	 * Keep a pause, cancel or finish from being undone by an older copy of this row.
+	 *
+	 * The live-log poll writes back the copy it read at its start. A copy read before the user
+	 * paused, or before the audit finished, would put 'in-progress' back: the audit would carry
+	 * on after Pause, or the screen would spin at 100% for good - and with cron_running back on,
+	 * cron-if-failed would not act either. A finished row is kept whole. Only resume moves a
+	 * stopped audit back to work, and it says so.
+	 *
+	 * @param array $data               The row about to be stored.
+	 * @param bool  $allow_state_change Resume only.
+	 * @return array
+	 */
+	private function tailwatch_keep_stop_state( array $data, $allow_state_change ) {
+		if ( $allow_state_change || ! isset( $data['scan_state'] ) || 'in-progress' !== $data['scan_state'] ) {
+			return $data;
+		}
+
+		$current = $this->get_cancel_pause_data();
+		if ( ! is_array( $current ) || ! isset( $current['scan_state'] ) ) {
+			return $data;
+		}
+		if ( in_array( $current['scan_state'], array( 'completed', 'failed' ), true ) ) {
+			return $current;
+		}
+		if ( in_array( $current['scan_state'], array( 'pause', 'cancel' ), true ) ) {
+			$data['scan_state'] = $current['scan_state'];
+		}
+
+		return $data;
 	}
 
 	/**
@@ -684,6 +760,7 @@ class HardeningAuditController {
 			// before that line, in which case we have nothing to clean up.
 			if ( ! empty( $process_id ) ) {
 				$this->process_manager->mark_failed( $process_id, $e->getMessage() );
+				$this->tailwatch_mark_run_failed( $process_id );
 			}
 
 			return array(
@@ -879,8 +956,8 @@ class HardeningAuditController {
 	}
 
 	/**
-	 * Shared pause/cancel executor. Stays private now that the public
-	 * surface is the unified `tailwatch_cancel_pause_hardening_audit`. Two paths
+	 * Shared pause/cancel executor behind the public
+	 * `tailwatch_cancel_pause_hardening_audit`. Two paths
 	 * through one method because the unschedule logic is identical — only
 	 * the terminal state and the ProcessManager call differ.
 	 *
@@ -906,11 +983,16 @@ class HardeningAuditController {
 				);
 			}
 
-			if ( 'completed' === $cancel_pause['scan_state'] ) {
+			// Refused, not answered with success: the screen treats success as "now paused" or
+			// "now cancelled" and would show a finished audit that way. Pause only means
+			// something to an audit that is running.
+			if ( 'completed' === $cancel_pause['scan_state'] || ( 'pause' === $target_state && 'in-progress' !== $cancel_pause['scan_state'] ) ) {
 				return array(
-					'code'    => 200,
+					'code'    => 409,
 					'data'    => array(),
-					'message' => __( 'The hardening audit has already finished.', 'tailwatch' ),
+					'message' => ( 'completed' === $cancel_pause['scan_state'] )
+						? __( 'This run has already finished, so there is nothing to pause or cancel.', 'tailwatch' )
+						: __( 'Only a run that is in progress can be paused.', 'tailwatch' ),
 				);
 			}
 
@@ -1026,9 +1108,15 @@ class HardeningAuditController {
 			// that switch on this code path will behave identically across
 			// the three modules.
 			if ( ! empty( $cancel_pause ) && ! empty( $cancel_pause['scan_state'] ) && 'pause' === $cancel_pause['scan_state'] ) {
+				// Resumed only while nothing that cannot run beside it is running or paused.
+				$blocked = ( new ProcessGuard() )->ensure_can_start_process( self::PROCESS_TYPE );
+				if ( null !== $blocked ) {
+					return $blocked;
+				}
+
 				$cancel_pause['scan_state']   = 'in-progress';
 				$cancel_pause['cron_running'] = false;
-				$this->update_cancel_pause_data( $cancel_pause );
+				$this->update_cancel_pause_data( $cancel_pause, true );
 
 				$process_id = isset( $cancel_pause['process_id'] ) ? $cancel_pause['process_id'] : null;
 				if ( $process_id ) {
@@ -1155,6 +1243,16 @@ class HardeningAuditController {
 				);
 			}
 
+			// An audit that stopped on an error stays stopped: the screen asks for this while it
+			// polls, and a tick scheduled here would run the failed check again.
+			if ( in_array( $cancel_pause['scan_state'] ?? '', array( 'failed', 'completed' ), true ) ) {
+				return array(
+					'data'    => '',
+					'message' => __( 'This run has stopped, so there is nothing to restart.', 'tailwatch' ),
+					'code'    => 409,
+				);
+			}
+
 			$cron_running = ! empty( $cancel_pause['cron_running'] );
 
 			if ( false === $cron_running ) {
@@ -1218,7 +1316,7 @@ class HardeningAuditController {
 			);
 		} catch ( \Throwable $e ) {
 			Log::error(
-				$e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+				$e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				array(
 					'feature' => 'hardening_audit',
 					'action'  => 'hardening_audit_cron_if_failed_on_attempt',
@@ -1250,7 +1348,7 @@ class HardeningAuditController {
 		// re-firing of the chunked-worker cron hook after finalize_audit
 		// cannot fall through to run_next_check_chunk → finalize_audit a
 		// second time and insert a duplicate audit_report row.
-		if ( in_array( $cancel_pause['scan_state'], array( 'pause', 'cancel', 'completed' ), true ) ) {
+		if ( in_array( $cancel_pause['scan_state'], array( 'pause', 'cancel', 'completed', 'failed' ), true ) ) {
 			return;
 		}
 
@@ -1274,6 +1372,7 @@ class HardeningAuditController {
 			if ( $process_id ) {
 				$this->process_manager->mark_failed( $process_id, $e->getMessage() );
 			}
+			$this->tailwatch_mark_run_failed( $process_id );
 			Log::error(
 				'Hardening audit worker exception: ' . $e->getMessage(),
 				array(
@@ -1304,7 +1403,7 @@ class HardeningAuditController {
 		// where the user could have clicked pause, or a sibling cron tick
 		// could have raced ahead and finalized.
 		$cancel_pause = $this->get_cancel_pause_data();
-		if ( ! empty( $cancel_pause['scan_state'] ) && in_array( $cancel_pause['scan_state'], array( 'pause', 'cancel', 'completed' ), true ) ) {
+		if ( ! empty( $cancel_pause['scan_state'] ) && in_array( $cancel_pause['scan_state'], array( 'pause', 'cancel', 'completed', 'failed' ), true ) ) {
 			return;
 		}
 
@@ -1738,11 +1837,11 @@ class HardeningAuditController {
 	 * the caller passes `{ page, limit }` (1-indexed page), and the
 	 * response carries the items as `data` directly plus a separate
 	 * `pagination: { total, page, limit, total_pages }` block. Defaults
-	 * are `page=1`, `limit=10` — same defaults the reference module uses.
+	 * are `page=1`, `limit=10`, the same as Integrity's.
 	 *
 	 * The list view returns lightweight summaries only; the caller asks
 	 * for `tailwatch_get_hardening_audit_report_by_id` when it wants the full
-	 * per-check details, so we don't ship 17 check payloads through every
+	 * per-check details, so we don't ship every check's payload through every
 	 * list refresh.
 	 *
 	 * @param mixed $post_data
@@ -1894,8 +1993,8 @@ class HardeningAuditController {
 	 * Mirrors `tailwatch_delete_comparison_by_id` exactly:
 	 *   - `{ ids: [1, 2, 3] }`   → delete those specific report ids
 	 *   - `{ is_delete: true }`  → delete every report
-	 *   - neither / both empty   → 400 with the same wording the reference
-	 *                              module uses ("Either is_delete must be
+	 *   - neither / both empty   → 400 with the same wording Integrity
+	 *                              uses ("Either is_delete must be
 	 *                              true or a non-empty ids array must be
 	 *                              provided.")
 	 *
@@ -2058,20 +2157,16 @@ class HardeningAuditController {
 	 * Drop reports older than the configured retention window. Driven by
 	 * HardeningAuditMaintenanceCronJob (every 30 minutes), not the worker.
 	 *
-	 * Honours the "Keep All Data" sentinel that
-	 * `get_report_retention_seconds` returns as 0 — same pattern Integrity
-	 * uses for its `tailwatch_maintain_integrity_entry`. Skipping rather than
-	 * passing a giant cutoff value avoids any chance of accidentally
-	 * deleting everything if the retention value were ever parsed wrong.
+	 * A retention of 0 from `get_report_retention_seconds` keeps every report.
+	 * Skipping rather than passing a giant cutoff value avoids any chance of
+	 * accidentally deleting everything if the retention value were ever parsed wrong.
 	 *
-	 * @return int Rows deleted (best-effort), or 0 when Keep All Data is set.
+	 * @return int Rows deleted (best-effort), or 0 when every report is kept.
 	 */
 	public function tailwatch_prune_hardening_audit_reports() {
 		$retention_seconds = $this->get_report_retention_seconds();
 
 		if ( 0 === $retention_seconds ) {
-			// "Keep All Data" — caller wants the report history preserved
-			// indefinitely; do nothing.
 			return 0;
 		}
 

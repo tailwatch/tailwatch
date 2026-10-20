@@ -30,6 +30,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use Tailwatch\Admin\App\Api\Services\Auth\JwtService;
+use Tailwatch\Admin\App\Api\Services\Login\PasswordlessAccountGuard;
 use WP_Error;
 use WP_REST_Request;
 
@@ -79,6 +80,18 @@ class ConnectAuthenticator {
 			return self::forbidden();
 		}
 
+		// Per-purpose action gate (RemoteActionAllowlist): a provisioning token may
+		// dispatch only the onboarding subset, and the credential-minting /
+		// trust-anchor actions are never machine-reachable on any purpose. Governs
+		// /dispatch only — the wp-admin AJAX plane (nonce + manage_options) is
+		// untouched. Legacy tokens without a purpose claim run as 'manage'.
+		$purpose = ( isset( $claims['purpose'] ) && is_string( $claims['purpose'] ) )
+			? $claims['purpose']
+			: RemoteActionAllowlist::PURPOSE_MANAGE;
+		if ( ! RemoteActionAllowlist::is_allowed( (string) $request->get_param( 'action_type' ), $purpose ) ) {
+			return self::forbidden_action();
+		}
+
 		self::$acting_user_id = $user_id;
 		return true;
 	}
@@ -90,6 +103,21 @@ class ConnectAuthenticator {
 	 */
 	public static function acting_user_id() {
 		return self::$acting_user_id;
+	}
+
+	/**
+	 * 403 for an action the token's purpose does not permit. Distinct error code so
+	 * a caller can tell "credential invalid" (401) apart from "credential valid but
+	 * this action is not allowed for it".
+	 *
+	 * @return WP_Error
+	 */
+	private static function forbidden_action() {
+		return new WP_Error(
+			'tailwatch_rest_action_not_allowed',
+			__( 'This action is not permitted for this connection.', 'tailwatch' ),
+			array( 'status' => 403 )
+		);
 	}
 
 	/**
@@ -118,8 +146,9 @@ class ConnectAuthenticator {
 			return 0;
 		}
 
-		// Live re-verification every request — never trust the stored value.
-		if ( ! get_userdata( $user_id ) || ! user_can( $user_id, 'manage_options' ) ) {
+		// Live re-verification every request — never trust the stored value. A temporary
+		// login never acts through the API: its access would outlive its expiry.
+		if ( ! get_userdata( $user_id ) || ! user_can( $user_id, 'manage_options' ) || PasswordlessAccountGuard::is_passwordless( $user_id ) ) {
 			return 0;
 		}
 
@@ -146,7 +175,9 @@ class ConnectAuthenticator {
 	 * Compare the request's X-Tailwatch-Auth-Key header against the stored value
 	 * using constant-time comparison. The stored value is issued by
 	 * VerificationKeysController::tailwatch_get_generated_cta_keys() when the admin
-	 * pairs a device, and cleared on deactivation / disconnect.
+	 * pairs a device and replaced by the next pairing. It is removed with the pairing
+	 * (disconnect, a provisioning that did not complete, a restore that cannot carry the
+	 * pairing) and on deactivation only when the admin chose to delete all plugin data.
 	 *
 	 * @return bool True when the request header matches the stored key.
 	 */

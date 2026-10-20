@@ -65,19 +65,17 @@ const FeatureCard = ({ feature, isLoading, featureLicenseData, loadingFeature, n
                 ? "Upgrade"
                 : (isActive ? "Active" : "Inactive");
 
-  // Notification button is disabled when the license isn't connected (mobile notifications
-  // require a connected license) and when a pro feature is locked because of license/plan/
-  // pro-plugin state. The tooltip mirrors the badge wording.
+  // Notification button is disabled when no Tailwatch account is connected (mobile
+  // notifications are sent through the account) and on a Tailwatch Pro feature that is
+  // locked. A suspended account works as a free one, so free features keep their button.
   let notificationLockReason = null;
-  if (isSuspended) {
-    notificationLockReason = "Upgrade";
-  } else if (featureLicenseData?.connection_status === false) {
+  if (featureLicenseData?.connection_status === false) {
     notificationLockReason = "Connect to Tailwatch";
-  }  else if (featureValue.is_locked) {
+  } else if (featureValue.is_locked) {
     if (proPluginActive === false) {
       notificationLockReason = "Install Pro Plugin";
-    } else if (planName === "Basic") {
-      notificationLockReason = "Upgrade";
+    } else if (isSuspended) {
+      notificationLockReason = "Reactivate";
     } else {
       notificationLockReason = "Upgrade";
     }

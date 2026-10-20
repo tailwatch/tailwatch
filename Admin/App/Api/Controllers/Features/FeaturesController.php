@@ -16,6 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use Tailwatch\Admin\App\Api\Controllers\Features\FeatureCacheController;
+use Tailwatch\Admin\App\Api\Controllers\Backup\BackupMaintainController;
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\CronJobManager;
 use Tailwatch\Admin\App\Api\Controllers\Verification\VerifyStatusController;
 use Tailwatch\Admin\App\Api\Models\DBModel;
@@ -143,11 +144,8 @@ class FeaturesController {
 	public function tailwatch_get_feature( $post_data, $plan_type = null ) {
 		// License status is read from cached DB state — no outbound API call.
 		// Freshness is owned by the 12h LicenseVerifyCronJob plus the manual
-		// connect / disconnect / verify-button user actions. This endpoint
-		// used to call tailwatch_verify_license() inline, which fired an outbound
-		// HTTPS request on every dashboard feature fetch (5-15 per admin
-		// session) — well-documented antipattern in WP licensing (EDD, Freemius,
-		// plugin-update-checker all cache locally and read from cache for UI).
+		// connect / disconnect / verify-button user actions, so fetching the
+		// dashboard's features never sends a request to the licence server.
 		$verify_ctrl    = new VerifyStatusController();
 		$license_status = $verify_ctrl->get_cached_license_status();
 
@@ -506,7 +504,7 @@ class FeaturesController {
 			$processed_duplicates = array();
 			$duplication_reports  = array();
 			$deletion_reports     = array();
-			$processed_reports    = array(); // Fix: Pass as argument instead of static
+			$processed_reports    = array();
 			$collected_value      = $this->collect_selected_values( $default_data['options'] );
 
 			// Inner options can only be changed while the parent feature is active.
@@ -547,6 +545,10 @@ class FeaturesController {
 				);
 				return $blocked;
 			}
+
+			// The number of backups kept before this save, for BackupMaintainController to compare.
+			$backup_maintain  = BackupMaintainController::FEATURE_OPTION === $feature_option ? new BackupMaintainController() : null;
+			$retention_before = $backup_maintain ? $backup_maintain->tailwatch_retention_count() : null;
 
 			// Update options.
 			$this->update_options(
@@ -590,6 +592,10 @@ class FeaturesController {
 
 			// Invalidate cache after successful update.
 			$this->invalidate_feature_cache( $feature['option'] );
+
+			if ( $backup_maintain ) {
+				$backup_maintain->tailwatch_retention_saved( $retention_before );
+			}
 
 			// Sync cron job if the main toggle (field_1) was changed.
 			if ( $this->is_main_toggle_changed( $json_data['options'] ) ) {
@@ -1129,7 +1135,7 @@ class FeaturesController {
 				array(
 					'action' => 'update_options_recursive',
 					'error'  => $e->getMessage(),
-					'trace'  => $e->getTraceAsString(),
+					'trace'  => Log::trace( $e ),
 				)
 			);
 		}

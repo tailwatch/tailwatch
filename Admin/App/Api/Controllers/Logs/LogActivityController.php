@@ -116,6 +116,11 @@ class LogActivityController {
 	 */
 	public function tailwatch_send_logs_activity_notification( $new_one, $field_name, $record_id = 0 ) {
 		if ( $this->tailwatch_logs_activity_push_notification( $field_name ) ) {
+			if ( in_array( $field_name, array( 'field_3', 'field_4', 'field_5', 'field_6', 'field_7' ), true )
+				&& ! PushNotificationController::tailwatch_push_budget_allows( 'activity_logs_' . $field_name ) ) {
+				return;
+			}
+
 			$severity = 'info';
 			$title    = isset( $new_one['title'] ) ? sanitize_text_field( $new_one['title'] ) : '';
 			$message  = isset( $new_one['body'] ) ? sanitize_text_field( $new_one['body'] ) : '';
@@ -223,8 +228,8 @@ class LogActivityController {
 	public function tailwatch_user_data_is( $username = '' ) {
 		return array(
 			'username'    => sanitize_text_field( (string) $username ),
-			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotValidated -- Server variable sanitized inline for logging
-			'ip_address'  => isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : 'unknown',
+			// The same client address the facet and Login Defender use (trusted proxies honoured).
+			'ip_address'  => IpService::get_client_ip(),
 			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotValidated -- Server variable sanitized inline for logging
 			'browser'     => isset( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) : 'unknown',
 			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotValidated -- Server variable sanitized inline for logging

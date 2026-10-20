@@ -1,6 +1,6 @@
 import React from 'react'
 import { InfoIcon, Clock, Package, Loader2, XCircle } from 'lucide-react';
-import DOMPurify from 'dompurify';
+import { safeHtml } from '../../../../Components/Utils/HelperFunctions/safeHtml';
 
 const UpdateDetails = ({
     pluginDetails,
@@ -55,7 +55,7 @@ const UpdateDetails = ({
                         </h2>
                         <div
                             className="mb-4 text-sm sm:text-base text-gray-700 leading-relaxed prose max-w-none prose-sm sm:prose-base"
-                            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(pluginDetails?.description || 'No descriptions available') }}
+                            dangerouslySetInnerHTML={{ __html: safeHtml(pluginDetails?.description || 'No descriptions available') }}
                         />
                     </div>
                 )}

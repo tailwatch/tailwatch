@@ -72,14 +72,16 @@ class FCMController {
 		$response = wp_remote_post(
 			TAILWATCH_RELAY,
 			array(
-				'headers'   => array(
+				'headers'     => array(
 					'Content-Type'      => 'application/json',
 					'X-Tailwatch-Header-Key' => $header_key,
 					'X-Tailwatch-Route'      => $route_token,
 				),
-				'body'      => wp_json_encode( $notification_data ),
-				'timeout'   => self::NOTIFICATION_TIMEOUT,
-				'sslverify' => true,
+				'body'        => wp_json_encode( $notification_data ),
+				'timeout'     => self::NOTIFICATION_TIMEOUT,
+				'sslverify'   => true,
+				// The header key goes to the relay and nowhere else.
+				'redirection' => 0,
 			)
 		);
 

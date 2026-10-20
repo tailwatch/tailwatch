@@ -24,25 +24,48 @@ use Tailwatch\Admin\App\Api\Logging\Log;
 class BulkFeatureActivationController {
 
 	public static $format_feature_name = array(
-		'default_files_and_permission'     => 'File Permissions',
+		'default_files_and_permission'     => 'Files & Permissions',
 		'default_log_activity'             => 'Activity Logs',
 		'default_monitoring_logs'          => 'Error Logs',
-		'default_email_configure'    	   => 'Email/SMTP Logs',
+		'default_email_configure'          => 'Email/SMTP Logs',
 		'default_verify_ssl'               => 'Smart SSL',
 		'default_backup_enable'            => 'Backup Vault',
+		'default_site_migration'           => 'Restore & Migration',
 		'default_malware_scan'             => 'Malware Guard',
 		'default_database_optimizer'       => 'Database Optimizer',
-		'default_file_integrity_check'     => 'Integrity Watch',
+		'default_file_integrity_check'     => 'File Integrity Watch',
 		'default_hardening_audit'          => 'Hardening Audit',
 		'default_search_replace'           => 'Search & Replace',
-		'advanced_user_access_control'     => 'User Management',
+		'advanced_user_access_control'     => 'Advanced User Management',
 		'default_redirection_manager'      => '301 Redirection',
 		'broken_link_checker_settings'     => 'Broken Links',
 		'default_disable_keys'             => 'Content Restrictions',
 		'default_two_step_authenticate'    => 'Role-based 2FA',
-		'default_cron_job_list'            => 'Cron Job Scheduler',
+		'default_cron_job_list'            => 'Cron Jobs',
 		'default_ips_managment'            => 'Geo-blocking',
 		'default_login_defender_management' => 'Login Defender',
+		'default_config_generate_key'       => 'Security Keys Rotation',
+		'default_updates_rollback'          => 'Updates & Rollback',
+	);
+
+	/**
+	 * Settings Fix All ticks on top of a feature's defaults.
+	 *
+	 * Only for the features whose defaults leave off the very settings the security score
+	 * checks; without them Fix All would switch the feature on and the item would stay listed.
+	 * Each path leads from the feature's `options` to the option whose `selected` is set.
+	 */
+	const FIX_ALL_SETTINGS = array(
+		// Auto Generate Keys. The first rotation runs one interval after it is switched on.
+		'default_config_generate_key' => array(
+			array( 'field_1', 'values', 'option' ),
+		),
+		// Automatic theme, plugin and core (minor and security) updates.
+		'default_updates_rollback'    => array(
+			array( 'field_1', 'sub_options', 'field_2', 'values', 'option' ),
+			array( 'field_4', 'sub_options', 'field_5', 'values', 'option' ),
+			array( 'field_7', 'sub_options', 'field_8', 'values', 'option' ),
+		),
 	);
 
 	/**
@@ -66,7 +89,7 @@ class BulkFeatureActivationController {
 			if ( empty( $feature_options ) || ! is_array( $feature_options ) ) {
 				return array(
 					'code'    => 400,
-					'message' => __( 'feature_options must be a non-empty array.', 'tailwatch' ),
+					'message' => __( 'Choose at least one feature to turn on.', 'tailwatch' ),
 				);
 			}
 
@@ -97,7 +120,7 @@ class BulkFeatureActivationController {
 					//    the security-score panel.
 					//
 					// 2. The key is genuinely unknown (typo, stale frontend) —
-					//    return 403 with the original "not available" wording.
+					//    return 403 with the "not available" wording.
 					$is_known_pro_feature = isset( self::$format_feature_name[ $feature_option ] );
 
 					if ( $is_known_pro_feature ) {
@@ -112,11 +135,7 @@ class BulkFeatureActivationController {
 						$results[ $feature_option ] = array(
 							'code'         => 403,
 							'feature_name' => $feature_display_name,
-							'message'      => sprintf(
-								/* translators: %s: feature display name */
-								__( "Feature '%s' is not available for bulk activation.", 'tailwatch' ),
-								$feature_display_name
-							),
+							'message'      => __( 'This feature cannot be turned on from here. Open it from the Features page to set it up.', 'tailwatch' ),
 							'status'       => 'skipped',
 						);
 					}
@@ -124,14 +143,14 @@ class BulkFeatureActivationController {
 					continue;
 				}
 
-				// Activate the feature
 				$result = $reset_controller->tailwatch_reset_feature_by_option(
 					wp_json_encode(
 						array(
 							'feature_option' => $feature_option,
 							'remain_active'  => true,
 						)
-					)
+					),
+					self::FIX_ALL_SETTINGS[ $feature_option ] ?? array()
 				);
 
 				if ( $result['code'] === 200 ) {
@@ -140,7 +159,7 @@ class BulkFeatureActivationController {
 						$result,
 						array(
 							'feature_name' => $feature_display_name,
-							'message'      => __( 'Feature activated successfully.', 'tailwatch' ),
+							'message'      => __( 'Turned on with the recommended settings.', 'tailwatch' ),
 							'status'       => 'activated',
 						)
 					);
@@ -167,8 +186,13 @@ class BulkFeatureActivationController {
 
 			return array(
 				'code'    => 200,
-				// translators: 1: number of activated features, 2: number failed, 3: number skipped.
-				'message' => sprintf( __( 'Activated %1$d features. Failed: %2$d. Skipped: %3$d.', 'tailwatch' ), $successful, $failed, $skipped ),
+				'message' => sprintf(
+					/* translators: 1: number of features turned on, 2: number failed, 3: number skipped. */
+					_n( 'Turned on %1$d feature. Failed: %2$d. Skipped: %3$d.', 'Turned on %1$d features. Failed: %2$d. Skipped: %3$d.', $successful, 'tailwatch' ),
+					$successful,
+					$failed,
+					$skipped
+				),
 				'results' => $results,
 				'summary' => array(
 					'successful' => $successful,
@@ -212,6 +236,7 @@ class BulkFeatureActivationController {
 			'default_email_configure',
 			'default_disable_keys',
 			'default_backup_enable',
+			'default_site_migration',
 			'default_database_optimizer',
 			'default_cron_job_list',
 			'default_search_replace',
@@ -221,6 +246,8 @@ class BulkFeatureActivationController {
 			'broken_link_checker_settings',
 			'default_ips_managment',
 			'default_login_defender_management',
+			'default_config_generate_key',
+			'default_updates_rollback',
 		);
 	}
 }

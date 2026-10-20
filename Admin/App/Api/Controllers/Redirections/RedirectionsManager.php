@@ -692,7 +692,7 @@ class RedirectionsManager extends BaseController {
 
 		} catch ( \Throwable $e ) {
 			Log::error(
-				$e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+				$e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				array(
 					'feature'   => 'redirections',
 					'action'    => 'redirection_create_rule_failed',
@@ -738,7 +738,7 @@ class RedirectionsManager extends BaseController {
 			);
 		} catch ( \Throwable $e ) {
 			Log::error(
-				$e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+				$e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				array(
 					'feature'   => 'redirections',
 					'action'    => 'post_types_retrieval_failed',
@@ -901,7 +901,7 @@ class RedirectionsManager extends BaseController {
 			);
 		} catch ( \Throwable $e ) {
 			Log::error(
-				$e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+				$e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				array(
 					'feature'   => 'redirections',
 					'action'    => 'posts_by_post_type_retrieval_failed',
@@ -998,7 +998,7 @@ class RedirectionsManager extends BaseController {
 			}
 		} catch ( \Throwable $e ) {
 			Log::error(
-				$e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+				$e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				array(
 					'feature'   => 'redirections',
 					'action'    => 'redirection_rule_retrieval_failed',
@@ -1096,7 +1096,7 @@ class RedirectionsManager extends BaseController {
 
 			$feature_controller = new DBModel();
 			// Fetch existing rule.
-			$value = $feature_controller->get_feature_value( $id );
+			$value = $feature_controller->get_feature_value( $id, 'default_redirection_rules' );
 			if ( empty( $value ) ) {
 				Log::error(
 					'No data found for the specified rule ID.',
@@ -1577,7 +1577,8 @@ class RedirectionsManager extends BaseController {
 			);
 
 			$where = array(
-				'id' => $id,
+				'id'  => $id,
+				'key' => 'default_redirection_rules',
 			);
 
 			$updated = $feature_controller->update_rows( $db_data, $where );
@@ -1624,7 +1625,7 @@ class RedirectionsManager extends BaseController {
 			);
 		} catch ( \Throwable $e ) {
 			Log::error(
-				$e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+				$e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				array(
 					'feature'   => 'redirections',
 					'action'    => 'redirection_update_rule_failed',

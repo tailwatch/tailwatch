@@ -1,3 +1,4 @@
+import { readFeatureGate } from '../../../Components/Utils/featureGate';
 import axios from "axios";
 import { toast } from "react-toastify";
 import { alertService } from "../../../Components/AlertService/AlertService";
@@ -70,6 +71,10 @@ export const getBlackList = async ({ setLoading, setBlackListData, page = 1, lim
         const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
+        // A reply the gate let through is proof both switches are on. Read from every
+        // response, not only refusals, so these flags cannot latch to false and stay there.
+        readFeatureGate(response, setFeatureEnable, setParentEnable);
+
         if (response.data.data.code === 200) {
             setBlackListData(response.data.data.data);
             if (setPagination && response.data.data.pagination) {
@@ -83,7 +88,7 @@ export const getBlackList = async ({ setLoading, setBlackListData, page = 1, lim
             console.error('Failed to get block ip ranges', response.data.data.message);
         }
     } catch (error) {
-        if (error.response.data.data.code === 403) {
+        if (error.response?.data?.data?.code === 403) {
             setIsLicenseConnect(true);
         } else {
             console.error('Failed to get block ip ranges :', error);
@@ -94,10 +99,6 @@ export const getBlackList = async ({ setLoading, setBlackListData, page = 1, lim
 }
 
 export const handleDeleteIp = async ({ setLoading, payload, getBlackListIpRanges }) => {
-    //  const confirmed = await alertService.confirm("This can't be undone.", "Are you sure to delete this?");
-    //   if (!confirmed) {
-    //     return;
-    //   }  
     setLoading(true);
     try {
         const formData = new FormData();
@@ -184,6 +185,10 @@ export const getBlockCountries = async ({ setLoading, setBlockCountriesData, pag
         const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
+        // A reply the gate let through is proof both switches are on. Read from every
+        // response, not only refusals, so these flags cannot latch to false and stay there.
+        readFeatureGate(response, setFeatureEnable, setParentEnable);
+
 
         if (response.data.data?.code === 402) {
             setIsLicenseConnect(response.data.data);
@@ -209,9 +214,9 @@ export const getBlockCountries = async ({ setLoading, setBlockCountriesData, pag
             console.error('Failed to get block countries', response.data.data.message);
         }
     } catch (error) {
-        if (error.response.data.data.code === 403) {
+        if (error.response?.data?.data?.code === 403) {
             setIsLicenseConnect(true);
-        } else if (error.response.data.data.code === 402) {
+        } else if (error.response?.data?.data?.code === 402) {
             setIsLicenseConnect(error.response.data.data);
         }
         else {
@@ -310,6 +315,10 @@ export const getIpWhiteList = async ({ setLoading, setIpWhiteListData, page = 1,
         const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
+        // A reply the gate let through is proof both switches are on. Read from every
+        // response, not only refusals, so these flags cannot latch to false and stay there.
+        readFeatureGate(response, setFeatureEnable, setParentEnable);
+
         if (response.data.data.code === 200) {
             setIpWhiteListData(response.data.data.data);
             if (setPagination && response.data.data.pagination) {
@@ -323,7 +332,7 @@ export const getIpWhiteList = async ({ setLoading, setIpWhiteListData, page = 1,
             console.error('Failed to get Whitelist ip ranges', response.data.data.message);
         }
     } catch (error) {
-        if (error.response.data.data.code === 403) {
+        if (error.response?.data?.data?.code === 403) {
             setIsLicenseConnect(true);
         } else {
             console.error('Failed to get Whitelist ip ranges :', error);
@@ -424,7 +433,13 @@ export const getWhitelistCountries = async ({ setLoading, setWhitlistCountries, 
         const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
-        if (response.data.data.code === 200) {
+        // A reply the gate let through is proof both switches are on. Read from every
+        // response, not only refusals, so these flags cannot latch to false and stay there.
+        readFeatureGate(response, setFeatureEnable, setParentEnable);
+
+        if (response.data.data?.code === 402) {
+            setIsLicenseConnect(response.data.data);
+        } else if (response.data.data.code === 200) {
             setWhitlistCountries(response.data.data.data);
             if (setPagination && response.data.data.pagination) {
                 setPagination({ page: response.data.data.pagination.page, limit: response.data.data.pagination.limit, total_pages: response.data.data.pagination.total_pages, total_items: response.data.data.pagination.total });
@@ -437,8 +452,10 @@ export const getWhitelistCountries = async ({ setLoading, setWhitlistCountries, 
             console.error('Failed to get Whitelist countries', response.data.data.message);
         }
     } catch (error) {
-        if (error.response.data.data.code === 403) {
+        if (error.response?.data?.data?.code === 403) {
             setIsLicenseConnect(true);
+        } else if (error.response?.data?.data?.code === 402) {
+            setIsLicenseConnect(error.response.data.data);
         } else {
             console.error('Failed to get Whitelist countires :', error);
         }

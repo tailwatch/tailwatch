@@ -132,8 +132,8 @@ class HardeningAuditModel {
 	}
 
 	/**
-	 * Retention sweep. Caller must honour the "Keep All Data" sentinel
-	 * before invoking — we never short-circuit the whole table here.
+	 * Retention sweep. The caller skips it when every report is kept - we never
+	 * short-circuit the whole table here.
 	 *
 	 * @param string $cutoff_gmt GMT cutoff, 'Y-m-d H:i:s'.
 	 * @return int Rows deleted (false from wpdb is coerced to 0).

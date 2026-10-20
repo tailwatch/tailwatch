@@ -18,17 +18,20 @@
 
 namespace Tailwatch\Admin\App\Api\Services;
 
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
 use Tailwatch\Admin\App\Api\Controllers\Backup\BackupController;
 use Tailwatch\Admin\App\Api\Controllers\BrokenLinkChecker\BrokenLinkStatus;
 use Tailwatch\Admin\App\Api\Controllers\Database\DBOptimizer\DatabaseOptimizerController;
 use Tailwatch\Admin\App\Api\Controllers\HardeningAudit\HardeningAuditController;
 use Tailwatch\Admin\App\Api\Controllers\IntegrityWatch\IntegrityWatchController;
+use Tailwatch\Admin\App\Api\Controllers\Restore\RestoreController;
 use Tailwatch\Admin\App\Api\Controllers\SearchReplace\SearchReplaceController;
 use Tailwatch\Admin\App\Api\Logging\Log;
-
-if ( ! defined( 'ABSPATH' ) ) {
-	exit;
-}
+use Tailwatch\Admin\App\Api\Models\DBModel;
+use Tailwatch\Admin\App\Api\Services\Restore\RestoreOrchestrator;
 
 /**
  * Class ProcessStatusService
@@ -104,7 +107,9 @@ class ProcessStatusService {
 			return false;
 		}
 
-		return $this->is_running_via_module_fallback( $process_type );
+		// No registry row at all backs this type, so the module claim stands
+		// alone. Bound it in time before trusting it (see the method).
+		return $this->is_running_via_unbacked_module_claim( $process_type );
 	}
 
 	/**
@@ -170,12 +175,116 @@ class ProcessStatusService {
 			if ( isset( $active_rows[ $type ] ) ) {
 				continue;
 			}
-			if ( $this->is_running_via_module_fallback( $type ) ) {
+			if ( $this->is_running_via_unbacked_module_claim( $type ) ) {
 				return $type;
 			}
 		}
 
 		return null;
+	}
+
+	/**
+	 * Find the first process_type from the given list that has a paused run, or null.
+	 *
+	 * A paused run is not working, so it is not "running" (see ACTIVE_STATES), but its work is
+	 * half done: another kind of process that changes the site or its data meanwhile leaves it
+	 * to resume against something different, such as a backup half from before a restore and
+	 * half from after. Only a run whose module still reports it paused counts, so a registry
+	 * row left behind by a run that was cancelled or finished never blocks.
+	 *
+	 * @param array<string> $process_types Process type names to check, in priority order.
+	 * @return string|null The first paused process_type, or null.
+	 */
+	public function find_first_paused( array $process_types ) {
+		$paused = array();
+		foreach ( (array) $this->process_manager->get_all_active_processes() as $proc ) {
+			if ( is_array( $proc ) && isset( $proc['process_type'], $proc['state'] ) && 'pause' === $proc['state'] ) {
+				$paused[ (string) $proc['process_type'] ] = true;
+			}
+		}
+
+		foreach ( $process_types as $type ) {
+			if ( is_string( $type ) && isset( $paused[ $type ] ) && $this->is_paused_via_module( $type ) ) {
+				return $type;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Whether the module itself still reports its run paused. A type with no reader is taken at
+	 * the registry's word.
+	 *
+	 * @param string $process_type Process type.
+	 * @return bool
+	 */
+	private function is_paused_via_module( $process_type ) {
+		$readers = $this->get_paused_readers();
+		if ( ! isset( $readers[ $process_type ] ) || ! is_callable( $readers[ $process_type ] ) ) {
+			return true;
+		}
+
+		try {
+			return 'pause' === call_user_func( $readers[ $process_type ] );
+		} catch ( \Throwable $e ) {
+			Log::error(
+				'Process paused reader threw: ' . $e->getMessage(),
+				array(
+					'feature'      => 'process_status',
+					'action'       => 'paused_reader_failed',
+					'process_type' => $process_type,
+					'exception'    => $e,
+				)
+			);
+			return false;
+		}
+	}
+
+	/**
+	 * Readers of each module's own scan state, for the paused check, plus the
+	 * tailwatch_process_paused_readers filter for extensions.
+	 *
+	 * @return array<string,callable> process_type => callable returning the module's scan_state.
+	 */
+	private function get_paused_readers() {
+		$readers = array(
+			'backup'              => static function () {
+				return self::scan_state_of( ( new BackupController() )->tailwatch_verify_backup_status() );
+			},
+			'db_optimize'         => static function () {
+				return self::scan_state_of( ( new DatabaseOptimizerController() )->tailwatch_verify_db_optimize_status() );
+			},
+			'files_integrity'     => static function () {
+				return self::scan_state_of( ( new IntegrityWatchController() )->tailwatch_verify_integrity_current_status() );
+			},
+			'search_replace'      => static function () {
+				return self::scan_state_of( ( new SearchReplaceController() )->tailwatch_verify_search_replace_status() );
+			},
+			'broken_link_checker' => static function () {
+				return self::scan_state_of( ( new BrokenLinkStatus() )->tailwatch_verify_broken_link_status() );
+			},
+			'hardening_audit'     => static function () {
+				return self::scan_state_of( ( new HardeningAuditController() )->tailwatch_verify_hardening_audit_status() );
+			},
+		);
+
+		/**
+		 * Filter the per-process_type readers used by the paused check.
+		 *
+		 * @param array<string,callable> $readers process_type => callable returning the scan_state.
+		 */
+		return apply_filters( 'tailwatch_process_paused_readers', $readers );
+	}
+
+	/**
+	 * The scan_state in a module's status answer, or '' when it has none.
+	 *
+	 * @param mixed $status A verify_*_status answer.
+	 * @return string
+	 */
+	private static function scan_state_of( $status ) {
+		return ( is_array( $status ) && isset( $status['scan_state'] ) && is_string( $status['scan_state'] ) ) ? $status['scan_state'] : '';
 	}
 
 	/**
@@ -232,9 +341,9 @@ class ProcessStatusService {
 	 * Layer 2 — module-specific verify fallback.
 	 *
 	 * Each module owns its predicate via the tailwatch_process_status_fallbacks
-	 * filter. This service ships built-in entries for free-plugin types
-	 * (db_optimize, files_integrity); the pro plugin hooks the filter to add
-	 * its own (malware_scan, migration, restore, …).
+	 * filter. This service ships built-in entries for the free plugin's types
+	 * (see get_fallbacks()); the pro plugin hooks the filter to add its own
+	 * (malware_scan, migration, …).
 	 *
 	 * A throwing fallback is contained — the caller sees "not running" rather
 	 * than the exception propagating, since Layer 1 has already returned false
@@ -268,6 +377,121 @@ class ProcessStatusService {
 	}
 
 	/**
+	 * Layer 2, but only trusted while the claim is plausibly fresh.
+	 *
+	 * Callers reach this only after Layer 1 found NO row of any kind for the
+	 * type — neither healthy nor stuck. A module asserting "in-progress" with
+	 * nothing in the registry behind it is unbacked: whatever created the row
+	 * has already been completed or reaped, and only the module's own
+	 * scan_state still says otherwise.
+	 *
+	 * That state is not self-healing. Layer 1 bounds a row by heartbeat, and
+	 * the Layer-1 orphan reap only fires when there IS a row to reap, so an
+	 * unbacked claim never expires: every peer in the type's cannot_start_while
+	 * list is blocked permanently with no user-reachable way out.
+	 *
+	 * Two independent conditions must both hold before a claim is dropped:
+	 * unbacked by the registry (established by the caller) AND older than the
+	 * type's own stuck_threshold. Anything short of both keeps trusting the
+	 * module, because the failure directions are not symmetric — wrongly reporting
+	 * "not running" can let two destructive processes overlap, while wrongly
+	 * reporting "running" only delays one.
+	 *
+	 * @param string $process_type
+	 * @return bool
+	 */
+	private function is_running_via_unbacked_module_claim( $process_type ) {
+		if ( ! $this->is_running_via_module_fallback( $process_type ) ) {
+			return false;
+		}
+
+		if ( ! $this->unbacked_claim_is_stale( $process_type ) ) {
+			return true;
+		}
+
+		Log::warning(
+			'Ignoring a stale in-progress claim from ' . $process_type . ': no process row backs it and it has outlived its stuck threshold.',
+			array(
+				'feature'      => 'process_status',
+				'action'       => 'stale_claim_ignored',
+				'process_type' => $process_type,
+			)
+		);
+
+		return false;
+	}
+
+	/**
+	 * Whether a module's unbacked in-progress claim has outlived its threshold.
+	 *
+	 * Reads the module's own progress row through the coordinates it already
+	 * registered with ProcessManager, so no per-type knowledge is added here.
+	 * The cancel/pause row is preferred because that is where the modules that
+	 * declare one keep started_time; the main data row is the fallback.
+	 *
+	 * Returns false whenever staleness cannot be established — an unregistered
+	 * type, an unreadable row, or a row carrying no usable timestamp. Those
+	 * keep trusting the module, which is the conservative direction.
+	 *
+	 * @param string $process_type Registered process type.
+	 * @return bool
+	 */
+	private function unbacked_claim_is_stale( $process_type ) {
+		$config = ProcessManager::get_process_config( $process_type );
+		if ( ! is_array( $config ) ) {
+			return false;
+		}
+
+		$threshold = isset( $config['stuck_threshold'] ) ? (int) $config['stuck_threshold'] : 0;
+		if ( $threshold <= 0 ) {
+			return false;
+		}
+
+		$db_model = new DBModel();
+		$latest   = 0;
+
+		$coordinates = array(
+			array( 'cancel_pause_key', 'cancel_pause_option' ),
+			array( 'data_key', 'data_option' ),
+		);
+
+		// Registrations all declare data_source 'wp_tw_settings', but nothing dispatches
+		// on it, and at least one module (broken_link_checker) keeps its row in the logs
+		// table while declaring the settings one. Try both rather than trust that field.
+		$tables = array( TAILWATCH_DB_TABLE_NAME );
+		if ( defined( 'TAILWATCH_DB_LOGS_TABLE_NAME' ) ) {
+			$tables[] = TAILWATCH_DB_LOGS_TABLE_NAME;
+		}
+
+		foreach ( $coordinates as $pair ) {
+			if ( empty( $config[ $pair[0] ] ) || empty( $config[ $pair[1] ] ) ) {
+				continue;
+			}
+
+			foreach ( $tables as $table ) {
+				$row = $db_model->get_recent_data( $config[ $pair[1] ], $config[ $pair[0] ], $table );
+				if ( ! is_array( $row ) ) {
+					continue;
+				}
+
+				// Any of these moving means the module was alive at that moment, so
+				// the newest wins and a genuinely long-running job is never called stale.
+				foreach ( array( 'started_time', 'last_activity', 'completion_timestamp', 'last_run' ) as $field ) {
+					if ( isset( $row[ $field ] ) && is_numeric( $row[ $field ] ) && (int) $row[ $field ] > $latest ) {
+						$latest = (int) $row[ $field ];
+					}
+				}
+			}
+		}
+
+		if ( $latest <= 0 ) {
+			return false;
+		}
+
+		return ( time() - $latest ) >= $threshold;
+	}
+
+	/**
 	 * Built-in Layer-2 fallbacks for free-plugin process types, plus the
 	 * tailwatch_process_status_fallbacks filter for pro-plugin and other extensions.
 	 *
@@ -281,6 +505,7 @@ class ProcessStatusService {
 			'search_replace'      => array( $this, 'fallback_search_replace' ),
 			'broken_link_checker' => array( $this, 'fallback_broken_link_checker' ),
 			'hardening_audit'     => array( $this, 'fallback_hardening_audit' ),
+			'restore'             => array( $this, 'fallback_restore' ),
 		);
 
 		/**
@@ -300,7 +525,7 @@ class ProcessStatusService {
 		 *         };
 		 *         return $f;
 		 *     } );
-	     *
+		 *
 		 * @param array<string,callable> $fallbacks Built-in fallback map.
 		 */
 		return apply_filters( 'tailwatch_process_status_fallbacks', $fallbacks );
@@ -407,10 +632,27 @@ class ProcessStatusService {
 	}
 
 	/**
+	 * Built-in fallback for restore.
+	 *
+	 * Restore has no scan_state; its state row carries an orchestrator phase.
+	 * Every phase except the two terminal ones means work is still outstanding,
+	 * and '' (no row) means a restore has never run.
+	 *
+	 * @return bool
+	 */
+	private function fallback_restore() {
+		$phase = RestoreController::current_phase();
+
+		return '' !== $phase
+			&& RestoreOrchestrator::PHASE_DONE !== $phase
+			&& RestoreOrchestrator::PHASE_FAILED !== $phase;
+	}
+
+	/**
 	 * Module-specific "have I positively completed?" check.
 	 *
-	 * Distinct from is_running_via_module_fallback (the existing Layer-2
-	 * predicate) which conflates "completed" with "state file missing" and
+	 * Distinct from is_running_via_module_fallback (the Layer-2 predicate)
+	 * which conflates "completed" with "state file missing" and
 	 * "transient setup state" — all return false. Self-heal needs a positive
 	 * completion signal to safely reap an orphaned active row, which the
 	 * boolean predicate cannot give. The completion check is a separate map
@@ -467,6 +709,7 @@ class ProcessStatusService {
 			'search_replace'      => array( $this, 'completion_search_replace' ),
 			'broken_link_checker' => array( $this, 'completion_broken_link_checker' ),
 			'hardening_audit'     => array( $this, 'completion_hardening_audit' ),
+			'restore'             => array( $this, 'completion_restore' ),
 		);
 
 		/**
@@ -486,7 +729,7 @@ class ProcessStatusService {
 		 *         };
 		 *         return $f;
 		 *     } );
-	     *
+		 *
 		 * @param array<string,callable> $fallbacks Built-in completion fallback map.
 		 */
 		return apply_filters( 'tailwatch_process_completion_fallbacks', $fallbacks );
@@ -525,7 +768,8 @@ class ProcessStatusService {
 		$controller = new BackupController();
 		$status     = $controller->tailwatch_verify_backup_status();
 
-		return isset( $status['scan_state'] ) && 'completed' === $status['scan_state'];
+		// A cancelled backup is finished too; its record must not keep the gate closed.
+		return isset( $status['scan_state'] ) && in_array( $status['scan_state'], array( 'completed', 'cancel' ), true );
 	}
 
 	/**
@@ -569,6 +813,19 @@ class ProcessStatusService {
 		$status     = $controller->tailwatch_verify_hardening_audit_status();
 
 		return isset( $status['scan_state'] ) && 'completed' === $status['scan_state'];
+	}
+
+	/**
+	 * Built-in completion check for restore.
+	 *
+	 * Only PHASE_DONE counts. A failed restore is not "completed" work — it is a
+	 * site that may be half-swapped, and reaping its row would quietly hand the
+	 * gate to whatever wanted to run next.
+	 *
+	 * @return bool
+	 */
+	private function completion_restore() {
+		return RestoreOrchestrator::PHASE_DONE === RestoreController::current_phase();
 	}
 
 	/**

@@ -344,7 +344,6 @@ class CronJobManager {
 			'tailwatch_files_integrity_schedule_run',
 			'tailwatch_files_integrity_scan',
 			'tailwatch_integrity_old_entry_cleanup',
-			'file_monitoring_cron_hook', // Legacy hook name.
 
 			// Hardening Audit (recurring schedule + chained single events + retention cleanup).
 			'tailwatch_hardening_audit_schedule_run',
@@ -380,10 +379,6 @@ class CronJobManager {
 
 			// Security Keys Rotation (recurring schedule).
 			'tailwatch_generate_keys_in_config',
-
-			// Legacy unprefixed names — keep in the uninstall sweep for one release cycle.
-			'login_defender_cleanup_expired',
-			'login_defender_cleanup',
 		);
 
 		/**
@@ -400,22 +395,44 @@ class CronJobManager {
 	}
 
 	/**
-	 * Clear all plugin cron jobs from WordPress.
+	 * One-off steps of a run in progress. Cleared on deactivation only: a settings reset calls
+	 * clear_all_cron_events() part-way through its own batch run and must keep these.
 	 *
-	 * Used during plugin uninstallation to ensure clean removal.
+	 * @var array<string>
+	 */
+	const RUN_STEP_HOOKS = array(
+		'tailwatch_scan_db_tables_cron',
+		'tailwatch_create_db_backup_cron',
+		'tailwatch_verify_backup_cron_hook',
+		'tailwatch_delete_backup_files_entry',
+		'tailwatch_delete_integrity_logs_file',
+		'tailwatch_search_replace_cron',
+		'tailwatch_update_table_status_on_cancel_cron',
+		'tailwatch_reset_all_settings_batch_cron',
+		'tailwatch_verify_features_in_multi_cron',
+		'tailwatch_restore_process',
+		'tailwatch_maintenance_watchdog',
+	);
+
+	/**
+	 * Clear the plugin's scheduled events.
 	 *
+	 * Every instance of each hook is removed, whatever arguments it was scheduled with.
+	 *
+	 * @param bool $include_run_steps Also clear the one-off steps of runs in progress (deactivation).
 	 * @return int Number of cron events cleared.
 	 */
-	public static function clear_all_cron_events() {
+	public static function clear_all_cron_events( $include_run_steps = false ) {
 		$hooks_cleared = 0;
 		$hooks         = self::get_all_cron_hooks();
+		if ( $include_run_steps ) {
+			$hooks = array_merge( (array) $hooks, self::RUN_STEP_HOOKS );
+		}
 
-		foreach ( $hooks as $hook ) {
-			$timestamp = wp_next_scheduled( $hook );
-			while ( $timestamp ) {
-				wp_unschedule_event( $timestamp, $hook );
-				++$hooks_cleared;
-				$timestamp = wp_next_scheduled( $hook );
+		foreach ( array_unique( (array) $hooks ) as $hook ) {
+			$cleared = wp_unschedule_hook( $hook );
+			if ( is_int( $cleared ) ) {
+				$hooks_cleared += $cleared;
 			}
 		}
 

@@ -6,6 +6,7 @@ defined( 'ABSPATH' ) || exit;
 
 use Tailwatch\Admin\App\Api\Models\DBModel;
 use Tailwatch\Admin\App\Api\Controllers\Logs\LiveLogs\LiveLogsController;
+use Tailwatch\Admin\App\Api\Services\ProcessGuard;
 use Tailwatch\Admin\App\Api\Services\ProcessManager;
 use Tailwatch\Admin\App\Api\Logging\Log;
 use Tailwatch\Admin\App\Api\Controllers\Redirections\RedirectionsManager;
@@ -24,10 +25,20 @@ class BrokenLinkStatus {
 		$feature_controller = new DBModel();
 		$tailwatch_key           = 'default_broken_link_checker';
 		$option             = 'broken_link_cancel_pause';
-		return $feature_controller->get_recent_data( $option, $tailwatch_key, TAILWATCH_DB_LOGS_TABLE_NAME );
+		// By id, as update_broken_link_cancel_pause() writes. Each scan adds a row, and by
+		// date an older one can sort newest once the site's timezone moves back.
+		return $feature_controller->get_recent_data_by_id( $option, $tailwatch_key, TAILWATCH_DB_LOGS_TABLE_NAME );
 	}
 
-	public function update_broken_link_cancel_pause( array $options ) {
+	/**
+	 * Stores the scan's status row.
+	 *
+	 * @param array $options            The row to store.
+	 * @param bool  $allow_state_change Resume only: put a stopped scan back to work.
+	 */
+	public function update_broken_link_cancel_pause( array $options, $allow_state_change = false ) {
+		$options = $this->tailwatch_keep_stop_state( $options, $allow_state_change );
+
 		$DBModel  = new DBModel();
 		$tailwatch_key = 'default_broken_link_checker';
 		$option   = 'broken_link_cancel_pause';
@@ -37,6 +48,38 @@ class BrokenLinkStatus {
 		);
 
 		$DBModel->update_recent_row( $db_data, $tailwatch_key, $option, TAILWATCH_DB_LOGS_TABLE_NAME );
+	}
+
+	/**
+	 * Keep a pause, cancel or finish from being undone by an older copy of this row.
+	 *
+	 * The live-log poll and the scan tick write back copies they read earlier. One read
+	 * before the user paused, or before the scan finished, would put 'in-progress' back: the
+	 * scan would carry on after Pause, or the screen would spin at 100%. A finished row is kept
+	 * whole, since nothing in an older copy is newer than it. Only resume moves a stopped
+	 * scan back to work, and it says so.
+	 *
+	 * @param array $options            The row about to be stored.
+	 * @param bool  $allow_state_change Resume only.
+	 * @return array
+	 */
+	private function tailwatch_keep_stop_state( array $options, $allow_state_change ) {
+		if ( $allow_state_change || ! isset( $options['scan_state'] ) || 'in-progress' !== $options['scan_state'] ) {
+			return $options;
+		}
+
+		$current = $this->broken_link_cancel_pause_data();
+		if ( ! is_array( $current ) || ! isset( $current['scan_state'] ) ) {
+			return $options;
+		}
+		if ( in_array( $current['scan_state'], array( 'completed', 'failed' ), true ) ) {
+			return $current;
+		}
+		if ( in_array( $current['scan_state'], array( 'pause', 'cancel' ), true ) ) {
+			$options['scan_state'] = $current['scan_state'];
+		}
+
+		return $options;
 	}
 
 	public function update_broken_link_logs_records( $message, $level = 'INFO' ) {
@@ -78,7 +121,7 @@ class BrokenLinkStatus {
 					'feature'  => $this->feature,
 					'action'   => 'broken_link_check_live_logs_failed',
 					'title'  => 'Broken Links Live Logs Failed',
-					'detail'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'   => 'system',
 					'severity' => 'high',
 				)
@@ -91,10 +134,50 @@ class BrokenLinkStatus {
 		}
 	}
 
+	/**
+	 * Listener for 'tailwatch_recovery_process_failed': recovery gave up on a stuck scan.
+	 *
+	 * @param array $process_data The process recovery gave up on.
+	 * @return void
+	 */
+	public function tailwatch_on_recovery_failed( $process_data ) {
+		if ( is_array( $process_data ) && isset( $process_data['process_type'] ) && 'broken_link_checker' === $process_data['process_type'] ) {
+			$this->tailwatch_mark_run_failed( $process_data['process_id'] ?? null );
+		}
+	}
+
+	/**
+	 * Put a scan that stopped on an error into 'failed', so its screen stops showing it running.
+	 *
+	 * Only a scan still in progress is converted, and only the one the failed process belongs
+	 * to, so a newer scan is never touched.
+	 *
+	 * @param string|null $process_id The process that failed.
+	 * @return void
+	 */
+	public function tailwatch_mark_run_failed( $process_id ) {
+		$row = $this->broken_link_cancel_pause_data();
+		if ( ! is_array( $row ) || 'in-progress' !== ( $row['scan_state'] ?? '' ) ) {
+			return;
+		}
+		if ( ! empty( $process_id ) && ! empty( $row['process_id'] ) && $row['process_id'] !== $process_id ) {
+			return;
+		}
+
+		$timestamp = wp_next_scheduled( 'tailwatch_broken_link_checker' );
+		if ( $timestamp ) {
+			wp_unschedule_event( $timestamp, 'tailwatch_broken_link_checker' );
+		}
+
+		$row['scan_state']   = 'failed';
+		$row['cron_running'] = false;
+		$this->update_broken_link_cancel_pause( $row );
+	}
+
 	public function tailwatch_stop_broken_link_cron() {
 		$cancel_pause = $this->broken_link_cancel_pause_data();
 
-		if ( ! empty( $cancel_pause['scan_state'] ) && ( $cancel_pause['scan_state'] === 'pause' || $cancel_pause['scan_state'] === 'cancel' ) ) {
+		if ( ! empty( $cancel_pause['scan_state'] ) && in_array( $cancel_pause['scan_state'], array( 'pause', 'cancel', 'failed' ), true ) ) {
 
 			$timestamp = wp_next_scheduled( 'tailwatch_broken_link_checker' );
 			if ( $timestamp ) {
@@ -143,10 +226,16 @@ class BrokenLinkStatus {
 			$cancel_pause = $this->broken_link_cancel_pause_data();
 
 			if ( ! empty( $cancel_pause ) && ! empty( $cancel_pause['scan_state'] ) && $cancel_pause['scan_state'] === 'pause' ) {
+				// Resumed only while nothing that cannot run beside it is running or paused.
+				$blocked = ( new ProcessGuard() )->ensure_can_start_process( 'broken_link_checker' );
+				if ( null !== $blocked ) {
+					return $blocked;
+				}
+
 				wp_schedule_single_event( time() + 10, 'tailwatch_broken_link_checker' );
 
 				$cancel_pause['scan_state'] = 'in-progress';
-				$this->update_broken_link_cancel_pause( $cancel_pause );
+				$this->update_broken_link_cancel_pause( $cancel_pause, true );
 
 				$process_id = $cancel_pause['process_id'] ?? null;
 				if ( $process_id ) {
@@ -193,7 +282,7 @@ class BrokenLinkStatus {
 					'feature'  => $this->feature,
 					'action'   => $action_failed,
 					'title'  => 'Broken Links',
-					'detail'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'   => $user_context,
 					'severity' => 'high',
 				)
@@ -240,6 +329,18 @@ class BrokenLinkStatus {
 			$cancel_pause = $this->broken_link_cancel_pause_data();
 
 			if ( ! empty( $data['scan_state'] ) && ( $data['scan_state'] === 'pause' || $data['scan_state'] === 'cancel' ) ) {
+				$current_state = ( is_array( $cancel_pause ) && isset( $cancel_pause['scan_state'] ) ) ? $cancel_pause['scan_state'] : '';
+				// A finished scan is not reopened or marked failed by a late click, and Pause only
+				// means something to a scan that is running.
+				if ( 'completed' === $current_state || ( 'pause' === $data['scan_state'] && 'in-progress' !== $current_state ) ) {
+					return array(
+						'data'    => array(),
+						'message' => ( 'completed' === $current_state )
+							? __( 'This run has already finished, so there is nothing to pause or cancel.', 'tailwatch' )
+							: __( 'Only a run that is in progress can be paused.', 'tailwatch' ),
+						'code'    => 409,
+					);
+				}
 
 				$cancel_pause['scan_state'] = $data['scan_state'];
 				$this->update_broken_link_cancel_pause( $cancel_pause );
@@ -356,7 +457,7 @@ class BrokenLinkStatus {
 					'feature'  => $this->feature,
 					'action'   => $action_failed,
 					'title'  => 'Broken Links',
-					'detail'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'   => $user_context,
 					'severity' => 'high',
 				)
@@ -388,7 +489,23 @@ class BrokenLinkStatus {
 			}
 
 			$cancel_pause = $this->broken_link_cancel_pause_data();
-			if ( $cancel_pause['cron_running'] === false ) {
+			if ( ! is_array( $cancel_pause ) ) {
+				return array(
+					'data'    => '',
+					'message' => __( 'There is no run to restart.', 'tailwatch' ),
+					'code'    => 409,
+				);
+			}
+			// A scan that stopped on an error stays stopped: the screen asks for this while it
+			// polls, and a tick scheduled here would run the failed step again.
+			if ( in_array( $cancel_pause['scan_state'] ?? '', array( 'failed', 'completed' ), true ) ) {
+				return array(
+					'data'    => '',
+					'message' => __( 'This run has stopped, so there is nothing to restart.', 'tailwatch' ),
+					'code'    => 409,
+				);
+			}
+			if ( ( $cancel_pause['cron_running'] ?? null ) === false ) {
 				if ( ! wp_next_scheduled( 'tailwatch_broken_link_checker' ) ) {
 					$cron_scheduled = wp_schedule_single_event( time() + 5, 'tailwatch_broken_link_checker' );
 
@@ -464,7 +581,7 @@ class BrokenLinkStatus {
 					'feature'  => $this->feature,
 					'action'   => $action_failed,
 					'title'  => 'Broken Links',
-					'detail'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'   => $user_context,
 					'severity' => 'high',
 				)
@@ -547,7 +664,7 @@ class BrokenLinkStatus {
 					'feature'  => $this->feature,
 					'action'   => 'broken_link_check_status_verify_failed',
 					'title'  => 'Broken Links Status Failed',
-					'detail'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'   => 'system',
 					'severity' => 'high',
 				)
@@ -663,7 +780,7 @@ class BrokenLinkStatus {
 					'feature'  => $this->feature,
 					'action'   => $action_failed,
 					'title'  => 'Broken Links',
-					'detail'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'   => $user_context,
 					'severity' => 'high',
 				)

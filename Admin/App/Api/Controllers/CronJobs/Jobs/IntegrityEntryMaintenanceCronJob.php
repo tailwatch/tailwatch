@@ -74,6 +74,16 @@ class IntegrityEntryMaintenanceCronJob extends AbstractCronJob {
 	}
 
 	/**
+	 * The clean-up keeps its own half-hourly schedule; the feature's settings only say
+	 * whether it runs.
+	 *
+	 * @return string
+	 */
+	protected function get_configured_interval() {
+		return $this->default_interval;
+	}
+
+	/**
 	 * Get human-readable schedule display name.
 	 *
 	 * @return string Display name.

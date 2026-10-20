@@ -22,6 +22,7 @@ use Tailwatch\Admin\App\Api\Logging\Log;
 use Tailwatch\Admin\App\Api\Services\Common\FilesystemService;
 use Tailwatch\Admin\App\Api\Services\Common\CompatibilityService;
 use Tailwatch\Admin\App\Api\Services\Common\HistoryService;
+use Tailwatch\Admin\App\Api\Services\ProcessGuard;
 
 /**
  * Class CoreController
@@ -236,10 +237,9 @@ class CoreController extends BaseController {
 		// WordPress core's Core_Upgrader, which downloads, unpacks, and installs the
 		// release through core's own update_core() (maintenance mode, correct file
 		// handling) and can restore the previous version on a critical failure. This is
-		// the sanctioned path — the same mechanism WP-CLI's `core update --version` uses
-		// — so the plugin never copies core files into ABSPATH itself. pre_check_md5 is
-		// disabled because a specific or older version will not match the current
-		// install's file checksums.
+		// WordPress's own update path, so the plugin never copies core files into ABSPATH
+		// itself. pre_check_md5 is disabled because a specific or older version will not
+		// match the current install's file checksums.
 		$offer = (object) array(
 			'response'        => 'upgrade',
 			'download'        => $download_url,
@@ -401,6 +401,11 @@ class CoreController extends BaseController {
 		$denied = $this->tailwatch_require_capability( 'update_core' );
 		if ( null !== $denied ) {
 			return $denied;
+		}
+
+		$blocked = ( new ProcessGuard() )->ensure_site_can_change();
+		if ( null !== $blocked ) {
+			return $blocked;
 		}
 
 		global $wp_version;
@@ -634,6 +639,11 @@ class CoreController extends BaseController {
 		$denied = $this->tailwatch_require_capability( 'update_core' );
 		if ( null !== $denied ) {
 			return $denied;
+		}
+
+		$blocked = ( new ProcessGuard() )->ensure_site_can_change();
+		if ( null !== $blocked ) {
+			return $blocked;
 		}
 
 		global $wp_version;

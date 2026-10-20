@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Layered WP-Cron health detector.
  *
  * Layer 1 — configuration short-circuits (cheap, no HTTP):
- *   - external cron runner present (Cavalcade / Cron Control) -> managed
+ *   - external cron-runner plugin active                       -> managed
  *   - DISABLE_WP_CRON                                          -> disabled
  *   - ALTERNATE_WP_CRON                                        -> alternate
  * Layer 2 — a single blocking loopback probe to wp-cron.php, with a
@@ -72,7 +72,7 @@ class CronHealthService {
 					'managed',
 					true,
 					sprintf(
-						/* translators: %s: name of the external cron-runner plugin, e.g. Cavalcade. */
+						/* translators: %s: name of the plugin or service that runs this site's scheduled tasks. */
 						__( 'Scheduled tasks on this site are handled by the %s runner rather than the built-in WP-Cron, so Tailwatch\'s tasks run through it and no action is needed.', 'tailwatch' ),
 						$name
 					)
@@ -82,8 +82,8 @@ class CronHealthService {
 
 		// Layer 1b: DISABLE_WP_CRON turns off WordPress's built-in trigger. Checked before
 		// ALTERNATE_WP_CRON because WordPress core (_wp_cron) honours DISABLE_WP_CRON even when
-		// ALTERNATE_WP_CRON is also set, so it is the flag that decides whether WP-Cron self-runs
-		// (this mirrors WP Crontrol's ordering). A system crontab calling wp-cron.php is a valid
+		// ALTERNATE_WP_CRON is also set, so it is the flag that decides whether WP-Cron self-runs.
+		// A system crontab calling wp-cron.php is a valid
 		// setup that cannot be detected from PHP, so the plugin continues with guidance, not a failure.
 		if ( defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON ) {
 			return $this->result(

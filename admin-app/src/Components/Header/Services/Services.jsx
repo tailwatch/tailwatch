@@ -1,6 +1,5 @@
 import React from 'react'
 import axios from "axios";
-import {toast} from 'react-toastify';
 
 /* global tailwatch_ajax */
 
@@ -55,10 +54,6 @@ export const handleToggleNotification = async ({ isEnabled, severitySettings, lo
         const response = await axios.post(tailwatch_ajax.ajax_url, formData);
 
         if (response.data.data.code === 200) {
-            if (response.data.data.message === "Please connect the license to update push notification.") {
-                toast.error("Please connect the license to enable email notifications.");
-                return false;
-            }
             if (loadNotificationStatus) {
                 await loadNotificationStatus();
             }

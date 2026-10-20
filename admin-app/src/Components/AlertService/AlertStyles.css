@@ -18,6 +18,8 @@
     align-self: flex-start;
     justify-self: flex-start;
     padding: 0 !important;
+    /* A title long enough to wrap lines up with the message under it, not centred. */
+    text-align: left;
   }
   
   /* Message styling */
@@ -132,7 +134,7 @@
   }
   
   /* ---------- Warning modal (alertService.warning) ---------- */
-  .warning-popup {
+  .notice-popup {
     border-radius: 12px;
     padding: 24px 24px 20px 24px;
     background-color: #ffffff;
@@ -143,7 +145,7 @@
     justify-content: flex-start;
   }
 
-  .warning-popup .warning-title {
+  .notice-popup .notice-title {
     font-size: 17px;
     font-weight: 600;
     color: #111827;
@@ -156,20 +158,20 @@
     align-items: center;
   }
 
-  .warning-popup .warning-html-container {
+  .notice-popup .notice-html-container {
     padding: 0 !important;
     margin: 0 !important;
     text-align: left !important;
   }
 
-  .warning-modal-body {
+  .notice-modal-body {
     display: flex;
     align-items: flex-start;
     gap: 12px;
     padding: 12px 0 18px 0;
   }
 
-  .warning-modal-icon {
+  .notice-modal-icon {
     flex: 0 0 auto;
     width: 38px;
     height: 38px;
@@ -181,21 +183,26 @@
     color: #d97706;
   }
 
-  .warning-modal-icon svg {
+  .notice-modal-icon svg {
     width: 20px;
     height: 20px;
   }
 
-  .warning-modal-message {
+  .notice-modal-message {
     flex: 1 1 auto;
     font-size: 14px;
     line-height: 1.55;
     color: #374151;
     padding-top: 6px;
     word-break: break-word;
+    /* Several callers hand this a list — the reasons a restore was refused, the backups
+       that were kept — joined with newlines. As plain HTML those collapse into one long
+       paragraph, which is how a tidy list of three separate problems ended up reading as
+       a single unbroken sentence. */
+    white-space: pre-line;
   }
 
-  .warning-popup .swal2-actions {
+  .notice-popup .swal2-actions {
     width: 100%;
     justify-content: flex-end;
     margin: 8px 0 0 0;
@@ -203,7 +210,7 @@
     border-top: 1px solid #f1f1f3;
   }
 
-  .warning-confirm-button {
+  .notice-confirm-button {
     background-color: #f59e0b !important;
     color: #ffffff !important;
     font-size: 14px;
@@ -215,16 +222,16 @@
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
   }
 
-  .warning-confirm-button:hover {
+  .notice-confirm-button:hover {
     background-color: #d97706 !important;
   }
 
-  .warning-confirm-button:focus {
+  .notice-confirm-button:focus {
     outline: none;
     box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.35);
   }
 
-  .warning-close-button {
+  .notice-close-button {
     position: absolute !important;
     top: 24px !important;
     right: 24px !important;
@@ -238,7 +245,7 @@
     transition: color 0.15s ease;
   }
 
-  .warning-close-button:hover {
+  .notice-close-button:hover {
     color: #374151 !important;
   }
 
@@ -266,21 +273,263 @@
       margin-top: 10px;
     }
 
-    .warning-popup {
+    .notice-popup {
       width: calc(100vw - 32px);
       padding: 20px;
     }
 
-    .warning-popup .warning-title {
+    .notice-popup .notice-title {
       font-size: 16px;
     }
 
-    .warning-modal-message {
+    .notice-modal-message {
       font-size: 13px;
     }
 
-    .warning-confirm-button {
+    .notice-confirm-button {
       width: 100%;
     }
   }
   
+/* The scope picker on the restore confirmation: one row of segments, each a real radio button,
+   and one line under it that follows the pick. The radio stays focusable for the keyboard. */
+.tw-segments {
+  display: flex;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: #ffffff;
+}
+
+.tw-segment {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.tw-segment + .tw-segment {
+  border-left: 1px solid #d1d5db;
+}
+
+.tw-segment input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tw-segment span {
+  display: block;
+  padding: 8px 6px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.tw-segment:hover span {
+  background-color: #f3f4f6;
+}
+
+.tw-segment input:checked + span {
+  background-color: #007980;
+  color: #ffffff;
+}
+
+.tw-segment input:focus-visible + span {
+  box-shadow: inset 0 0 0 2px rgba(0, 121, 128, 0.45);
+}
+
+.tw-segment input:checked:focus-visible + span {
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.75);
+}
+
+.tw-segment-note {
+  margin: -4px 0 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #6b7280;
+}
+
+@media (max-width: 500px) {
+  .tw-segments {
+    flex-direction: column;
+  }
+
+  .tw-segment + .tw-segment {
+    border-left: 0;
+    border-top: 1px solid #d1d5db;
+  }
+}
+
+/* ---------------------------------------------------------------- notice tones */
+/*
+  One modal, four accents.
+
+  The layout above was built for the warning dialog and was the only alert in the product
+  that looked designed — error, information and success were still bare SweetAlert2
+  defaults, so a failed pairing arrived looking like a different application from the
+  warning shown a moment earlier.
+
+  Only the colour changes per tone: the border along the top, the icon and its disc, and
+  the button. Everything else — the spacing, the left-aligned title, the rule above the
+  actions — stays exactly as it was, because the shape is what makes them read as one
+  family.
+*/
+
+/* Warning — amber. The values the modal already had, named. */
+.notice-popup.tone-warning { border-top-color: #f59e0b; }
+.tone-warning .notice-modal-icon { background-color: #fef3c7; color: #d97706; }
+.tone-warning .notice-confirm-button { background-color: #f59e0b !important; }
+.tone-warning .notice-confirm-button:hover { background-color: #d97706 !important; }
+.tone-warning .notice-confirm-button:focus { box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.35); }
+
+/* Error — red. Something was refused or went wrong. */
+.notice-popup.tone-error { border-top-color: #dc2626; }
+.tone-error .notice-modal-icon { background-color: #fee2e2; color: #dc2626; }
+.tone-error .notice-confirm-button { background-color: #dc2626 !important; }
+.tone-error .notice-confirm-button:hover { background-color: #b91c1c !important; }
+.tone-error .notice-confirm-button:focus { box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.35); }
+
+/* Information — the product's own teal. Nothing is wrong; this is a fact. */
+.notice-popup.tone-info { border-top-color: #007980; }
+.tone-info .notice-modal-icon { background-color: #e9f6f7; color: #007980; }
+.tone-info .notice-confirm-button { background-color: #007980 !important; }
+.tone-info .notice-confirm-button:hover { background-color: #006670 !important; }
+.tone-info .notice-confirm-button:focus { box-shadow: 0 0 0 3px rgba(0, 121, 128, 0.35); }
+
+/* Success — green. */
+.notice-popup.tone-success { border-top-color: #059669; }
+.tone-success .notice-modal-icon { background-color: #d1fae5; color: #059669; }
+.tone-success .notice-confirm-button { background-color: #059669 !important; }
+.tone-success .notice-confirm-button:hover { background-color: #047857 !important; }
+.tone-success .notice-confirm-button:focus { box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.35); }
+
+/* ------------------------------------------------------------- what will happen */
+/*
+  The confirmation for an action that replaces the site (alertService.confirmImpact): what
+  it acts on, an optional choice, one line per consequence and the warning, each in its own
+  place rather than one paragraph.
+*/
+.custom-popup.tw-impact-popup {
+  width: 480px;
+  max-width: calc(100vw - 32px);
+}
+
+.tw-impact {
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 6px 0 4px 0;
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #374151;
+}
+
+.tw-impact-icon {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+}
+
+.tw-impact-subject {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  color: #007980;
+}
+
+.tw-impact-subject strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  word-break: break-word;
+}
+
+.tw-impact-subject span {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: #6b7280;
+  word-break: break-all;
+}
+
+.tw-impact-label {
+  margin-bottom: -4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.tw-impact-points {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tw-impact-points li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+}
+
+/* The display above would otherwise beat the hidden attribute. */
+.tw-impact-points li[hidden] {
+  display: none;
+}
+
+.tw-impact-points .tw-impact-icon {
+  color: #007980;
+}
+
+.tw-impact-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background-color: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  color: #b45309;
+}
+
+.tw-impact-warning strong {
+  display: block;
+  font-weight: 600;
+  color: #92400e;
+}
+
+.tw-impact-warning span {
+  display: block;
+  margin-top: 2px;
+  color: #92400e;
+}
+
+@media (max-width: 500px) {
+  .custom-popup.tw-impact-popup {
+    width: calc(100vw - 32px);
+  }
+
+  .tw-impact {
+    font-size: 13px;
+  }
+}

@@ -151,9 +151,8 @@ class IntegrityWatchController extends BaseController {
 	private $tick_loop_active = false;
 
 	/**
-	 * Seconds of work per cron tick before the loop yields + reschedules. Kept below the
-	 * common 30s shared-host limit (Delicious Brains / WP Background Processing use 20s).
-	 * Filterable via 'tailwatch_integrity_tick_seconds'.
+	 * Seconds of work per cron tick before the loop yields + reschedules. Kept well below
+	 * the common 30s shared-host limit. Filterable via 'tailwatch_integrity_tick_seconds'.
 	 *
 	 * @var int
 	 */
@@ -190,6 +189,7 @@ class IntegrityWatchController extends BaseController {
 		$hook_controller->add_action_hook( 'tailwatch_files_integrity_scan', array( $this, 'tailwatch_start_monitoring_files' ) );
 		$hook_controller->add_action_hook( 'tailwatch_delete_integrity_logs_file', array( $this, 'tailwatch_delete_integrity_logs' ) );
 		$hook_controller->add_action_hook( 'init', array( $this, 'tailwatch_run_integrity_cron' ) );
+		$hook_controller->add_action_hook( 'tailwatch_recovery_process_failed', array( $this, 'tailwatch_on_recovery_failed' ) );
 		// Scheduling and handler for 'tailwatch_integrity_old_entry_cleanup' is owned by
 		// IntegrityEntryMaintenanceCronJob in the CronJobs framework.
 		$this->process_manager = new ProcessManager();
@@ -222,8 +222,8 @@ class IntegrityWatchController extends BaseController {
 				),
 				// Process types that, when running, prevent a user from starting
 				// a manual integrity check. db_optimize is intentionally NOT
-				// listed (matching the spec's directional choice — db_optimize
-				// blocks integrity from starting, but not vice versa).
+				// listed: a running integrity check blocks the optimizer from
+				// starting, but not the reverse.
 				'cannot_start_while'  => array(
 					'backup',
 					'restore',
@@ -235,7 +235,7 @@ class IntegrityWatchController extends BaseController {
 					// site-wide; integrity must wait for them to finish.
 					'settings_import',
 					'reset_all',
-					// The pro baseline updater rewrites the same baseline rows a new
+					// An add-on's baseline updater rewrites the same baseline rows a new
 					// comparison reads; block a manual integrity start until it ends.
 					'baseline_update',
 				),
@@ -320,7 +320,7 @@ class IntegrityWatchController extends BaseController {
 	 * Integrity scan mode. 'fast' (default + any unrecognized value) skips re-hashing a
 	 * file whose size AND mtime are unchanged from the baseline — the hash is still
 	 * recomputed the moment size/mtime differ, so a real change is never missed. 'thorough'
-	 * hashes every file every scan (the original behavior). Resolved once per request.
+	 * hashes every file every scan. Resolved once per request.
 	 *
 	 * @return string 'fast' or 'thorough'.
 	 */
@@ -368,8 +368,7 @@ class IntegrityWatchController extends BaseController {
 	/**
 	 * Whether the process is within ~10% of the PHP memory_limit. The time-budget loop
 	 * checks this BETWEEN batches and yields when true, so a large run reschedules instead
-	 * of fatalling on OOM. Mirrors WP Background Processing's memory-exceeded guard.
-	 * memory_limit == -1 (unlimited) or unparseable → never exceeded.
+	 * of fatalling on OOM. memory_limit == -1 (unlimited) or unparseable → never exceeded.
 	 *
 	 * @return bool
 	 */
@@ -378,7 +377,6 @@ class IntegrityWatchController extends BaseController {
 		if ( $limit <= 0 ) {
 			return false; // -1 / unlimited / unknown — let the host decide.
 		}
-		// Yield once usage crosses 90% of the limit.
 		return memory_get_usage( true ) >= ( $limit * 0.9 );
 	}
 
@@ -427,9 +425,8 @@ class IntegrityWatchController extends BaseController {
 	 * Acquire the single-worker lock for the integrity scan tick. Without it, the recurring
 	 * 'tailwatch_files_integrity_schedule_run' cron and an injected 'tailwatch_files_integrity_scan'
 	 * step could run two workers on the same scan_snapshot row and clobber the cursor.
-	 * TTL is the PHP max_execution_time so it never expires mid-legitimate-tick; the
-	 * shutdown hook + finally release it on normal/timeout/fatal exit. Mirrors the backup
-	 * worker lock.
+	 * The 600-second TTL outlasts any legitimate tick; the shutdown hook + finally
+	 * release it on normal/timeout/fatal exit. Mirrors the backup worker lock.
 	 *
 	 * @return bool True if this worker got the lock.
 	 */
@@ -506,9 +503,12 @@ class IntegrityWatchController extends BaseController {
 	 * @return void
 	 */
 	private function tailwatch_mark_scan_failed( $is_comparison, $error_count ) {
-		$existing   = $this->get_files_integrity_progress();
-		$process_id = ( is_array( $existing ) && isset( $existing['process_id'] ) )
-			? $existing['process_id']
+		$existing = $this->get_files_integrity_progress();
+		// A baseline build's process is the one named in its own progress file, not the status
+		// row, which belongs to a comparison.
+		$owner      = $is_comparison ? $existing : (array) $this->load_progress( $this->progress_file );
+		$process_id = ( is_array( $owner ) && isset( $owner['process_id'] ) )
+			? $owner['process_id']
 			: ( $this->current_process_id ?? null );
 
 		if ( $is_comparison && is_array( $existing ) && ! empty( $existing ) ) {
@@ -529,6 +529,48 @@ class IntegrityWatchController extends BaseController {
 				'error'   => 'Reached ' . (int) $error_count . ' consecutive batch errors; scan marked failed.',
 			)
 		);
+	}
+
+	/**
+	 * Listener for 'tailwatch_recovery_process_failed': recovery gave up on a stuck scan.
+	 *
+	 * Marks the comparison 'failed' as tailwatch_mark_scan_failed() does, so its screen stops
+	 * showing it running. Only a comparison still in progress is converted, and only the one
+	 * the failed process belongs to. A baseline build has no row to mark; when the failed process
+	 * owns one, its queued tick is dropped so the build stays stopped until a scan is run again.
+	 *
+	 * @param array $process_data The process recovery gave up on.
+	 * @return void
+	 */
+	public function tailwatch_on_recovery_failed( $process_data ) {
+		if ( ! is_array( $process_data ) || 'files_integrity' !== ( $process_data['process_type'] ?? '' ) ) {
+			return;
+		}
+
+		$process_id = $process_data['process_id'] ?? null;
+		if ( ! empty( $process_id ) && file_exists( $this->progress_file ) ) {
+			$baseline = (array) $this->load_progress( $this->progress_file );
+			if ( ( $baseline['process_id'] ?? '' ) === $process_id ) {
+				wp_clear_scheduled_hook( 'tailwatch_files_integrity_scan' );
+				return;
+			}
+		}
+
+		$row = $this->get_files_integrity_progress();
+		if ( ! is_array( $row ) || 'in-progress' !== ( $row['scan_state'] ?? '' ) ) {
+			return;
+		}
+		if ( ! empty( $process_id ) && ! empty( $row['process_id'] ) && $row['process_id'] !== $process_id ) {
+			return;
+		}
+
+		$timestamp = wp_next_scheduled( 'tailwatch_files_integrity_scan' );
+		if ( $timestamp ) {
+			wp_unschedule_event( $timestamp, 'tailwatch_files_integrity_scan' );
+		}
+
+		$row['scan_state'] = 'failed';
+		$this->update_files_integrity_cancel_pause( $row );
 	}
 
 	/**
@@ -570,8 +612,7 @@ class IntegrityWatchController extends BaseController {
 
 	/**
 	 * Returns the path to monitor. Only whole-site monitoring is supported, so this
-	 * is always ABSPATH regardless of the (inert) plugins/themes scope options —
-	 * this also removes the old null-path edge when no scope was selected.
+	 * is always ABSPATH regardless of the (inert) plugins/themes scope options.
 	 *
 	 * @return string
 	 */
@@ -675,12 +716,6 @@ class IntegrityWatchController extends BaseController {
 					wp_unschedule_event( $timestamp, 'tailwatch_files_integrity_schedule_run' );
 				}
 
-				// Also clear the legacy hook if it still exists in the DB.
-				$legacy_timestamp = wp_next_scheduled( 'file_monitoring_cron_hook' );
-				if ( $legacy_timestamp ) {
-					wp_unschedule_event( $legacy_timestamp, 'file_monitoring_cron_hook' );
-				}
-
 				$remove_data = $this->tailwatch_remove_garbage_entries_files();
 				$comparison  = null;
 
@@ -726,7 +761,7 @@ class IntegrityWatchController extends BaseController {
 				array(
 					'feature' => 'files_integrity',
 					'action'  => 'files_integrity_start_failed',
-					'error'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'error'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				)
 			);
 			return array(
@@ -762,6 +797,29 @@ class IntegrityWatchController extends BaseController {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Whether an unfinished baseline build has stopped for good: nothing is queued or running to
+	 * carry it on, and the process that owned it failed or is gone. An owner that recovery has
+	 * not given up on still counts as running, so the screen does not report it stopped while
+	 * recovery is about to resume it.
+	 *
+	 * @return bool
+	 */
+	private function tailwatch_baseline_build_stopped() {
+		if ( $this->tailwatch_integrity_scan_starting() ) {
+			return false;
+		}
+
+		$progress   = (array) $this->load_progress( $this->progress_file );
+		$process_id = $progress['process_id'] ?? '';
+		if ( empty( $process_id ) ) {
+			return true;
+		}
+
+		$process = $this->process_manager->get_process( $process_id );
+		return ! is_array( $process ) || ! empty( $process['failed_at'] );
 	}
 
 	/**
@@ -839,6 +897,17 @@ class IntegrityWatchController extends BaseController {
 						'code'       => 200,
 					);
 				}
+			} elseif ( false === $existing_entry['is_completed'] && $this->tailwatch_baseline_build_stopped() ) {
+				$response = array_merge(
+					array(
+						'isEnabled'  => true,
+						'is_request' => false,
+						'scan_state' => 'failed',
+						'message'    => __( 'File monitoring setup stopped before it finished. Run a scan to continue from where it stopped.', 'tailwatch' ),
+						'code'       => 200,
+					),
+					$this->tailwatch_baseline_build_progress()
+				);
 			} elseif ( false === $existing_entry['is_completed'] ) {
 				$response = array_merge(
 					array(
@@ -860,7 +929,7 @@ class IntegrityWatchController extends BaseController {
 						'scan_type'    => $existing_data['scan_type'],
 						'is_completed' => false,
 						'scan_state'   => 'pause',
-						'message'      => __( 'File comparison was the pause.', 'tailwatch' ),
+						'message'      => __( 'File comparison was paused.', 'tailwatch' ),
 						'code'         => 200,
 					);
 				} elseif ( ! empty( $existing_data ) && ( 'in-progress' === $existing_data['scan_state'] ) ) {
@@ -896,7 +965,7 @@ class IntegrityWatchController extends BaseController {
 				array(
 					'feature' => 'files_integrity',
 					'action'  => 'files_integrity_status_verify_failed',
-					'error'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'error'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				)
 			);
 			return array(
@@ -926,7 +995,7 @@ class IntegrityWatchController extends BaseController {
 				array(
 					'feature' => 'files_integrity',
 					'action'  => 'files_integrity_live_logs_failed',
-					'error'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'error'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				)
 			);
 			return array(
@@ -1018,9 +1087,12 @@ class IntegrityWatchController extends BaseController {
 	/**
 	 * Updates files integrity progress (cancel/pause state).
 	 *
-	 * @param array $options Progress options to save.
+	 * @param array $options            Progress options to save.
+	 * @param bool  $allow_state_change Resume only: put a paused scan back to work.
 	 */
-	public function update_files_integrity_cancel_pause( array $options ) {
+	public function update_files_integrity_cancel_pause( array $options, $allow_state_change = false ) {
+		$options = $this->tailwatch_keep_stop_state( $options, $allow_state_change );
+
 		$db_model = new DBModel();
 		$tailwatch_key = 'default_files_integrity_check';
 		$option   = 'files_integrity_progress';
@@ -1030,6 +1102,37 @@ class IntegrityWatchController extends BaseController {
 		);
 
 		$db_model->update_recent_row( $db_data, $tailwatch_key, $option );
+	}
+
+	/**
+	 * Keep a pause, cancel, finish or failure from being undone by an older copy of this row.
+	 *
+	 * The live-log poll writes back the copy it read at its start. One read before the user
+	 * paused, or before the comparison finished or failed, would put 'in-progress' back. A
+	 * finished or failed row is kept whole. Only resume moves a stopped scan back to work,
+	 * and it says so.
+	 *
+	 * @param array $options            The row about to be stored.
+	 * @param bool  $allow_state_change Resume only.
+	 * @return array
+	 */
+	private function tailwatch_keep_stop_state( array $options, $allow_state_change ) {
+		if ( $allow_state_change || ! isset( $options['scan_state'] ) || 'in-progress' !== $options['scan_state'] ) {
+			return $options;
+		}
+
+		$current = $this->get_files_integrity_progress();
+		if ( ! is_array( $current ) || ! isset( $current['scan_state'] ) ) {
+			return $options;
+		}
+		if ( in_array( $current['scan_state'], array( 'completed', 'failed' ), true ) ) {
+			return $current;
+		}
+		if ( in_array( $current['scan_state'], array( 'pause', 'cancel' ), true ) ) {
+			$options['scan_state'] = $current['scan_state'];
+		}
+
+		return $options;
 	}
 
 	/**
@@ -1043,10 +1146,16 @@ class IntegrityWatchController extends BaseController {
 			$existing_data = $this->get_files_integrity_progress();
 
 			if ( ! empty( $existing_data ) && ! empty( $existing_data['scan_state'] ) && 'pause' === $existing_data['scan_state'] ) {
+				// Resumed only while nothing that cannot run beside it is running or paused.
+				$blocked = ( new ProcessGuard() )->ensure_can_start_process( 'files_integrity' );
+				if ( null !== $blocked ) {
+					return $blocked;
+				}
+
 				wp_schedule_single_event( time() + 5, 'tailwatch_files_integrity_scan' );
 
 				$existing_data['scan_state'] = 'in-progress';
-				$this->update_files_integrity_cancel_pause( $existing_data );
+				$this->update_files_integrity_cancel_pause( $existing_data, true );
 
 				Log::info(
 					'Files Integrity Resumed',
@@ -1089,7 +1198,7 @@ class IntegrityWatchController extends BaseController {
 				array(
 					'feature' => 'files_integrity',
 					'action'  => 'files_integrity_resume_failed',
-					'error'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'error'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				)
 			);
 			return array(
@@ -1115,6 +1224,18 @@ class IntegrityWatchController extends BaseController {
 			$existing_data = $this->get_files_integrity_progress();
 
 			if ( ! empty( $data['scan_state'] ) && ( 'pause' === $data['scan_state'] || 'cancel' === $data['scan_state'] ) ) {
+				$current_state = ( is_array( $existing_data ) && isset( $existing_data['scan_state'] ) ) ? $existing_data['scan_state'] : '';
+				// Cancelling deletes the comparison's results, so a click that lands after the scan
+				// finished must not take them. Pause only means something to a scan that is running.
+				if ( 'completed' === $current_state || ( 'pause' === $data['scan_state'] && 'in-progress' !== $current_state ) ) {
+					return array(
+						'data'    => array(),
+						'message' => ( 'completed' === $current_state )
+							? __( 'This run has already finished, so there is nothing to pause or cancel.', 'tailwatch' )
+							: __( 'Only a run that is in progress can be paused.', 'tailwatch' ),
+						'code'    => 409,
+					);
+				}
 
 				$existing_data['scan_state'] = $data['scan_state'];
 				$this->update_files_integrity_cancel_pause( $existing_data );
@@ -1139,7 +1260,6 @@ class IntegrityWatchController extends BaseController {
 					}
 					$eid = $existing_data['id'];
 					$this->tailwatch_delete_comparison_entry( array( $eid ), false );
-					// Optional: wp_schedule_single_event( time() + 5, 'tailwatch_delete_integrity_logs_file' ).
 				} elseif ( 'pause' === $data['scan_state'] ) {
 					$message = 'Files Integrity paused successfully. You can resume it later.';
 					Log::info(
@@ -1183,7 +1303,7 @@ class IntegrityWatchController extends BaseController {
 				array(
 					'feature' => 'files_integrity',
 					'action'  => 'files_integrity_cancel_pause_failed',
-					'error'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'error'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				)
 			);
 			return array(
@@ -1366,7 +1486,7 @@ class IntegrityWatchController extends BaseController {
 				array(
 					'feature' => 'files_integrity',
 					'action'  => 'files_integrity_delete_failed',
-					'error'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'error'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				)
 			);
 			return array(
@@ -1389,23 +1509,25 @@ class IntegrityWatchController extends BaseController {
 			return;
 		}
 
-		$get_feature     = $this->get_features_options();
-		$maintain_option = isset( $get_feature['field_1']['sub_options']['field_4']['options'] ) ? $get_feature['field_1']['sub_options']['field_4']['options'] : '6 Hours';
+		$get_feature = $this->get_features_options();
+		$options     = isset( $get_feature['field_1']['sub_options']['field_4']['options'] ) ? $get_feature['field_1']['sub_options']['field_4']['options'] : null;
 
-		if ( is_array( $maintain_option ) ) {
-			foreach ( $maintain_option as $key => $value ) {
-				if ( isset( $value['selected'] ) && $value['selected'] ) {
-					$maintain_option = $value['value'];
+		// Not configured: this plugin's default. Configured but unreadable: keep everything.
+		$hours = 6;
+		if ( is_array( $options ) ) {
+			$hours = null;
+			foreach ( $options as $option ) {
+				if ( isset( $option['selected'] ) && $option['selected'] ) {
+					$hours = $this->tailwatch_integrity_retention_hours( $option );
 					break;
 				}
 			}
 		}
 
-		if ( 'Keep All Data' === $maintain_option ) {
+		if ( null === $hours ) {
 			return;
 		}
 
-		$hours = (int) filter_var( $maintain_option, FILTER_SANITIZE_NUMBER_INT );
 		// "Now" in the SAME clock the scan_time is stored in (current_time('mysql') =
 		// WP-local), so strtotime($scan_time) below compares like-for-like. Using a
 		// raw time() (UTC) here would skew the age by the site's GMT offset and
@@ -1413,8 +1535,7 @@ class IntegrityWatchController extends BaseController {
 		$current_time = strtotime( current_time( 'mysql' ) );
 
 		// Drop scans older than the retention window (+ their sidecars). Scans are
-		// bounded by this very job, so listing them is cheap and lets us keep the
-		// exact strtotime()/time() age comparison the file path used.
+		// bounded by this very job, so listing them all is cheap.
 		$file_mon    = new FileMonModel();
 		$all         = $file_mon->list_scans( array( 'completed_only' => false, 'limit' => 100000, 'offset' => 0 ) );
 		$deleted_ids = array();
@@ -1434,6 +1555,23 @@ class IntegrityWatchController extends BaseController {
 	}
 
 	/**
+	 * Hours of history a retention choice keeps, or null to keep everything. "N Hours" is
+	 * read here; any other option is answered by whoever offered it.
+	 *
+	 * @param array $option Selected retention option.
+	 * @return int|null
+	 */
+	private function tailwatch_integrity_retention_hours( $option ) {
+		$value = isset( $option['value'] ) && is_string( $option['value'] ) ? trim( $option['value'] ) : '';
+		if ( 1 === preg_match( '/^([1-9]\d*) Hours?$/', $value, $matches ) ) {
+			return (int) $matches[1];
+		}
+
+		$answer = apply_filters( 'tailwatch_integrity_retention_hours', null, $option );
+		return ( is_numeric( $answer ) && (int) $answer > 0 ) ? (int) $answer : null;
+	}
+
+	/**
 	 * Reschedules files integrity cron if it failed or is not scheduled.
 	 *
 	 * @return array
@@ -1441,7 +1579,14 @@ class IntegrityWatchController extends BaseController {
 	public function tailwatch_files_integrity_cron_if_failed() {
 		try {
 			$get_integrity_data = $this->get_files_integrity_progress();
-			$cron_running       = ( is_array( $get_integrity_data ) && isset( $get_integrity_data['cron_running'] ) )
+			if ( is_array( $get_integrity_data ) && 'failed' === ( $get_integrity_data['scan_state'] ?? '' ) ) {
+				return array(
+					'data'    => '',
+					'message' => __( 'This run has stopped, so there is nothing to restart.', 'tailwatch' ),
+					'code'    => 409,
+				);
+			}
+			$cron_running = ( is_array( $get_integrity_data ) && isset( $get_integrity_data['cron_running'] ) )
 				? $get_integrity_data['cron_running']
 				: null;
 			if ( false === $cron_running ) {
@@ -1513,7 +1658,7 @@ class IntegrityWatchController extends BaseController {
 				array(
 					'feature' => 'files_integrity',
 					'action'  => 'files_integrity_cron_if_failed_on_attempt',
-					'error'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'error'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				)
 			);
 			return array(
@@ -1604,9 +1749,9 @@ class IntegrityWatchController extends BaseController {
 
 			$last_scanned_file = $progress['last_scanned_file'] ?? null;
 
-			if ( empty( $progress['process_id'] ) && ! empty( $this->current_process_id ) ) {
-				$progress['process_id'] = $this->current_process_id;
-				$this->save_progress( $progress_file, $last_scanned_file, $process_id );
+			// A build left by a process that has since failed carries on under this one.
+			if ( ! empty( $this->current_process_id ) && ( $progress['process_id'] ?? '' ) !== $this->current_process_id ) {
+				$this->save_progress( $progress_file, $last_scanned_file, $process_id, $progress['scan_queue_offset'] ?? null, $progress['queue_total'] ?? null, $progress['queue_processed'] ?? null );
 			}
 			$response = false;
 		} else {
@@ -1627,10 +1772,10 @@ class IntegrityWatchController extends BaseController {
 	 * Cron callback: starts or continues file monitoring.
 	 *
 	 * Processes as many batches as fit inside one time/memory budget (the "tick"), then
-	 * reschedules ONCE if work remains. This replaces the old one-batch-per-cron-event
-	 * cadence (every batch paid a full WP-Cron loopback + 5s gap), which made large
-	 * trees crawl. A single-worker lock prevents the recurring schedule, an injected scan
-	 * step, and the healthcheck from running two workers on the same shared cursor.
+	 * reschedules ONCE if work remains, so a large tree does not pay a full WP-Cron
+	 * loopback + 5s gap per batch. A single-worker lock prevents the recurring schedule,
+	 * an injected scan step, and the healthcheck from running two workers on the same
+	 * shared cursor.
 	 */
 	public function tailwatch_start_monitoring_files() {
 		if ( ! $this->tailwatch_acquire_scan_lock() ) {
@@ -1665,8 +1810,8 @@ class IntegrityWatchController extends BaseController {
 				// Comparison loop. Per-tick state flags are written once up front, then
 				// batches run until the comparison completes/pauses/fails or the budget is hit.
 				$existing_data = $this->get_files_integrity_progress();
-				// A duplicate tick after completion must not reactivate the finished row or restart the scan.
-				if ( ! empty( $existing_data['scan_state'] ) && 'completed' === $existing_data['scan_state'] ) {
+				// A tick after the comparison finished or failed must not reactivate the row or restart the scan.
+				if ( ! empty( $existing_data['scan_state'] ) && in_array( $existing_data['scan_state'], array( 'completed', 'failed' ), true ) ) {
 					return;
 				}
 				$process_id    = isset( $existing_data['process_id'] ) ? $existing_data['process_id'] : ( $this->current_process_id ?? null );
@@ -1743,7 +1888,7 @@ class IntegrityWatchController extends BaseController {
 					array(
 						'feature' => 'files_integrity',
 						'action'  => 'files_integrity_complete_failed',
-						'error'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+						'error'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					)
 				);
 			}
@@ -1796,19 +1941,14 @@ class IntegrityWatchController extends BaseController {
 
 		$process_id = isset( $progress['process_id'] ) ? $progress['process_id'] : ( $this->current_process_id ?? null );
 
-		if ( ! empty( $process_id ) ) {
-			$this->process_manager->heart_beat( $process_id );
-			$this->process_manager->update_state( $process_id, 'in_progress' );
-		}
-
-		// Discovery decouple: walk once into a queue file and resume by byte offset
-		// (no per-batch full-tree re-walk). Falls back to the legacy re-walk when
-		// the queue is unavailable, so behaviour degrades gracefully.
+		// Walk once into a queue file and resume by byte offset (no per-batch
+		// full-tree re-walk). Falls back to a per-batch re-walk when the queue is
+		// unavailable, so behaviour degrades gracefully.
 		$queued = $this->tailwatch_scan_batch_from_queue( $path_to_monitor, $progress_file, $this->batch_size );
 		if ( null === $queued ) {
 			$remaining_files = $this->scan_files( $path_to_monitor, $last_scanned_file, $this->batch_size );
 			$queue_offset    = null;
-			$queue_total     = $progress['queue_total'] ?? null; // legacy fallback path has no queue total
+			$queue_total     = $progress['queue_total'] ?? null; // The re-walk fallback has no queue total.
 		} else {
 			$remaining_files = $queued['files'];
 			$queue_offset    = $queued['next_offset'];
@@ -1828,6 +1968,8 @@ class IntegrityWatchController extends BaseController {
 		$last_file_processed = end( $remaining_files );
 		$this->save_progress( $progress_file, $last_file_processed, $process_id, $queue_offset, $queue_total, $queue_processed );
 
+		// The process checks in only once the batch is saved, so recovery counts a batch that
+		// dies part-way as no progress and gives up on one that dies every time.
 		if ( $process_id ) {
 			$this->process_manager->update_metadata(
 				$process_id,
@@ -1837,6 +1979,7 @@ class IntegrityWatchController extends BaseController {
 					'initial_completed'   => $is_completed,
 				)
 			);
+			$this->process_manager->update_state( $process_id, 'in_progress' );
 		}
 
 		if ( $is_completed ) {
@@ -1881,8 +2024,6 @@ class IntegrityWatchController extends BaseController {
 		$skip_large  = $this->tailwatch_skip_large_files();
 
 		foreach ( $files as $file_path ) {
-
-			// Relative path computed below (works for local and live).
 
 			$relative_path = trim( substr( $file_path, $base_length ), DIRECTORY_SEPARATOR );
 
@@ -2071,7 +2212,7 @@ class IntegrityWatchController extends BaseController {
 	}
 
 	/**
-	 * Reconstruct a comparison_status block (the legacy JSON shape) from a
+	 * Reconstruct a comparison_status block (the JSON shape callers read) from a
 	 * tw_filemon_scans row plus its change-tree sidecar.
 	 *
 	 * @param array $row          Scan row.
@@ -2100,7 +2241,7 @@ class IntegrityWatchController extends BaseController {
 
 	/**
 	 * Public: the latest comparison (reconstructed from tw_filemon_scans + its
-	 * sidecar), or null when none exists. Lets the pro malware handoff read the
+	 * sidecar), or null when none exists. Lets an add-on's malware handoff read the
 	 * latest comparison without touching comparison_status.json directly.
 	 *
 	 * @return array|null
@@ -2117,8 +2258,8 @@ class IntegrityWatchController extends BaseController {
 
 	/**
 	 * Public: aggregated integrity dashboard stats from tw_filemon_scans. Sums the
-	 * per-scan counters in SQL (no folder_files trees loaded), so the pro security
-	 * dashboard no longer reads/decodes the whole comparison_status.json.
+	 * per-scan counters in SQL, so a security dashboard never loads or decodes
+	 * a folder_files tree.
 	 *
 	 * @param int $period_days Window, in days, for the "period" split.
 	 * @return array{totals:array,period:array,last_comparison:?array}
@@ -2160,7 +2301,7 @@ class IntegrityWatchController extends BaseController {
 
 	/**
 	 * Public: the comparison_status for a scan id (row + sidecar), or null. Lets
-	 * the pro baseline updater read a specific comparison without decoding
+	 * an add-on's baseline updater read a specific comparison without decoding
 	 * comparison_status.json.
 	 *
 	 * @param int $scan_id Comparison/scan id.
@@ -2198,8 +2339,7 @@ class IntegrityWatchController extends BaseController {
 	/**
 	 * Public: apply a comparison's accepted changes to the baseline table —
 	 * re-hash new/modified files from disk and upsert them, delete removed files.
-	 * Replaces the pro updater's load-tree / mutate / save-tree cycle, so the whole
-	 * baseline is never held in memory.
+	 * Works on the changed rows only, so the whole baseline is never held in memory.
 	 *
 	 * @param string $monitored_path Monitored root the changes belong to.
 	 * @param array  $changes        Each: file_path (absolute), status (new|modified|deleted).
@@ -2597,7 +2737,7 @@ class IntegrityWatchController extends BaseController {
 					$dir_iterator,
 					static function ( $current ) use ( $exclude_reals ) {
 						if ( ! $current->isDir() ) {
-							return true; // files are boundary-checked in the loop.
+							return true; // Files are boundary-checked in the loop.
 						}
 						$real = $current->getRealPath();
 						if ( false === $real ) {
@@ -2713,8 +2853,8 @@ class IntegrityWatchController extends BaseController {
 	 * Walk the tree ONCE and stream every in-scope file path (same skip rules as
 	 * scan_files) into a newline-delimited queue file, published atomically via a
 	 * temp + rename. Lets batches resume by byte offset instead of re-walking and
-	 * skipping file-by-file (the old O(N^2) cost). Bounded memory: the iterator is
-	 * lazy and paths are written one at a time.
+	 * skipping file-by-file (O(N^2) over a whole scan). Bounded memory: the iterator
+	 * is lazy and paths are written one at a time.
 	 *
 	 * @param string $directory  Root to walk.
 	 * @param string $queue_file Destination queue path.
@@ -2723,7 +2863,7 @@ class IntegrityWatchController extends BaseController {
 	private function tailwatch_build_scan_queue( $directory, $queue_file ) {
 		// $directory (ABSPATH) is unused; the concrete roots come from
 		// tailwatch_monitor_folders() (the same set scan_files() walks). The skip
-		// rules (own-storage + error_log/debug.log) now live inside the walker.
+		// rules (own-storage + error_log/debug.log) live inside the walker.
 		unset( $directory );
 
 		$tmp = $queue_file . '.tmp';
@@ -2763,8 +2903,7 @@ class IntegrityWatchController extends BaseController {
 	 * Return the next batch of file paths from the discovery queue, building the
 	 * queue once at the start of a scan (offset 0). Resume is O(1) — seek to the
 	 * stored byte offset and read batch_size lines. Returns null to signal the
-	 * caller to fall back to the legacy re-walk (queue unavailable / lost), so
-	 * correctness degrades gracefully to current behaviour.
+	 * caller to fall back to the per-batch re-walk (queue unavailable / lost).
 	 *
 	 * @param string $directory     Root to scan.
 	 * @param string $progress_file Progress file (carries scan_queue_offset).
@@ -2790,7 +2929,7 @@ class IntegrityWatchController extends BaseController {
 				return null;
 			}
 		} elseif ( ! file_exists( $queue_file ) ) {
-			// Queue lost mid-scan: fall back to the legacy resume by last_scanned_file.
+			// Queue lost mid-scan: fall back to resuming by last_scanned_file.
 			return null;
 		}
 
@@ -2893,8 +3032,8 @@ class IntegrityWatchController extends BaseController {
 			$prior_row     = $file_mon->get_scan( $next_id );
 			$prior_scanned = ( null !== $prior_row ) ? (int) $prior_row['new_scan_file'] : 0;
 
-			// Discovery decouple: walk-once queue with byte-offset resume; legacy
-			// re-walk as fallback (see generate_initial_snapshot).
+			// Walk-once queue with byte-offset resume; per-batch re-walk as
+			// fallback (see generate_initial_snapshot).
 			$queued = $this->tailwatch_scan_batch_from_queue( $path_to_monitor, $progress_file, $this->batch_size );
 			if ( null === $queued ) {
 				$current_files_batch = $this->scan_files( $path_to_monitor, $last_scanned_file, $this->batch_size );
@@ -2985,11 +3124,10 @@ class IntegrityWatchController extends BaseController {
 			$malware_status_initial = isset( $malware['status'] ) ? (string) $malware['status'] : 'Inactive';
 			$suspicious_handling_initial = isset( $malware['suspicious_handling'] ) ? (string) $malware['suspicious_handling'] : 'No';
 
-			// Accumulate this batch into the comparison's row + sidecar (the table is
-			// the only store now): counts add up across batches and the change-tree
-			// merges. Insert on the first batch, update on later ones (handled inside
-			// tailwatch_write_scan_status). Malware fields + scan_time are set on the first
-			// batch and preserved thereafter.
+			// Accumulate this batch into the comparison's row + sidecar: counts add up
+			// across batches and the change-tree merges. Insert on the first batch, update
+			// on later ones (handled inside tailwatch_write_scan_status). Malware fields +
+			// scan_time are set on the first batch and preserved thereafter.
 			$prior_tree  = ( null !== $prior_row ) ? $file_mon->read_sidecar( $next_id ) : array();
 			$merged_tree = $this->merge_folder_files( $prior_tree, $comparison_files );
 
@@ -3084,7 +3222,6 @@ class IntegrityWatchController extends BaseController {
 
 				do_action( 'tailwatch_after_integrity_check_completed', wp_json_encode( $integrity_data ) );
 
-				// Optional: schedule cleanup event.
 				return false; // Comparison complete — no more work.
 			} elseif ( count( $current_files_batch ) === $this->batch_size ) {
 				// The tick loop owns rescheduling; only self-reschedule when invoked outside it.
@@ -3106,7 +3243,7 @@ class IntegrityWatchController extends BaseController {
 				array(
 					'feature' => 'files_integrity',
 					'action'  => 'files_integrity_complete_failed',
-					'error'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'error'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				)
 			);
 
@@ -3135,7 +3272,7 @@ class IntegrityWatchController extends BaseController {
 				array(
 					'feature' => 'files_integrity',
 					'action'  => 'files_integrity_delete_failed',
-					'error'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'error'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				)
 			);
 		}
@@ -3201,6 +3338,7 @@ class IntegrityWatchController extends BaseController {
 		$comparison_files = array();
 		$files_to_delete  = array();
 		$log_messages     = array();
+		$stat_moved       = array();
 
 		foreach ( $current_files_map as $file_path => $current_file ) {
 
@@ -3222,6 +3360,13 @@ class IntegrityWatchController extends BaseController {
 					$prev_size      = round( $initial_file['size'] / 1024, 1 );
 					$curr_size      = round( $current_file['size'] / 1024, 1 );
 					$log_messages[] = 'Modified: ' . basename( $file_path ) . ' (' . $prev_size . 'KB → ' . $curr_size . 'KB)';
+				} elseif ( '' !== (string) $current_file['file_hash']
+					&& ( (int) $current_file['size'] !== (int) $initial_file['size'] || (int) $current_file['modified'] !== (int) $initial_file['modified'] ) ) {
+					$stat_moved[ FileMonModel::path_key( $file_path ) ] = array(
+						'file_hash' => (string) $current_file['file_hash'],
+						'size'      => (int) $current_file['size'],
+						'modified'  => (int) $current_file['modified'],
+					);
 				}
 				$files_to_delete[] = $file_path;
 			} else {
@@ -3249,6 +3394,7 @@ class IntegrityWatchController extends BaseController {
 		// deleted set (get_deleted).
 		if ( $file_mon instanceof FileMonModel ) {
 			$file_mon->mark_seen( $scan_id, array_map( array( FileMonModel::class, 'path_key' ), $files_to_delete ) );
+			$file_mon->refresh_stat( $stat_moved );
 		}
 
 		return $this->build_tree( $comparison_files, $current_directory );
@@ -3256,9 +3402,9 @@ class IntegrityWatchController extends BaseController {
 
 	/**
 	 * Build the path-keyed baseline map the comparison needs, for ONLY the given
-	 * batch paths, from tw_filemon_baseline. Each row is shaped like the legacy
-	 * flatten (modified as a unix timestamp for gmdate) so compare_files stays
-	 * storage-agnostic.
+	 * batch paths, from tw_filemon_baseline. Each row is shaped like a
+	 * map_files_by_path() leaf (modified as a unix timestamp for gmdate) so
+	 * compare_files stays storage-agnostic.
 	 *
 	 * @param FileMonModel $file_mon       Repository.
 	 * @param string       $monitored_path Monitored root.
@@ -3475,7 +3621,7 @@ class IntegrityWatchController extends BaseController {
 				array(
 					'feature' => 'files_integrity',
 					'action'  => 'files_integrity_entries_retrieval_failed',
-					'error'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'error'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				)
 			);
 			return array(
@@ -3656,7 +3802,7 @@ class IntegrityWatchController extends BaseController {
 				array(
 					'feature' => 'files_integrity',
 					'action'  => 'files_integrity_entry_details_by_id_failed',
-					'error'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'error'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				)
 			);
 			return array(
@@ -3704,7 +3850,7 @@ class IntegrityWatchController extends BaseController {
 				array(
 					'feature' => 'files_integrity',
 					'action'  => 'files_integrity_status_failed',
-					'error'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'error'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 				)
 			);
 			return array(

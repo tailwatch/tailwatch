@@ -16,16 +16,17 @@ const WhiteListCountry = ({ widget, limit, isGeoLicense }) => {
         <div>
             {!widget && (
                 <TableControlStrip showCanvas={true} isDisabled={loading} handleDeleteAll={handleDeletAll} featureId={ipManagement?.featureId} CheckStatus={checkWhiteCountryListStatus} disbaled={filteredData.length===0} selectedFilesCount={selectedItems.length} handleBulkDelete={handleBulkDelete} isDeleting={isDeleting} searchTerm={searchTerm} setSearchTerm={setSearchTerm} hasEligibleFiles={filteredData.length > 0} showDeleteButton={true} showControls={true}
-                    showAddButton={true} addButtonLabel="Add to Whitelist" onAddButtonClick={handleOpenModal} onButtonDisable={loading || featureEnable === false || parentEnable === false || isLicenseConnect === true || !isGeoLicense?.is_connected || ipManagement?.isActiveState === '0'} />
+                    showAddButton={true} addButtonLabel="Add to Whitelist" onAddButtonClick={handleOpenModal} onButtonDisable={loading || featureEnable === false || parentEnable === false || isLicenseConnect === true || isLicenseConnect?.code === 402 || !isGeoLicense?.is_connected || ipManagement?.isActiveState === '0'} />
             )}
             {loading ? (
                 <LoaderSkeleton count="0" />
             ) : (
                 <div className='space-y-4'>
                     {(featureEnable === false || parentEnable === false || isLicenseConnect === true || ipManagement?.isActiveState === '0' ) && (<InfoBar type="info" message="Please Configure your Settings First" />)}
+                    {(isLicenseConnect?.code === 402) && <InfoBar type="info" message={isLicenseConnect?.message} />}
                     {!widget && <GeoLicenseNotice isGeoLicense={isGeoLicense} />}
                     {widget && (
-                        <ActionButton defaultText="Add to Whitelist" isDisabled={featureEnable === false || parentEnable === false || isLicenseConnect === true || isGeoLicense?.is_connected === false || ipManagement?.isActiveState === '0' } onClick={handleOpenModal} className="shadow-lg hover:shadow-xl" />
+                        <ActionButton defaultText="Add to Whitelist" isDisabled={featureEnable === false || parentEnable === false || isLicenseConnect === true || isLicenseConnect?.code === 402 || isGeoLicense?.is_connected === false || ipManagement?.isActiveState === '0' } onClick={handleOpenModal} className="shadow-lg hover:shadow-xl" />
                     )}
                     <Table columns={columns} data={filteredData} renderRow={renderRow} noDataMessage="No whitelist countries found" />
                     {!widget && (

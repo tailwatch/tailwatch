@@ -100,7 +100,7 @@ const CurrentActivityData = ({ currentActivity }) => {
     const rateViolations = activity.rate_limit_violations ?? 0;
     const lockType = activity.lock_type || 'none';
     const lockDuration = formatDuration(activity.lock_duration);
-    // Backend now ships current_activity.time_remaining as a pre-formatted human
+    // The server sends current_activity.time_remaining as a pre-formatted human
     // string (e.g. "23 hours, 59 minutes" or "Permanent"). Prefer it; fall back
     // to the client-side formatted lockDuration when the field is missing.
     const timeRemaining = activity.time_remaining || null;

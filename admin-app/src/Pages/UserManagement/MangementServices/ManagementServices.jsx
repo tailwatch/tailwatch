@@ -1,3 +1,4 @@
+import { readFeatureGate } from '../../../Components/Utils/featureGate';
 import axios from "axios";
 import { toast } from 'react-toastify';
 /* global tailwatch_ajax */
@@ -101,6 +102,10 @@ export const fetchTempLoginData = async ({  setTempLoginData, setLoading,setFeat
         'Content-Type': 'multipart/form-data',
       },
     });    
+    // A reply the gate let through is proof both switches are on. Read from every
+    // response, not only refusals, so these flags cannot latch to false and stay there.
+    readFeatureGate(response, setFeatureEnable, setParentEnable);
+
     
     if (response.data.success === true) {
       const processedData = Object.keys(response.data.data.data)
@@ -163,7 +168,6 @@ export const tempUserRoles = async ({ setTempRoles, setTempLang, setTempSlug, se
     });
 
     if (response.status === 200) {
-      // Set the state with the correct data from the response
       setTempRoles(response.data.data.data.roles);
       setTempLang(response.data.data.data.languages);
       setTempSlug(response.data.data.data.redirect_slugs);
@@ -261,7 +265,7 @@ export const updateTwoFa = async ({ userId, username, state, setUserData, setLoa
     }
   } catch (error) {
     console.error('Error updating 2FA:', error);
-    return false;
+    return { success: false, message: 'Failed to update 2FA.' };
   }
 };
 
@@ -313,7 +317,7 @@ export const manageLoginStatus = async ({ user_id, enable, expiry_time, reset_lo
     formData.append('action', 'tailwatch_global_ajax_handler');
     formData.append('action_type', 'tailwatch_manage_login_status');
     formData.append('nonce', tailwatch_ajax.nonce);
-    formData.append('data', JSON.stringify({ user_id, enable, expiry_time, reset_login_count })); // ✅ added
+    formData.append('data', JSON.stringify({ user_id, enable, expiry_time, reset_login_count }));
 
     const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: {

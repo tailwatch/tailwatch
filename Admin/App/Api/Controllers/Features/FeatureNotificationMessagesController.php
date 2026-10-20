@@ -202,7 +202,7 @@ class FeatureNotificationMessagesController {
 				'disabled' => 'Malware scanning is off. Infected files can sit on your server unnoticed and quietly serve malware to visitors or hijack your site for SEO spam.',
 			),
 			'default_database_optimizer'     => array(
-				'enabled'  => 'Database optimizer tools are available in your dashboard. You can change your table prefix, clean revisions, and remove orphaned data whenever you need.',
+				'enabled'  => 'Database optimizer tools are available in your dashboard. You can remove orphaned data, trashed items, expired transients and old log entries whenever you need.',
 				'disabled' => 'Database optimizer tools are hidden. Your database may slowly accumulate junk rows, which can slow the site and inflate storage usage over time.',
 			),
 			'default_file_integrity_check'   => array(

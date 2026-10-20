@@ -11,7 +11,8 @@ export const useDatabaseOptimizer = () => {
     const [verifyStatus, setVerifyStatus] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isOperationInProgress, setIsOperationInProgress] = useState(false);
-    const [isCanceled, setIsCanceled] = useState(false);        
+    const [isCanceled, setIsCanceled] = useState(false);
+    const [isFailed, setIsFailed] = useState(false);
     const [verifyLoading, setVerifyLoading] = useState(true);
     const [isPausing, setIsPausing] = useState(false);
     const [isCanceling, setIsCanceling] = useState(false);
@@ -85,7 +86,7 @@ export const useDatabaseOptimizer = () => {
         if (scanState === "in-progress" && !isCompleted) {
             const delayFetchLogs = setTimeout(() => {
 
-                fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setIsLogsVisible, setIsScanInProgress, setProgress, setRenderKey, setIsPausing, setIsPaused, setIsCanceled, setOperationLoading, isLastLogIndex, setIsLastLogIndex);
+                fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setIsLogsVisible, setIsScanInProgress, setProgress, setRenderKey, setIsPausing, setIsPaused, setIsCanceled, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setIsFailed);
             }, 4000);
 
             return () => clearTimeout(delayFetchLogs);
@@ -106,7 +107,7 @@ export const useDatabaseOptimizer = () => {
 
         try {
             const scanSuccessful = await instantScanning(
-                setScanCompleted, () => fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setIsLogsVisible, setIsScanInProgress, setProgress, setRenderKey, setIsPausing, setIsPaused, setIsCanceled, setOperationLoading, isLastLogIndex, setIsLastLogIndex));
+                setScanCompleted, () => fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setIsLogsVisible, setIsScanInProgress, setProgress, setRenderKey, setIsPausing, setIsPaused, setIsCanceled, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setIsFailed));
 
             if (!scanSuccessful) {
                 return;
@@ -119,6 +120,7 @@ export const useDatabaseOptimizer = () => {
             setIsCanceling(false);
             setIsCanceled(false);
             setIsCompleted(false);
+            setIsFailed(false);
             setProgress(1);
             setIsLogsVisible(true);
             setRenderKey((prevKey) => prevKey + 1);
@@ -131,7 +133,7 @@ export const useDatabaseOptimizer = () => {
     };
 
     const handleOptimizeAction = async (scan_state) => {
-        onPauseOrCancel({ scan_state, setIsLogsVisible, setLogs, setIsScanInProgress, setIsCompleted, setIsPaused, setErrorMessages })
+        return onPauseOrCancel({ scan_state, setIsLogsVisible, setLogs, setIsScanInProgress, setIsCompleted, setIsPaused, setErrorMessages })
     };
 
     const handleCancelOptimize = async () => {
@@ -139,7 +141,12 @@ export const useDatabaseOptimizer = () => {
             setOperationLoading(true);
         }
         setIsCanceling(true);
-        await handleOptimizeAction("cancel")        
+        const accepted = await handleOptimizeAction("cancel")
+        if (accepted === false) {
+            setOperationLoading(false);
+            setIsCanceling(false);
+            return;
+        }
         setIsCanceled(true)
         setIsScanInProgress(false);
         setIsLogsVisible(false);
@@ -152,13 +159,14 @@ export const useDatabaseOptimizer = () => {
     const handlePauseOptimize = async () => {
         setOperationLoading(true);
         setIsPausing(true);
-        await handleOptimizeAction("pause");
-        // await verifyDatabaseStatus();
-        // setLoading(true);
+        const accepted = await handleOptimizeAction("pause");
+        if (accepted === false) {
+            setOperationLoading(false);
+            setIsPausing(false);
+            return;
+        }
         setIsPaused(true);
         setVerifyStatus(true);
-        // setRenderKey((prevKey) => prevKey + 1);
-        // setLoading(false);
     };
 
     const handleToggleDetails = () => {
@@ -172,10 +180,10 @@ export const useDatabaseOptimizer = () => {
         await verifyDatabaseOptimizeStatus({ setProgress, setScanState, setProcessType, setScanType, setVerifyStatus, setVerifyLoading, setFeatureEnable, setParentEnable });
     }
 
-    // for LockCard 
+    // For LockCard
     const checkDatabaseStatus = async () => {
-        if (isChecking.current) return; // Exit if already running
-        isChecking.current = true; // Set flag to true
+        if (isChecking.current) return;
+        isChecking.current = true;
         try {
             await refreshDatabaseStatus();
             setFetchTrigger((prevKey) => prevKey + 1);
@@ -199,6 +207,7 @@ export const useDatabaseOptimizer = () => {
         setLogs([]);
         setIsCanceled(false);
         setIsCanceling(false);
+        setIsFailed(false);
         setIsCompleted(false);
         setIsLogsVisible(false);
         setIsScanInProgress(false);
@@ -218,19 +227,21 @@ export const useDatabaseOptimizer = () => {
         fetchOptimizerStatus();
     }, [fetchTrigger, renderKey])
 
+    // Failed is included because an auto-scheduled run keeps its details closed, and its
+    // "in progress" bar (the only way to open them) is hidden once the run has failed.
     useEffect(() => {
-        if (isCompleted) {
+        if (isCompleted || isFailed) {
             setShowDetails(true);
             setVerifyStatus(true);
         }
-    }, [isScanInProgress, isCompleted]);    
+    }, [isScanInProgress, isCompleted, isFailed]);
 
     return {
         verifyLoading, enableDatabase, showErrorAccordion, errorMessages, fetchTrigger, scanType, isCompleted, scanState, isCanceled, handleToggleDetails, showDetails, handleInstantScan,
         setIsLogsVisible, isLogsVisible, isScanInProgress, isStarting, isOperationInProgress, handleResumeOptimize, handleCancelOptimize, handlePauseOptimize, isPaused, isPausing, verifyStatus, isCanceling, resetAllStates, processType,
         checkDatabaseStatus, setIsScanInProgress, setLogs, setIsCompleted, setProgress, setIsOperationInProgress, isComponentActive, fetchLogs, setRenderKey, setIsFetchingLogs, verifyDatabaseStatus,
         progress, progressBarColor, logs, setIsModalOpen, setIsPaused, setParentEnable, setFeatureEnable, setIsCanceled, renderKey, isModalOpen, setIsPausing, featureEnable, parentEnable, setOperationLoading, isOperationLoading, checkTableStatus, isLastLogIndex, setIsLastLogIndex,
-        optimizerStatus, optimizerStatusLoading, fetchOptimizerStatus
+        optimizerStatus, optimizerStatusLoading, fetchOptimizerStatus, isFailed, setIsFailed
     }
 
 }

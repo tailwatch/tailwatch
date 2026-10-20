@@ -33,6 +33,7 @@ const TableControlStrip = ({
   featureId,
   CheckStatus,
   isDisabled,
+  isSearchDisabled = isDisabled,
   showBulkActions = false,
   showBruteForceActions = false,
   userBasedFilter = false,
@@ -645,10 +646,10 @@ const TableControlStrip = ({
             <input
               type="text"
               placeholder="Search..."
-              disabled={isDisabled}
+              disabled={isSearchDisabled}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`!w-full sm:!w-48 md:!w-56 lg:!w-64 !pl-9 sm:!pl-10 !pr-3 sm:!pr-4 !py-1.5 !bg-white !border !border-gray-200 !rounded-lg focus:!ring-1 focus:!ring-[#007980] focus:!border-[#007980] !shadow-sm !outline-none !text-sm ${isDisabled ? "!opacity-50 !cursor-not-allowed !bg-gray-100" : ""
+              className={`!w-full sm:!w-48 md:!w-56 lg:!w-64 !pl-9 sm:!pl-10 !pr-3 sm:!pr-4 !py-1.5 !bg-white !border !border-gray-200 !rounded-lg focus:!ring-1 focus:!ring-[#007980] focus:!border-[#007980] !shadow-sm !outline-none !text-sm ${isSearchDisabled ? "!opacity-50 !cursor-not-allowed !bg-gray-100" : ""
                 }`}
             />
             <div className="absolute inset-y-0 left-0 !pl-3 flex items-center pointer-events-none">

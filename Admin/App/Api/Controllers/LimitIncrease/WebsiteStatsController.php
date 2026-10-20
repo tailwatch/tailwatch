@@ -58,7 +58,6 @@ class WebsiteStatsController {
 	 */
 	public function get_website_stats( $sections = 'all' ) {
 		try {
-			// Available sections mapping.
 			$available_sections = array(
 				'php_configuration'       => 'get_php_configuration',
 				'server_information'      => 'get_server_information',
@@ -72,7 +71,6 @@ class WebsiteStatsController {
 
 			// Handle different input types.
 			if ( 'all' === $sections || empty( $sections ) ) {
-				// Get all sections.
 				foreach ( $available_sections as $section => $method ) {
 					$stats[ $section ] = $this->$method();
 				}
@@ -92,7 +90,6 @@ class WebsiteStatsController {
 					}
 				}
 			} else {
-				// Invalid input type.
 				return array(
 					'status'  => 'error',
 					'data'    => array(),
@@ -129,8 +126,8 @@ class WebsiteStatsController {
 			'php_version'         => PHP_VERSION,
 			'php_sapi'            => php_sapi_name(),
 			'memory_limit'        => array(
-				'value' => ini_get( 'memory_limit' ),
-				'bytes' => $this->convert_to_bytes( ini_get( 'memory_limit' ) ),
+				'value' => PerformanceOptimizerController::tailwatch_site_memory_limit(),
+				'bytes' => $this->convert_to_bytes( PerformanceOptimizerController::tailwatch_site_memory_limit() ),
 			),
 			'max_execution_time'  => array(
 				'value'   => ini_get( 'max_execution_time' ),
@@ -185,7 +182,6 @@ class WebsiteStatsController {
 			'user_agent'          => isset( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) : 'Unknown',
 		);
 
-		// Add CPU and memory info if available.
 		if ( function_exists( 'sys_getloadavg' ) ) {
 			$server_info['cpu_load'] = sys_getloadavg();
 		}
@@ -234,7 +230,6 @@ class WebsiteStatsController {
 	private function get_database_information() {
 		global $wpdb;
 
-		// Get basic database configuration.
 		$basic_info = array(
 			'database_version'     => $wpdb->db_version(),
 			'database_server_info' => $wpdb->db_server_info(),
@@ -245,12 +240,10 @@ class WebsiteStatsController {
 			'table_prefix'         => $wpdb->prefix,
 		);
 
-		// Get detailed database information using DiskSpaceController.
 		try {
 			$disk_controller  = new DiskSpaceController();
 			$database_details = $disk_controller->get_database_info();
 
-			// Merge basic info with detailed info.
 			return array_merge( $basic_info, $database_details );
 		} catch ( \Throwable $e ) {
 			// If DiskSpaceController fails, return basic info only.
@@ -272,7 +265,6 @@ class WebsiteStatsController {
 			WP_Filesystem();
 		}
 
-		// Get basic file system information.
 		$basic_info = array(
 			'wordpress_root_writable' => $wp_filesystem->is_writable( ABSPATH ),
 			'wp_content_writable'     => $wp_filesystem->is_writable( WP_CONTENT_DIR ),
@@ -284,12 +276,10 @@ class WebsiteStatsController {
 			'temp_directory_writable' => $wp_filesystem->is_writable( sys_get_temp_dir() ),
 		);
 
-		// Get detailed directory sizes using DiskSpaceController.
 		try {
 			$disk_controller = new DiskSpaceController();
 			$directory_sizes = $disk_controller->calculate_directory_sizes();
 
-			// Merge basic info with directory sizes.
 			return array_merge( $basic_info, $directory_sizes );
 		} catch ( \Throwable $e ) {
 			// If DiskSpaceController fails, return basic info only.
@@ -424,7 +414,6 @@ class WebsiteStatsController {
 			}
 			$sections = isset( $data['sections'] ) ? $data['sections'] : 'all';
 
-			// Validate sections parameter.
 			$validated_sections = $this->validate_sections( $sections, $this->available_sections );
 
 			if ( false === $validated_sections ) {
@@ -553,32 +542,27 @@ class WebsiteStatsController {
 					'temp_directory_writable' => $fs['temp_directory_writable'] ? 'Yes' : 'No',
 				);
 
-				// Add directory sizes if available.
-				if ( isset( $fs['total_site_size'] ) ) {
-					$formatted['file_system_information']['total_site_size'] = $fs['total_site_size'];
+				// Add directory sizes if available. A walk that ran out of time leaves most of
+				// the site uncounted, so its sizes are withheld rather than shown as the site's.
+				$sizes_known = empty( $fs['partial'] );
+				$size_fields = array(
+					'total_site_size' => 'total_site_size',
+					'root'            => 'wordpress_core_size',
+					'wp-admin'        => 'wp_admin_size',
+					'wp-includes'     => 'wp_includes_size',
+					'wp-content'      => 'wp_content_size',
+					'plugins'         => 'plugins_size',
+					'themes'          => 'themes_size',
+					'uploads'         => 'uploads_size',
+				);
+				foreach ( $size_fields as $from => $to ) {
+					if ( isset( $fs[ $from ] ) ) {
+						$formatted['file_system_information'][ $to ] = $sizes_known
+							? $fs[ $from ]
+							: __( 'Unavailable: the site took too long to measure', 'tailwatch' );
+					}
 				}
-				if ( isset( $fs['root'] ) ) {
-					$formatted['file_system_information']['wordpress_core_size'] = $fs['root'];
-				}
-				if ( isset( $fs['wp-admin'] ) ) {
-					$formatted['file_system_information']['wp_admin_size'] = $fs['wp-admin'];
-				}
-				if ( isset( $fs['wp-includes'] ) ) {
-					$formatted['file_system_information']['wp_includes_size'] = $fs['wp-includes'];
-				}
-				if ( isset( $fs['wp-content'] ) ) {
-					$formatted['file_system_information']['wp_content_size'] = $fs['wp-content'];
-				}
-				if ( isset( $fs['plugins'] ) ) {
-					$formatted['file_system_information']['plugins_size'] = $fs['plugins'];
-				}
-				if ( isset( $fs['themes'] ) ) {
-					$formatted['file_system_information']['themes_size'] = $fs['themes'];
-				}
-				if ( isset( $fs['uploads'] ) ) {
-					$formatted['file_system_information']['uploads_size'] = $fs['uploads'];
-				}
-				if ( isset( $fs['files_size'] ) ) {
+				if ( isset( $fs['files_size'] ) && $sizes_known ) {
 					$formatted['file_system_information']['files_size_bytes'] = $fs['files_size'];
 				}
 			}
@@ -631,29 +615,24 @@ class WebsiteStatsController {
 	 * @return string|array|false 'all', validated array, or false if invalid.
 	 */
 	private function validate_sections( $sections, $available_sections ) {
-		// If sections is 'all', return 'all'.
 		if ( 'all' === $sections ) {
 			return 'all';
 		}
 
-		// If sections is not an array, it's invalid.
 		if ( ! is_array( $sections ) ) {
 			return false;
 		}
 
-		// If empty array, default to 'all'.
 		if ( empty( $sections ) ) {
 			return 'all';
 		}
 
-		// Check if all provided sections are valid.
 		foreach ( $sections as $section ) {
 			if ( ! in_array( $section, $available_sections, true ) ) {
-				return false; // Invalid section found.
+				return false;
 			}
 		}
 
-		// Remove duplicates and return validated array.
 		return array_unique( $sections );
 	}
 }

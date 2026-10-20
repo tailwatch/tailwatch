@@ -5,6 +5,7 @@ import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
 import { Spinner } from '../../../Components/Spinner/Spinner';
 import { toast } from 'react-toastify' ;
+import { alertService } from '../../../Components/AlertService/AlertService';
 
 const EmailAuthenticator = () => {
     const [loading, setLoading] = useState(true);
@@ -12,17 +13,38 @@ const EmailAuthenticator = () => {
     const [emailId, setEmailId] = useState(null);
     const [userName, setUserName] = useState(null);
     const [isToggling, setIsToggling] = useState(false);
-    
+    const [isRequired, setIsRequired] = useState(false);
+    // Whether this account may take itself out of the rule its role sets: only someone who
+    // could switch that rule off for everyone may.
+    const [canExempt, setCanExempt] = useState(false);
+    const [isExempt, setIsExempt] = useState(false);
 
     useEffect(() => {
-        verifyEmailStatus({ setIsVerifyEmail, setEmailId, setLoading, setUserName });
+        verifyEmailStatus({ setIsVerifyEmail, setEmailId, setLoading, setUserName, setIsRequired, setCanExempt, setIsExempt });
     }, []);
 
+    const locked = isRequired && !canExempt;
+
     const handleToggle = async () => {
-        setIsToggling(true);
         const updatedState = !isVerifyEmail;
-        await updateEmailStatus({ id: emailId, state: updatedState, setIsVerifyEmail, setEmailId, setLoading, });
-        toast.success('Two-step email authenticator updated successfully');
+        if (!updatedState && isRequired) {
+            const confirmed = await alertService.verify(
+                "Your role requires email verification. Switching it off takes only your account out of that rule: you will sign in without the emailed code, while everyone else with your role still gets it. This is recorded in the logs.",
+                "Switch off email verification for your account?",
+                "Switch off",
+                "Cancel"
+            );
+            if (!confirmed) {
+                return;
+            }
+        }
+        setIsToggling(true);
+        const result = await updateEmailStatus({ id: emailId, state: updatedState, setIsVerifyEmail, setEmailId, setLoading, setUserName, setIsRequired, setCanExempt, setIsExempt });
+        if (result?.success) {
+            toast.success('Two-step email authenticator updated successfully');
+        } else {
+            toast.error(result?.message || 'Failed to update 2FA.');
+        }
         setIsToggling(false);
     };
 
@@ -53,10 +75,25 @@ const EmailAuthenticator = () => {
                             {isToggling ? (
                                 <Skeleton width={40} height={25} borderRadius={999} />
                             ) : (
-                                <ToggleSwitch checked={isVerifyEmail} onChange={handleToggle} disabled={isToggling} />
+                                <ToggleSwitch checked={isVerifyEmail} onChange={locked ? () => { } : handleToggle} disabled={isToggling || locked} />
                             )}
                         </div>
                     </div>
+                    {locked && (
+                        <p className="text-sm text-gray-600">
+                            Your role requires email verification, so it cannot be turned off here.
+                        </p>
+                    )}
+                    {isRequired && canExempt && (
+                        <p className="text-sm text-gray-600">
+                            Your role requires email verification. Because you can change the 2FA rules, you can switch it off for your own account; everyone else with your role still gets the code.
+                        </p>
+                    )}
+                    {isExempt && (
+                        <p className="text-sm text-gray-600">
+                            Email verification is switched off for your account although your role requires it. Switch it on to use it again.
+                        </p>
+                    )}
                 </>
             )}
         </div>

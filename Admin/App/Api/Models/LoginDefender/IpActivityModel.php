@@ -75,9 +75,9 @@ class IpActivityModel {
 		$last_attempt        = isset( $data['attempt_time'] ) ? new DateTime( $data['attempt_time'] ) : null;
 		// Capture the PREVIOUS attempt timestamp before $data['attempt_time'] is
 		// overwritten with $now below. Both the rapid-submission and the
-		// rate-limit-window checks must compare against the prior attempt — the
-		// window check previously re-read the already-overwritten value (always
-		// ~0), so the window branch was always taken and violations never reset.
+		// rate-limit-window checks must compare against the prior attempt: the
+		// overwritten value would always give a gap of about zero, so the window
+		// branch would always be taken and violations would never reset.
 		$prev_attempt_ts     = $last_attempt ? strtotime( $data['attempt_time'] ) : null;
 		$is_rapid            = $last_attempt && ( $current_timestamp - $prev_attempt_ts ) < $min_submission_time;
 

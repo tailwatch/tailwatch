@@ -1,0 +1,117 @@
+/*
+ * Tailwatch: the "Connect your free Tailwatch account" banner on the WordPress Dashboard.
+ * Loaded on that screen only, and only while the banner is shown.
+ */
+.notice.tailwatch-connect-banner {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 24px;
+	padding: 12px 56px 12px 24px;
+	border: 1px solid #d6eff0;
+	border-left: 4px solid #007980;
+	border-radius: 8px;
+	background: linear-gradient( 110deg, #ffffff 0%, #f0fbfb 55%, #d6eff0 100% );
+	box-shadow: 0 1px 2px rgba( 0, 0, 0, 0.04 );
+}
+
+.tailwatch-connect-banner__body {
+	max-width: 640px;
+}
+
+.notice.tailwatch-connect-banner .tailwatch-connect-banner__title {
+	margin: 0 0 6px;
+	padding: 0;
+	font-size: 18px;
+	font-weight: 600;
+	line-height: 1.35;
+	color: #1d2327;
+}
+
+.notice.tailwatch-connect-banner .tailwatch-connect-banner__text {
+	margin: 0 0 14px;
+	padding: 0;
+	font-size: 14px;
+	line-height: 1.6;
+	color: #3c434a;
+}
+
+.notice.tailwatch-connect-banner .tailwatch-connect-banner__actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 16px;
+	margin: 0;
+	padding: 0;
+}
+
+.tailwatch-connect-banner .button.button-primary.tailwatch-connect-banner__connect {
+	background: #007980;
+	border-color: #007980;
+	color: #ffffff;
+}
+
+.tailwatch-connect-banner .button.button-primary.tailwatch-connect-banner__connect:hover,
+.tailwatch-connect-banner .button.button-primary.tailwatch-connect-banner__connect:focus {
+	background: #006670;
+	border-color: #006670;
+	color: #ffffff;
+}
+
+.tailwatch-connect-banner .button.button-primary.tailwatch-connect-banner__connect:focus {
+	box-shadow: 0 0 0 1px #ffffff, 0 0 0 3px #007980;
+}
+
+.tailwatch-connect-banner .button-link.tailwatch-connect-banner__later {
+	color: #006670;
+	text-decoration: underline;
+}
+
+.tailwatch-connect-banner__art {
+	flex: 0 0 auto;
+	width: 288px;
+	max-width: 100%;
+	height: auto;
+}
+
+.tailwatch-connect-banner__close {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	width: 32px;
+	height: 32px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+	background: none;
+	color: #50575e;
+	cursor: pointer;
+}
+
+.tailwatch-connect-banner__close::before {
+	content: "\f153";
+	display: block;
+	font: normal 20px/32px dashicons;
+	text-align: center;
+}
+
+.tailwatch-connect-banner__close:hover {
+	color: #1d2327;
+}
+
+.tailwatch-connect-banner__close:focus {
+	outline: 2px solid #007980;
+	outline-offset: 1px;
+}
+
+@media screen and ( max-width: 782px ) {
+	.notice.tailwatch-connect-banner {
+		padding: 12px 48px 12px 16px;
+	}
+
+	.tailwatch-connect-banner__art {
+		display: none;
+	}
+}

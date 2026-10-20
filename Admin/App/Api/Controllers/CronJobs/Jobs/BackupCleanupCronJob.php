@@ -23,6 +23,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use Tailwatch\Admin\App\Api\Controllers\CronJobs\AbstractCronJob;
 use Tailwatch\Admin\App\Api\Controllers\Backup\BackupController;
+use Tailwatch\Admin\App\Api\Controllers\Restore\RestoreController;
+use Tailwatch\Admin\App\Api\Services\Restore\RestoreOrchestrator;
 use Tailwatch\Admin\App\Api\Logging\Log;
 
 /**
@@ -100,6 +102,20 @@ class BackupCleanupCronJob extends AbstractCronJob {
 				array(
 					'feature'   => 'backup_cleanup_cron',
 					'action'    => 'execute_failed',
+					'error'     => $e->getMessage(),
+					'exception' => $e,
+				)
+			);
+		}
+
+		try {
+			RestoreOrchestrator::clear_failed_staging( RestoreController::stored_state(), time() + 20 );
+		} catch ( \Throwable $e ) {
+			Log::error(
+				'Restore staging clean-up failed',
+				array(
+					'feature'   => 'backup_cleanup_cron',
+					'action'    => 'restore_staging_cleanup_failed',
 					'error'     => $e->getMessage(),
 					'exception' => $e,
 				)

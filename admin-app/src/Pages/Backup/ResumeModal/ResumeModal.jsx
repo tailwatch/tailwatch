@@ -23,6 +23,7 @@ const ResumeModal = ({
   setErrorMessages,
   setIsPaused,
   setIsCanceled,
+  setIsFailed,
   handleInstantScan,
   isLastLogIndex,
   setIsLastLogIndex,
@@ -58,6 +59,7 @@ const ResumeModal = ({
         setOperationLoading,
         isLastLogIndex,
         setIsLastLogIndex,
+        setIsFailed,
       });
     } catch (error) {
       setErrorMessages((prevErrors) => [...prevErrors, error]);

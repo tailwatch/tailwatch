@@ -215,6 +215,19 @@ class RecoveryModeController {
 				return;
 			}
 
+			// Only a connected site signs the owner in from a recovery link: the link reaches
+			// the owner through the Tailwatch app or dashboard. Elsewhere core asks for a login.
+			$activation = ( new VerifyStatusController() )->get_plugin_activation_status();
+			if ( ! is_array( $activation ) || empty( $activation['extended_connected'] ) ) {
+				return;
+			}
+
+			// The recovery cookie lasts a week; it signs in once, then core asks for a login.
+			$spent_key = $this->recovery_cookie_spent_key();
+			if ( '' === $spent_key || false !== get_transient( $spent_key ) ) {
+				return;
+			}
+
 			$auto_login = new AutoLogin();
 			$admin      = $auto_login->get_primary_admin_user();
 			if ( ! $admin ) {
@@ -225,6 +238,8 @@ class RecoveryModeController {
 			if ( ! $token ) {
 				return;
 			}
+			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- core's own filter, read so the marker lasts as long as the cookie.
+			set_transient( $spent_key, 1, (int) apply_filters( 'recovery_mode_cookie_length', WEEK_IN_SECONDS ) );
 
 			// Prevent the token URL from leaking via referrer / cache on an already
 			// fragile site.
@@ -258,6 +273,19 @@ class RecoveryModeController {
 				)
 			);
 		}
+	}
+
+	/**
+	 * Transient that marks the current recovery cookie as already used for a sign-in.
+	 *
+	 * @return string Empty when the request carries no recovery cookie.
+	 */
+	private function recovery_cookie_spent_key() {
+		if ( ! defined( 'RECOVERY_MODE_COOKIE' ) || empty( $_COOKIE[ RECOVERY_MODE_COOKIE ] ) ) {
+			return '';
+		}
+		$cookie = sanitize_text_field( wp_unslash( $_COOKIE[ RECOVERY_MODE_COOKIE ] ) );
+		return '' === $cookie ? '' : 'tailwatch_recovery_spent_' . md5( $cookie );
 	}
 
 	/**

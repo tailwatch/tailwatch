@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import Modal from "../../../Components/Modal/Modal";
 import { toast } from 'react-toastify';
+import { warnIfBlocked } from "../../../Components/Hooks/OwningProcess/warnIfBlocked";
 /* global tailwatch_ajax */
 
 const ResumeModal = ({
@@ -26,6 +27,7 @@ const ResumeModal = ({
   setOperationLoading,
   isLastLogIndex,
   setIsLastLogIndex,
+  setIsFailed,
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResuming, setIsResuming] = useState(false);    
@@ -48,8 +50,8 @@ const ResumeModal = ({
       if (response.data.success) {        
         setIsScanInProgress(true);
         setIsFetchingLogs(true); 
-        fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setIsLogsVisible, setIsScanInProgress, setProgress, setRenderKey, setIsPausing, setIsPaused, setIsCanceled, setOperationLoading, isLastLogIndex, setIsLastLogIndex);
-      } else {
+        fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setIsLogsVisible, setIsScanInProgress, setProgress, setRenderKey, setIsPausing, setIsPaused, setIsCanceled, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setIsFailed);
+      } else if (!(await warnIfBlocked(response.data?.data))) {
         toast.error("Failed to resume the optimization:", response.data);
       }
     } catch (error) {

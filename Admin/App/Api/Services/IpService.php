@@ -3,9 +3,7 @@
  * IP Service
  *
  * Canonical helper for resolving the real client IP behind reverse proxies
- * (Cloudflare / NGINX / AWS ALB / etc.). Single source of truth — replaces
- * the three duplicated `get_client_ip()` implementations that previously
- * lived in MonitoringLogController and RedirectionRules.
+ * (CDNs, load balancers). Single source of truth for every caller.
  *
  * Static API by design: the helper is pure (no state, no side effects),
  * needs no constructor wiring, and the call sites are short:

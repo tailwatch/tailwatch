@@ -26,7 +26,7 @@ const CountryListContent = ({ widget = false, limit = 10, isGeoLicense }) => {
                 <LoaderSkeleton count="0" />
             ) : (
                 <div className='space-y-4'>
-                    {(featureEnable === false || parentEnable === false || isLicenseConnect === true) && (<InfoBar type="info" message={isLicenseConnect ? "License not connected. Please connect your license to use this feature." : "Please Configure your Settings First"} />)}
+                    {(featureEnable === false || parentEnable === false || isLicenseConnect === true) && (<InfoBar type="info" message={isLicenseConnect ? "You don't have permission to change these settings." : "Please Configure your Settings First"} />)}
                     {(isLicenseConnect?.code === 402) && <InfoBar type="info" message={isLicenseConnect?.message} />}
                     {!widget && <GeoLicenseNotice isGeoLicense={isGeoLicense} />}
                     {widget && (

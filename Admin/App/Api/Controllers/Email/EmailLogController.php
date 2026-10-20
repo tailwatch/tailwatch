@@ -142,6 +142,30 @@ class EmailLogController {
 	}
 
 	/**
+	 * Remove one-time secrets from an email body before it is logged.
+	 *
+	 * Password-reset, new-user, recovery-mode and sign-in emails carry a working key in
+	 * their links, and WordPress stores only a hash of it, so a logged copy would be a live
+	 * login. The value of every link parameter named like a key, token, code, nonce or
+	 * password is replaced; the rest of the email is kept.
+	 *
+	 * @param mixed $message Email body.
+	 *
+	 * @return mixed
+	 */
+	private function redact_message( $message ) {
+		if ( ! is_string( $message ) || '' === $message ) {
+			return $message;
+		}
+
+		return (string) preg_replace(
+			'/((?:\?|&(?:amp;|#0?38;)?)[\w\-]*(?:key|token|code|nonce|auth|pass)[\w\-]*=)[^&\s"\x27<>#]+/i',
+			'$1[redacted]',
+			$message
+		);
+	}
+
+	/**
 	 * Capture email headers from wp_mail filter.
 	 *
 	 * @param array $args The wp_mail arguments.
@@ -190,7 +214,7 @@ class EmailLogController {
 
 			$to          = isset( $error_data['to'] ) ? implode( ', ', (array) $error_data['to'] ) : '';
 			$subject     = isset( $error_data['subject'] ) ? $error_data['subject'] : '';
-			$message     = isset( $error_data['message'] ) ? $error_data['message'] : '';
+			$message     = $this->redact_message( isset( $error_data['message'] ) ? $error_data['message'] : '' );
 			$headers     = $this->email_headers;
 			$attachments = isset( $error_data['attachments'] ) ? implode( ', ', (array) $error_data['attachments'] ) : '';
 
@@ -334,7 +358,7 @@ class EmailLogController {
 
 			$sent_to     = is_array( $args['to'] ) ? implode( ', ', $args['to'] ) : $args['to'];
 			$subject     = isset( $args['subject'] ) ? $args['subject'] : '';
-			$message     = isset( $args['message'] ) ? $args['message'] : '';
+			$message     = $this->redact_message( isset( $args['message'] ) ? $args['message'] : '' );
 			$headers     = $this->email_headers;
 			$attachments = isset( $args['attachments'] ) && is_array( $args['attachments'] ) ? implode( ', ', $args['attachments'] ) : ( isset( $args['attachments'] ) ? $args['attachments'] : '' );
 

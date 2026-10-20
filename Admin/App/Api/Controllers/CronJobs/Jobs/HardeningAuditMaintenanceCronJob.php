@@ -55,6 +55,16 @@ class HardeningAuditMaintenanceCronJob extends AbstractCronJob {
 		return $this->get_audit_controller()->get_features_options();
 	}
 
+	/**
+	 * The clean-up keeps its own half-hourly schedule; the feature's settings only say
+	 * whether it runs.
+	 *
+	 * @return string
+	 */
+	protected function get_configured_interval() {
+		return $this->default_interval;
+	}
+
 	protected function get_schedule_display_name() {
 		return 'Hardening Audit Report Cleanup';
 	}

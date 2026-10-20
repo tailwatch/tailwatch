@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { LicenseTabSkeleton } from "../../../Components/Skeleton/LoaderSkeleton";
-import { handleConfirmDisconnect, getSecretKeys, fetchData, handleConnect, getCookies } from './LicenseTabServices/LicenseTabServices';
+import { handleConfirmDisconnect, fetchData, connectWithNewPairing } from './LicenseTabServices/LicenseTabServices';
 import { ConnectedLicenseView, NoLicenseView } from "./LicenseComponents/LicenseComponents";
 import { useFeaturesData } from "../../../Components/Context/FeaturesDataContext";
 import { alertService } from "../../../Components/AlertService/AlertService";
 import { useUser } from "../../../Components/Context/UserContext";
 import { useLicenseProvider } from "../../../Components/Context/LicenseProvider";
+import SavedProSettingsCard from "../../../Components/SavedProSettings/SavedProSettingsCard";
 
 /* global tailwatch_ajax */
 
@@ -21,19 +22,19 @@ const LicenseTab = ({ activeTab, loading: parentLoading, setLoading }) => {
   const [connecting, setConnecting] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
 
-  const { planName, setPlanName, devices, setDevices, loading: licenseLoading } = useLicenseProvider(); 
+  const { planName, setPlanName, devices, setDevices, loading: licenseLoading, refreshLicense } = useLicenseProvider(); 
   const isLoading = licenseLoading || parentLoading || isFetching;
 
   const handleDirectDisconnect = async () => {        
     const isConfirmed = await alertService.verify(
-      "Are you sure you want to disconnect your license? This will remove all connections to our service and you'll need to reconnect to use premium features.",
+      "Are you sure you want to disconnect your license? This site will no longer be linked to the Tailwatch app and dashboard until you reconnect.",
       "Disconnect License?",
       "Disconnect",
       "Cancel"
     );
     
     if (isConfirmed) {
-      handleConfirmDisconnect(email, setEmail, setLicenseKey, setConnectionDateTime, setPlanName, setDevices, setLoading, fetchFeaturesData);
+      handleConfirmDisconnect(email, setEmail, setLicenseKey, setConnectionDateTime, setPlanName, setDevices, setLoading, refreshLicense, fetchFeaturesData);
     }
   };
   
@@ -52,28 +53,15 @@ const LicenseTab = ({ activeTab, loading: parentLoading, setLoading }) => {
   }, [activeTab]);
 
   const handleConnectClick = async () => {
-    // Provision the pairing credentials the dashboard needs before opening the
-    // sign-in popup: the CTA keys (client_id / client_secret / auth_header_key) that
-    // authenticate the inbound Connect API, and a recovery cookie the dashboard stores
-    // so it can reach the site if it later becomes unreachable. Both manage the
-    // connecting state themselves; if either fails we abort without opening the popup.
-    const secretKeys = await getSecretKeys({ setConnecting });
-    const cookies = await getCookies({ setConnecting });
-    if (!secretKeys || !cookies) {
-      return;
-    }
-
-    await handleConnect({
-      setLoading: setLoading,
+    await connectWithNewPairing({
+      setConnecting,
+      setLoading,
       tailwatch_ajax,
-      ctaId: secretKeys.cta_id,
-      ctaSecret: secretKeys.cta_secret,
-      authHeaderKey: secretKeys.auth_header_key,
-      cookieName: cookies.name,
-      cookieValue: cookies.value,
       successCallback: async () => {
         await fetchFeaturesData();
         await fetchData({setEmail, setLicenseKey, setConnectionDateTime, setPlanName, setDevices, setStartData, setEndData, setLoading,setIsExpiry, setRole});
+        // As disconnecting does: the sidebar and the header read the licence from here.
+        await refreshLicense();
       },
     });
   };
@@ -93,6 +81,7 @@ const LicenseTab = ({ activeTab, loading: parentLoading, setLoading }) => {
       ) : (
         <NoLicenseView handleConnectClick={handleConnectClick} connecting={connecting} />
       )}
+      <SavedProSettingsCard />
     </div>
   );
 };

@@ -37,6 +37,8 @@ class ResetByFeatureOptionController {
 	 * Can optionally keep the feature in active state after reset.
 	 *
 	 * @param string $post_data JSON encoded data containing feature_option and remain_active flag.
+	 * @param array  $turn_on   Paths, from the feature's `options`, to options to select on top
+	 *                          of the defaults. Passed by Fix All only, never from a request.
 	 *
 	 * @return array {
 	 *     Response array.
@@ -46,7 +48,7 @@ class ResetByFeatureOptionController {
 	 *     @type string $message      Response message.
 	 * }
 	 */
-	public function tailwatch_reset_feature_by_option( $post_data ) {
+	public function tailwatch_reset_feature_by_option( $post_data, array $turn_on = array() ) {
 		$feature_option = null;
 		$remain_active  = false;
 
@@ -122,6 +124,17 @@ class ResetByFeatureOptionController {
 			if ( $remain_active ) {
 				$row['type_state'] = 'active';
 				$row['is_active']  = 1;
+			}
+
+			if ( ! empty( $turn_on ) ) {
+				$row['value'] = self::tailwatch_select_options( $row['value'], $turn_on );
+				if ( false === $row['value'] ) {
+					return array(
+						'feature_data' => array(),
+						'code'         => 400,
+						'message'      => __( 'The recommended settings for this feature could not be applied.', 'tailwatch' ),
+					);
+				}
 			}
 
 			$where = array(
@@ -213,5 +226,35 @@ class ResetByFeatureOptionController {
 				'message'      => __( 'An error occurred while resetting the feature.', 'tailwatch' ),
 			);
 		}
+	}
+
+	/**
+	 * Select options inside a feature's stored value.
+	 *
+	 * @param string $value JSON value of the feature row.
+	 * @param array  $paths Each a list of keys from `options` down to an option array.
+	 * @return string|false The value with every option selected, or false when a path does
+	 *                      not lead to an option.
+	 */
+	private static function tailwatch_select_options( $value, array $paths ) {
+		$data = json_decode( (string) $value, true );
+		if ( ! is_array( $data ) || ! isset( $data['options'] ) || ! is_array( $data['options'] ) ) {
+			return false;
+		}
+
+		foreach ( $paths as $path ) {
+			$node = &$data['options'];
+			foreach ( (array) $path as $step ) {
+				if ( ! isset( $node[ $step ] ) || ! is_array( $node[ $step ] ) ) {
+					unset( $node );
+					return false;
+				}
+				$node = &$node[ $step ];
+			}
+			$node['selected'] = true;
+			unset( $node );
+		}
+
+		return wp_json_encode( $data );
 	}
 }

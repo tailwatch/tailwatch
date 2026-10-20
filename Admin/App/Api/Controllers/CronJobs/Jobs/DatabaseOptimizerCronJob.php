@@ -26,7 +26,7 @@ use Tailwatch\Admin\App\Api\Logging\Log;
  * Class DatabaseOptimizerCronJob
  *
  * Cron job for Database Optimizer feature:
- * - Schedules recurring optimization based on interval (Every 12/24/48 Hours, Every Week).
+ * - Schedules recurring optimization based on the configured interval.
  * - On execute, starts the optimizer with scan_type 'automatically'.
  *
  */

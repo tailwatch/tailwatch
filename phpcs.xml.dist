@@ -10,6 +10,11 @@
 	<exclude-pattern>*/Admin/View/Static/*</exclude-pattern>
 	<exclude-pattern>*/dev/*</exclude-pattern>
 	<exclude-pattern>*/_smoke-test/*</exclude-pattern>
+	<!-- Developer harnesses, alongside dev/ and _smoke-test/ above. They never ship
+	     (scripts/build-plugin.js copies from a strict allowlist), and they use raw
+	     $wpdb, unprefixed helpers and one-line assertions on purpose — holding them
+	     to the shipped-code bar buries real findings in Admin/ under their noise. -->
+	<exclude-pattern>*/tests/*</exclude-pattern>
 
 	<arg name="extensions" value="php"/>
 	<arg name="basepath" value="."/>

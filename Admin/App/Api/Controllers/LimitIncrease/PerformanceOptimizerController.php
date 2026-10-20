@@ -40,6 +40,30 @@ class PerformanceOptimizerController {
 		'max_file_uploads',
 	);
 
+	/**
+	 * Context for wp_raise_memory_limit() while a scan works. Core turns it into the
+	 * `tailwatch_scan_memory_limit` filter.
+	 */
+	const SCAN_MEMORY_CONTEXT = 'tailwatch_scan';
+
+	/** What a scan asks for when nobody has said otherwise. A floor, never a cap. */
+	const SCAN_MEMORY_FLOOR = '512M';
+
+	/** Seconds per request a scan asks for when nobody has said otherwise. */
+	const SCAN_TIME_LIMIT = 600;
+
+	/**
+	 * The lowest memory limit this screen will save. A saved value applies to the whole site,
+	 * and a busy site can come close to 64 MB on an ordinary request.
+	 */
+	const MIN_MEMORY_LIMIT = '128M';
+
+	/**
+	 * The lowest time limit this screen will save, besides 0 for none. PHP's own default; the
+	 * site-size walk at a backup start runs up to 20 seconds of CPU.
+	 */
+	const MIN_EXECUTION_TIME = 30;
+
 	/** @var array<string, int|string> Recommended default values. */
 	private $get_recommended_settings = array(
 		'memory_limit'         => '512M',
@@ -82,6 +106,15 @@ class PerformanceOptimizerController {
 	private static $settings_already_applied = false;
 
 	/**
+	 * The memory limit the site runs at: this request's once any saved value is applied,
+	 * before Tailwatch raises its own. The Performance screen is itself a Tailwatch request,
+	 * so reading ini_get() there would report the raise rather than the saved value.
+	 *
+	 * @var string|null
+	 */
+	private static $site_memory_limit = null;
+
+	/**
 	 * Constructor. Applies saved settings on load.
 	 *
 	 */
@@ -92,6 +125,29 @@ class PerformanceOptimizerController {
 
 		$this->apply_saved_settings_on_load();
 		self::$settings_already_applied = true;
+		self::$site_memory_limit        = (string) ini_get( 'memory_limit' );
+	}
+
+	/**
+	 * The memory limit the site runs at, for anything that shows it to the operator.
+	 *
+	 * Inside a Tailwatch request ini_get() answers with what that request was raised to.
+	 * Code sizing its own work wants that; a screen saying what the site runs at wants this.
+	 *
+	 * @return string
+	 */
+	public static function tailwatch_site_memory_limit() {
+		return null !== self::$site_memory_limit ? self::$site_memory_limit : (string) ini_get( 'memory_limit' );
+	}
+
+	/**
+	 * A setting as the site runs with it, rather than as this request does.
+	 *
+	 * @param string $key Setting key.
+	 * @return string|false
+	 */
+	private function site_value( $key ) {
+		return 'memory_limit' === $key ? self::tailwatch_site_memory_limit() : ini_get( $key );
 	}
 
 	/**
@@ -149,6 +205,40 @@ class PerformanceOptimizerController {
 			'settings' => $validated,
 			'errors'   => $errors,
 		);
+	}
+
+	/**
+	 * The settings in a set that are below what this screen will save, one sentence each.
+	 *
+	 * @param array<string, string> $settings Normalized settings.
+	 * @return string[] Empty when every value is allowed.
+	 */
+	private function tailwatch_below_minimum( array $settings ) {
+		$errors = array();
+
+		if ( isset( $settings['memory_limit'] )
+			&& wp_convert_hr_to_bytes( (string) $settings['memory_limit'] ) < wp_convert_hr_to_bytes( self::MIN_MEMORY_LIMIT ) ) {
+			$errors[] = sprintf(
+				/* translators: 1: the lowest memory limit allowed, e.g. 128M; 2: the value that was entered. */
+				__( 'Memory limit must be at least %1$s, or WordPress and its plugins can run out of memory on ordinary pages; %2$s is too low.', 'tailwatch' ),
+				self::MIN_MEMORY_LIMIT,
+				$settings['memory_limit']
+			);
+		}
+
+		if ( isset( $settings['max_execution_time'] ) ) {
+			$seconds = (int) $settings['max_execution_time'];
+			if ( 0 !== $seconds && $seconds < self::MIN_EXECUTION_TIME ) {
+				$errors[] = sprintf(
+					/* translators: 1: the lowest time limit allowed, in seconds; 2: the value that was entered. */
+					__( 'Max execution time must be at least %1$d seconds, or 0 for no limit; %2$d is too low.', 'tailwatch' ),
+					self::MIN_EXECUTION_TIME,
+					$seconds
+				);
+			}
+		}
+
+		return $errors;
 	}
 
 	/**
@@ -291,6 +381,19 @@ class PerformanceOptimizerController {
 			);
 		}
 
+		// Checked on the merged set, so a value saved before these minimums existed cannot
+		// ride along when another field is changed.
+		$too_low = $this->tailwatch_below_minimum( $settings );
+		if ( ! empty( $too_low ) ) {
+			$too_low[] = __( 'Nothing was saved.', 'tailwatch' );
+
+			return array(
+				'code'    => 400,
+				'message' => implode( ' ', $too_low ),
+				'errors'  => $too_low,
+			);
+		}
+
 		if ( $is_update ) {
 			$db_data = array(
 				'value'         => wp_json_encode( $settings ),
@@ -338,9 +441,13 @@ class PerformanceOptimizerController {
 			self::$cached_settings = null;
 
 			$this->apply_settings_directly( $settings );
-			// Remove any legacy Tailwatch php_value block left by older versions —
-			// php_value in .htaccess can 500 mod_php hosts with restrictive
-			// AllowOverride and is silently ignored on FPM/LiteSpeed/nginx.
+			if ( isset( $settings['memory_limit'] ) ) {
+				self::$site_memory_limit = (string) ini_get( 'memory_limit' );
+			}
+			// Clear any existing Tailwatch php_value block first — php_value in
+			// .htaccess can 500 mod_php hosts with restrictive AllowOverride and is
+			// silently ignored on FPM/LiteSpeed/nginx, so it is re-added below only
+			// where the probe allows it.
 			$this->strip_legacy_htaccess_block();
 
 			// Persist PHP_INI_PERDIR limits to the right file for this SAPI:
@@ -360,6 +467,10 @@ class PerformanceOptimizerController {
 			// Read back ini_get() to report what actually took effect, instead
 			// of claiming success on the DB write alone.
 			$verification = $this->verify_applied_settings( $settings, $config_written, $user_ini_supported );
+
+			// apply_settings_directly() lowered this request to the saved limit too, which the
+			// read-back needed. Past it, this is a Tailwatch request like any other.
+			$this->tailwatch_raise_memory_limit( 'admin' );
 
 			$response = array(
 				'code'             => 200,
@@ -482,8 +593,8 @@ class PerformanceOptimizerController {
 	 * whether any saved PHP performance settings exist:
 	 *   - '1' : settings exist, read them from the plugin table.
 	 *   - '0' : no settings, skip entirely (no DB query).
-	 *   - null: flag not yet initialised (fresh install or first load after
-	 *           this optimisation was introduced on an existing install).
+	 *   - null: flag not yet initialised (fresh install, or an install that
+	 *           predates the flag).
 	 *           Probe the DB once and populate the flag so subsequent loads
 	 *           take the fast path.
 	 *
@@ -520,12 +631,12 @@ class PerformanceOptimizerController {
 	}
 
 	/**
-	 * Removes any legacy Tailwatch Performance `php_value` block from .htaccess.
+	 * Removes the Tailwatch Performance `php_value` block from .htaccess, if present.
 	 *
-	 * The optimizer no longer WRITES php_value to .htaccess (it can return a
-	 * 500 on mod_php hosts where AllowOverride lacks Options, and is ignored on
-	 * FPM/LiteSpeed/nginx). This only strips a block left by older versions so
-	 * upgraded installs are cleaned up. Never writes new directives → no 500
+	 * An unchecked php_value can return a 500 on mod_php hosts where
+	 * AllowOverride lacks Options, and is ignored on FPM/LiteSpeed/nginx, so the
+	 * block is cleared on every save and removal; attempt_htaccess_write() adds
+	 * it back only where the probe allows. Never writes new directives → no 500
 	 * risk. Returns 200 when there is nothing to do or the strip succeeds.
 	 *
 	 * @return array{code: int, message: string}
@@ -657,7 +768,7 @@ class PerformanceOptimizerController {
 				site_url( $dir_name . '/tailwatch-probe' ),
 				array(
 					'timeout'   => 10,
-					'sslverify' => false,
+					'sslverify' => apply_filters( 'https_local_ssl_verify', false ), // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Core WordPress filter for local loopback SSL verification.
 				)
 			);
 			if ( ! is_wp_error( $response ) ) {
@@ -685,7 +796,7 @@ class PerformanceOptimizerController {
 			$url,
 			array(
 				'timeout'   => 10,
-				'sslverify' => false,
+				'sslverify' => apply_filters( 'https_local_ssl_verify', false ), // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Core WordPress filter for local loopback SSL verification.
 			)
 		);
 		if ( is_wp_error( $response ) ) {
@@ -863,7 +974,7 @@ class PerformanceOptimizerController {
 		$current  = array();
 
 		foreach ( $settings as $setting ) {
-			$value              = ini_get( $setting );
+			$value              = $this->site_value( $setting );
 			$current[ $setting ] = false !== $value ? $value : 'N/A';
 		}
 
@@ -871,42 +982,93 @@ class PerformanceOptimizerController {
 	}
 
 	/**
-	 * Boosts PHP settings to recommended values only when current values are below them.
+	 * Give a heavy job room to work: the highest of the site's limit and ours.
 	 *
-	 * Called at the start of heavy scanning/backup processes. Runtime only — no DB or
-	 * .htaccess changes. If the server already has a higher value configured, it is left
-	 * untouched.
+	 * Called on every tick of a backup, restore, integrity check, malware scan or hardening
+	 * audit. Runtime only: nothing is written to the database, .user.ini or .htaccess, and
+	 * the next request starts from the site's own limits again.
 	 *
+	 * Two limits, because they are the only two a running request can change. The other
+	 * four this class manages are PHP_INI_PERDIR or PHP_INI_SYSTEM; ini_set() on them
+	 * silently does nothing, so the save path writes those to .user.ini instead.
+	 *
+	 * Never lowers - including on an unlimited host, where memory -1 and time 0 are not
+	 * "below the target". A limit saved on the Performance screen is already in force when
+	 * this runs, so a higher one stands and a lower one is raised for the job the same as a
+	 * low host limit would be.
+	 *
+	 * @return array<string, array{from: string, to: string}> What was raised, if anything.
 	 */
 	public function tailwatch_boost_for_scanning() {
-		$recommended = $this->get_recommended_settings;
-		$size_keys   = array( 'memory_limit', 'upload_max_filesize', 'post_max_size' );
-		$to_apply    = array();
+		$raised = $this->tailwatch_raise_memory_limit( self::SCAN_MEMORY_CONTEXT );
 
-		foreach ( $recommended as $key => $recommended_value ) {
-			$current_raw = ini_get( $key );
-
-			if ( false === $current_raw ) {
-				continue;
-			}
-
-			if ( in_array( $key, $size_keys, true ) ) {
-				$current_bytes     = wp_convert_hr_to_bytes( $current_raw );
-				$recommended_bytes = wp_convert_hr_to_bytes( (string) $recommended_value );
-
-				if ( $current_bytes < $recommended_bytes ) {
-					$to_apply[ $key ] = $recommended_value;
-				}
-			} else {
-				if ( (int) $current_raw < (int) $recommended_value ) {
-					$to_apply[ $key ] = $recommended_value;
-				}
-			}
+		if ( ! function_exists( 'set_time_limit' ) ) {
+			return $raised;
 		}
 
-		if ( ! empty( $to_apply ) ) {
-			$this->apply_settings_directly( $to_apply );
+		$before = (int) ini_get( 'max_execution_time' );
+
+		// 0 is unlimited, and the only way to make that worse is to set a number.
+		if ( 0 === $before || $before >= self::SCAN_TIME_LIMIT ) {
+			return $raised;
 		}
+
+		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, Squiz.PHP.DiscouragedFunctions.Discouraged -- a host may disable set_time_limit; a scan must degrade rather than fail.
+		if ( false !== @set_time_limit( self::SCAN_TIME_LIMIT ) ) {
+			$raised['max_execution_time'] = array(
+				'from' => (string) $before,
+				'to'   => (string) self::SCAN_TIME_LIMIT,
+			);
+		}
+
+		return $raised;
+	}
+
+	/**
+	 * Raise the memory limit for this request to at least what the context needs.
+	 *
+	 * Through wp_raise_memory_limit(), so the rules are core's own: it checks the value can
+	 * change at all, leaves an unlimited one alone, and has no path that lowers. The
+	 * constructor has applied any limit saved on the Performance screen by now, so the
+	 * highest of that, the host's and the context's wins. A saved limit below what the
+	 * context needs is not honoured here, since a site already using most of a low limit
+	 * could not start a backup at all.
+	 *
+	 * @param string $context 'admin' for an ordinary request, SCAN_MEMORY_CONTEXT for a job.
+	 * @return array<string, array{from: string, to: string}> What was raised, if anything.
+	 */
+	public function tailwatch_raise_memory_limit( $context ) {
+		$callback = array( __CLASS__, 'tailwatch_scan_memory_floor' );
+		if ( self::SCAN_MEMORY_CONTEXT === $context && false === has_filter( 'tailwatch_scan_memory_limit', $callback ) ) {
+			// Priority 5, so a site's own filter at the default 10 has the last word.
+			add_filter( 'tailwatch_scan_memory_limit', $callback, 5 );
+		}
+
+		$before = (string) ini_get( 'memory_limit' );
+		$after  = wp_raise_memory_limit( $context );
+
+		if ( false === $after || (string) $after === $before ) {
+			return array();
+		}
+
+		return array(
+			'memory_limit' => array(
+				'from' => $before,
+				'to'   => (string) $after,
+			),
+		);
+	}
+
+	/**
+	 * Our default for the scan context: what core proposes, or our floor if that is lower.
+	 *
+	 * @param int|string $limit What core proposes: WP_MAX_MEMORY_LIMIT, or php.ini if higher.
+	 * @return int|string
+	 */
+	public static function tailwatch_scan_memory_floor( $limit ) {
+		return wp_convert_hr_to_bytes( (string) $limit ) >= wp_convert_hr_to_bytes( self::SCAN_MEMORY_FLOOR )
+			? $limit
+			: self::SCAN_MEMORY_FLOOR;
 	}
 
 	/**
@@ -1002,8 +1164,8 @@ class PerformanceOptimizerController {
 	 * apply itself (host-capped, host-required, or ini_set disabled). The user
 	 * applies these manually and owns the change.
 	 *
-	 * - php_ini: universal (hosting panel / php.ini / MultiPHP INI Editor),
-	 *   includes every requested key.
+	 * - php_ini: universal (hosting panel / php.ini), includes every
+	 *   requested key.
 	 * - htaccess: only on Apache mod_php, and only when the capability probe did
 	 *   NOT prove php_value is rejected (we don't hand out a snippet that would
 	 *   500 the user's site).
@@ -1094,14 +1256,14 @@ class PerformanceOptimizerController {
 	 *
 	 * For the two runtime-settable directives (memory_limit, max_execution_time)
 	 * it performs a raise probe: read the value, attempt the raise, read it back.
-	 * A host hard cap (php_admin_value / FPM pool / CloudLinux / Suhosin) leaves
+	 * A host hard cap (php_admin_value / FPM pool / OS or extension limits) leaves
 	 * the read-back unchanged — the only reliable signal, since ini_set may
 	 * "succeed" yet be silently clamped. The probe only ever RAISES (never
 	 * lowers), so leaving the raised value in place for this read request is
 	 * harmless. PHP_INI_PERDIR/SYSTEM directives cannot change at runtime, so
 	 * they are reported as config-pending / host-required.
 	 *
-	 * Note: CloudLinux LVE physical-memory caps act ABOVE PHP and cannot be seen
+	 * Note: OS-level per-account memory caps act ABOVE PHP and cannot be seen
 	 * here — 'active' proves PHP accepted the value, not that the kernel will.
 	 *
 	 * @return array<string, mixed>
@@ -1126,11 +1288,15 @@ class PerformanceOptimizerController {
 
 		foreach ( $this->get_valid_php_settings as $key ) {
 			$target  = isset( $saved[ $key ] ) ? $saved[ $key ] : ( isset( $recommended[ $key ] ) ? $recommended[ $key ] : null );
-			$current = ini_get( $key );
+			$current = $this->site_value( $key );
+			$local   = isset( $ini_all[ $key ]['local_value'] ) ? $ini_all[ $key ]['local_value'] : null;
+			if ( 'memory_limit' === $key && null !== self::$site_memory_limit ) {
+				$local = self::$site_memory_limit;
+			}
 
 			$entry = array(
 				'master'     => isset( $ini_all[ $key ]['global_value'] ) ? $ini_all[ $key ]['global_value'] : null,
-				'local'      => isset( $ini_all[ $key ]['local_value'] ) ? $ini_all[ $key ]['local_value'] : null,
+				'local'      => $local,
 				'current'    => ( false !== $current && '' !== $current ) ? $current : 'N/A',
 				'target'     => $target,
 				'changeable' => function_exists( 'wp_is_ini_value_changeable' ) ? wp_is_ini_value_changeable( $key ) : null,

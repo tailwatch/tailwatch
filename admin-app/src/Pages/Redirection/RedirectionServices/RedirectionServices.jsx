@@ -1,3 +1,4 @@
+import { readFeatureGate } from '../../../Components/Utils/featureGate';
 import axios from "axios";
 import { toast } from 'react-toastify';
 import { alertService } from "../../../Components/AlertService/AlertService";
@@ -36,9 +37,12 @@ export const getAllRedirectRules = async ({setRedirectRules, setFeatureEnable, s
     const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
+    // A reply the gate let through is proof both switches are on. Read from every
+    // response, not only refusals, so these flags cannot latch to false and stay there.
+    readFeatureGate(response, setFeatureEnable, setParentEnable);
+
 
     if (response.data.data.code === 200) {
-      // Process the data and set it to state
       setRedirectRules(response.data.data.data);    
        if (setPagination && response.data.data) {
         setPagination({ page: response.data.data.pagination.page, limit: response.data.data.pagination.limit, total_pages: response.data.data.pagination.total_pages,total_items: response.data.data.pagination.total });
@@ -189,7 +193,6 @@ export const handleDelete = async (deleteData, setIsDeleting, fetchRedirectRules
 };
 
 export const getRedirectionLogs = async ({ setRedirectLogs, setLoading, page = 1, limit = 10,setFeatureEnable, setParentEnable, setPagination }) => {
-  // setLoading(true);  
   try {
     const formData = new FormData();
     formData.append('action', 'tailwatch_global_ajax_handler');
@@ -200,6 +203,10 @@ export const getRedirectionLogs = async ({ setRedirectLogs, setLoading, page = 1
     const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
+    // A reply the gate let through is proof both switches are on. Read from every
+    // response, not only refusals, so these flags cannot latch to false and stay there.
+    readFeatureGate(response, setFeatureEnable, setParentEnable);
+
 
     if (response.data.data.code === 200) {
       setRedirectLogs(response.data.data.data);
@@ -217,7 +224,6 @@ export const getRedirectionLogs = async ({ setRedirectLogs, setLoading, page = 1
   } catch (error) {
     console.error('Error fetching Redirect Rules:', error);
   } finally {
-    // setLoading(false);
   }
 
 }
@@ -265,6 +271,10 @@ export const fetchLogsErrorData = async ({ setLoading, setLogsData, page = 1, li
     const response = await axios.post(tailwatch_ajax.ajax_url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
+    // A reply the gate let through is proof both switches are on. Read from every
+    // response, not only refusals, so these flags cannot latch to false and stay there.
+    readFeatureGate(response, setFeatureEnable, setParentEnable);
+
     if (response.data.success) {
       const parsedData = response.data.data.data.map(item => {
         try {

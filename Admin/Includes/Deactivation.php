@@ -17,6 +17,9 @@ namespace Tailwatch\Admin\Includes;
 use Tailwatch\Admin\App\Api\Templates\DeactivationAlert;
 use Tailwatch\Admin\App\Api\Controllers\Features\FeatureCacheController;
 use Tailwatch\Admin\App\Api\Models\DBModel;
+use Tailwatch\Admin\App\Api\Controllers\Dashboard\DashboardBannerController;
+use Tailwatch\Admin\App\Api\Services\ProcessStartClaim;
+use Tailwatch\Admin\App\Api\Services\Backup\RetentionHold;
 
 // Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -53,9 +56,10 @@ class Deactivation {
 	/**
 	 * Remove all plugin data during deactivation.
 	 *
+	 * @param bool $network_wide Whether the plugin is being deactivated for the whole network.
 	 * @return void
 	 */
-	public function tailwatch_remove_plugin_data() {
+	public function tailwatch_remove_plugin_data( $network_wide = false ) {
 		$set_value = get_option( 'tailwatch_deactivate_plugin' );
 
 		if ( $set_value ) {
@@ -68,11 +72,14 @@ class Deactivation {
 			$this->tailwatch_remove_all_option_meta_data( $db_model );
 
 			// Clean up plugin directories: the wp-content backup folder and the
-			// slug-named folder inside the uploads directory that holds logs.
-			$folders = array(
-				TAILWATCH_CONTENT_DIR_BASE,
-				dirname( TAILWATCH_LOGS_DIRECTORY ),
-			);
+			// slug-named folder inside the uploads directory that holds logs. On multisite
+			// the backup folder is shared by every site, so it goes only when a network
+			// administrator deactivates the plugin for the whole network; each site's own
+			// logs folder goes either way.
+			$folders = array( dirname( TAILWATCH_LOGS_DIRECTORY ) );
+			if ( ! is_multisite() || ( $network_wide && current_user_can( 'manage_network_options' ) ) ) {
+				$folders[] = TAILWATCH_CONTENT_DIR_BASE;
+			}
 
 			foreach ( $folders as $folder ) {
 				if ( is_dir( $folder ) ) {
@@ -166,9 +173,17 @@ class Deactivation {
 		delete_option( 'tailwatch_deactivate_plugin' );
 		delete_option( 'tailwatch_db_version' );
 		delete_option( 'tailwatch_features_synced_version' );
+		delete_option( ProcessStartClaim::OPTION );
 		// Master secret is preserved across deactivation (so encrypted data stays
 		// decryptable) but must be removed on full data deletion.
 		delete_option( 'tailwatch_app_secret_key' );
+
+		// The highest number of backups kept, remembered for retention.
+		RetentionHold::forget();
+
+		// Each administrator's choice on the Dashboard banner.
+		delete_metadata( 'user', 0, DashboardBannerController::DISMISSED_META, '', true );
+		delete_metadata( 'user', 0, DashboardBannerController::SNOOZED_META, '', true );
 
 		// Additional cleanup.
 		$db_model->tailwatch_delete_data_on_deactivate();

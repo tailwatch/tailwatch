@@ -20,6 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use Tailwatch\Admin\App\Api\Services\Auth\JwtService;
+use Tailwatch\Admin\App\Api\Services\Login\PasswordlessAccountGuard;
 
 /**
  * Class VerificationKeysController
@@ -53,9 +54,17 @@ class VerificationKeysController {
 				);
 			}
 
+			// A temporary login's access ends; an API pairing would outlive it.
+			if ( PasswordlessAccountGuard::is_passwordless( get_current_user_id() ) ) {
+				return array(
+					'code'    => 403,
+					'message' => __( 'A temporary login cannot connect this site.', 'tailwatch' ),
+				);
+			}
+
 			// Refuse to (re)mint pairing credentials while the site is already connected -
 			// a held token or a second admin must not silently rebind the site. The admin
-			// must disconnect first (which clears these keys). Matches ManageWP/MainWP.
+			// must disconnect first (which clears these keys).
 			$activation = ( new VerifyStatusController() )->get_plugin_activation_status();
 			if ( is_array( $activation ) && ! empty( $activation['extended_connected'] ) ) {
 				return array(
@@ -155,9 +164,17 @@ class VerificationKeysController {
 				continue;
 			}
 
+			// generate_jwt() writes ONE tracking row per pair, under the base id —
+			// there is no tailwatch_token_jti_<hex32>_refresh. Looking one up verbatim
+			// would always miss, sweeping a consumed refresh token's revocation flag
+			// while the token itself still has days of its 7-day life left and making
+			// it replayable at token/refresh. Ask about the base id, which is the row
+			// that actually tracks the pair's expiry.
+			//
 			// $jti is validated by is_valid_jti_format() above — only /^[a-f0-9]{32}(_refresh)?$/
 			// can reach here, so the option name is always tailwatch_token_jti_<hex32>. No arbitrary reads.
-			$matching_jti = 'tailwatch_token_jti_' . $jti;
+			$base_jti     = preg_replace( '/_refresh$/', '', $jti );
+			$matching_jti = 'tailwatch_token_jti_' . $base_jti;
 			if ( false === get_option( $matching_jti, false ) ) {
 				delete_option( $option->option_name );
 				++$deleted;

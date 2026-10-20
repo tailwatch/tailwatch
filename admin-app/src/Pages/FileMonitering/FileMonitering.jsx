@@ -19,7 +19,7 @@ const FileMonitering = () => {
   const { featureEnable, ismonitering, setFeatureEnable, parentEnable, setParentEnable, isLoadingVisible, showFileMonteringLogs, trigerMoniteringDetails, loadingStrip, isCompleted, isCanceled, summaryData, isScannerEnabled, navigate, scanType, scanState, handleToggleDetails,
     showDetails, isPaused, handleInstantScan, setIsLogsVisible, isLogsVisible, verifyStatus, handleResume, isScanInProgress, isStarting, isOperationInProgress, isPausing, isCanceling, handleCancel, handlePause, statusMessage,
     isDisabled, resetAllStates, checkIntegrityFileStatus, isModalOpen, fetchLogs, setIsScanInProgress, setLogs, setIsCompleted, setProgress, setIsOperationInProgress, isComponentActive, setIsFetchingLogs, isLastLogIndex, setIsLastLogIndex,
-    checkMonitoringStatus, setRenderKey, renderKey, setTrigerMoniteringDetails, setIsPaused, setIsCanceled, handleSummaryData, progress, progressBarColor, logs, setIsModalOpen, setOperationLoading, isOperationLoading, isLicenseConnect, setIsLicenseConnect, scanError, setScanError, scanErrorDismissed, setScanErrorDismissed, scanProgress } = useFileMonitering();
+    checkMonitoringStatus, setRenderKey, renderKey, setTrigerMoniteringDetails, setIsPaused, setIsCanceled, handleSummaryData, progress, progressBarColor, logs, setIsModalOpen, setOperationLoading, isOperationLoading, isLicenseConnect, setIsLicenseConnect, scanError, setScanError, scanErrorDismissed, setScanErrorDismissed, scanProgress, isFailed, setIsFailed } = useFileMonitering();
   const loadingBarRef = useRef(null);
 
   useEffect(() => {
@@ -57,7 +57,7 @@ const FileMonitering = () => {
             <SkeletonButton />
           ) : (
             <>
-              {scanType === "automatically" && !isCompleted && scanState !== "pause" && !isCanceled && (
+              {scanType === "automatically" && !isCompleted && !isFailed && scanState !== "pause" && !isCanceled && (
                 <InfoBar type="progress" message={<> File Integrity is in progress by ' Auto Schedule '. <button onClick={handleToggleDetails} className="text-blue-500 underline ml-2" > {showDetails ? "Hide" : "View "} </button> &nbsp; you can also View , Cancel and Pause the proccess by click on View Link. </>} />
               )}
               {(scanType === "automatically" && scanState === "pause" && !isCanceled) ? (
@@ -67,22 +67,22 @@ const FileMonitering = () => {
                 <>
                   <MoniteringActions isLicenseConnect={isLicenseConnect} ismonitering={ismonitering} parentEnable={parentEnable} featureEnable={featureEnable} isPaused={isPaused} isCompleted={isCompleted} handleInstantScan={handleInstantScan} toggleLogs={() => setIsLogsVisible(!isLogsVisible)} isLogsVisible={isLogsVisible} featureId={showFileMonteringLogs.featureId}
                     verifyStatus={verifyStatus} handleResume={handleResume} isScanInProgress={isScanInProgress} isStarting={isStarting} isOperationInProgress={isOperationInProgress} isCanceled={isCanceled}
-                    isPausing={isPausing} isCanceling={isCanceling} handleCancel={handleCancel} handlePause={handlePause} statusMessage={statusMessage} scanProgress={scanProgress} isDisabled={isDisabled} resetAllStates={resetAllStates} checkIntegrityFileStatus={checkIntegrityFileStatus}
+                    isPausing={isPausing} isCanceling={isCanceling} handleCancel={handleCancel} handlePause={handlePause} statusMessage={statusMessage} scanProgress={scanProgress} isDisabled={isDisabled} resetAllStates={resetAllStates} checkIntegrityFileStatus={checkIntegrityFileStatus} isFailed={isFailed}
                   />
                   {(isScanInProgress || isPaused || !verifyStatus) && !isCanceled && scanType !== "automatically" && (<ProgresBar progress={progress} bgColor={progressBarColor} />)}
-                  <LogsScreen logs={logs} setLogs={setLogs} isPaused={isPaused} isCanceled={isCanceled} isLogsVisible={isLogsVisible} isCompleted={isCompleted} cancelMessage="File Scanning Cancel!" successMessage="File Scanning is Completed successfully!" />
+                  <LogsScreen logs={logs} setLogs={setLogs} isPaused={isPaused} isCanceled={isCanceled || isFailed} isLogsVisible={isLogsVisible} isCompleted={isCompleted} cancelMessage={isFailed ? "File Integrity scan stopped because of an error before it finished." : "File Scanning Cancel!"} successMessage="File Scanning is Completed successfully!" />
                 </>
               )}
             </>
           )}
         </div>
       </div>
-      {(parentEnable === false || isLicenseConnect === true) && <LockCard featureName="File Integrity Watch" featureDescription="Track every file change on your website in real time. Automatically scan modified files for malware at set intervals, compare before-and-after versions, and store change history for up to 24 hours or more." featureId={showFileMonteringLogs?.featureId} isActive={showFileMonteringLogs?.isActiveState} isLocked={showFileMonteringLogs?.isLocked} afterToggleCallback={checkIntegrityFileStatus} />}
+      {parentEnable === false && <LockCard featureName="File Integrity Watch" featureDescription="Track every file change on your website in real time. Scan at set intervals, compare before-and-after versions, and keep a recent history of changes." featureId={showFileMonteringLogs?.featureId} isActive={showFileMonteringLogs?.isActiveState} isLocked={showFileMonteringLogs?.isLocked} afterToggleCallback={checkIntegrityFileStatus} />}
       <MoniteringFiles key={renderKey} onSummaryDataUpdate={handleSummaryData} setIsLicenseConnect={setIsLicenseConnect} />
       <ResumeModal isLastLogIndex={isLastLogIndex} setIsLastLogIndex={setIsLastLogIndex} setOperationLoading={setOperationLoading} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} fetchLogs={fetchLogs} setIsScanInProgress={setIsScanInProgress} setLogs={setLogs}
         setIsCompleted={setIsCompleted} setProgress={setProgress} handleCancel={handleCancel} setIsOperationInProgress={setIsOperationInProgress} isComponentActive={isComponentActive}
         isCanceled={isCanceled} setIsLogsVisible={setIsLogsVisible} setIsFetchingLogs={setIsFetchingLogs} checkMonitoringStatus={checkMonitoringStatus}
-        setRenderKey={setRenderKey} setTrigerMoniteringDetails={setTrigerMoniteringDetails} setIsPaused={setIsPaused} setIsCanceled={setIsCanceled}
+        setRenderKey={setRenderKey} setTrigerMoniteringDetails={setTrigerMoniteringDetails} setIsPaused={setIsPaused} setIsCanceled={setIsCanceled} setIsFailed={setIsFailed}
       />
 
       {scanError && (

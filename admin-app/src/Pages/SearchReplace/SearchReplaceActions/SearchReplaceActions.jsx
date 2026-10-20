@@ -5,7 +5,7 @@ import { UseSearchReplace } from '../../../Components/Hooks/Features/UseFeatures
 import { RiRestartFill } from "react-icons/ri";
 import ShowCanvas from '../../../Components/ShowCanvasButton/ShowCanvas';
 
-const SearchReplaceActions = ({ featureEnable, isScanInProgress, isStarting, isPaused, isCompleted, handleSearchReplace, toggleLogs, isLogsVisible, isOperationInProgress, handleResume, verifyStatus, isCanceled, isPausing, isCanceling, handlePause, handleCancel, isDisabled, resetAllStates, scanState, handleCancelAfterPause, verifyLoading,checkPauseResumeStatus,featureId,isSearchReplaceEnable }) => {    
+const SearchReplaceActions = ({ featureEnable, isScanInProgress, isStarting, isPaused, isCompleted, handleSearchReplace, toggleLogs, isLogsVisible, isOperationInProgress, handleResume, verifyStatus, isCanceled, isPausing, isCanceling, handlePause, handleCancel, isDisabled, resetAllStates, scanState, handleCancelAfterPause, verifyLoading,checkPauseResumeStatus,featureId,isSearchReplaceEnable, isFailed }) => {
     const isRevertingChanges = scanState === 'reverting_changes';
     const cancelHandler = isPausing ? handleCancelAfterPause : handleCancel;
 
@@ -28,7 +28,7 @@ const SearchReplaceActions = ({ featureEnable, isScanInProgress, isStarting, isP
                             {(isPaused || !verifyStatus) && !isCanceled && (
                                 <ActionButton onClick={handleResume} isDisabled={isDisabled || isScanInProgress || isCompleted || featureEnable === false } isInProgress={isScanInProgress} isCompleted={isCompleted} defaultText="Resume process" inProgressText="In Progress..." completedText="Completed" />
                             )}
-                            {(isCompleted || isCanceled) && (
+                            {(isCompleted || isCanceled || isFailed) && (
                                 <div className='flex cursor-pointer' onClick={resetAllStates} role="button" >
                                     <RiRestartFill className='text-[25px] text-[#007980] hover:text-opacity-80' />
                                     <p className='pl-[5px] text-md text-gray-600 font-semibold'>Refresh</p>

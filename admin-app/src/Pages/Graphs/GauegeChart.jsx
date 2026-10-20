@@ -29,7 +29,7 @@ const GaugeChart = ({ isValue, onRefetch }) => {
       };
     } else if (value >= 40) {
       return {
-        label: "Ok",
+        label: "OK",
         bgClass: "bg-gradient-to-br from-yellow-100 via-amber-100 to-yellow-300",
         borderClass: "border-amber-300",
         textColor: "text-amber-700",
@@ -121,7 +121,7 @@ const GaugeChart = ({ isValue, onRefetch }) => {
           customSegmentLabels={[
             { text: 'Very Bad', position: 'INSIDE', color: '#000' },
             { text: 'Bad', position: 'INSIDE', color: '#000' },
-            { text: 'Ok', position: 'INSIDE', color: '#000' },
+            { text: 'OK', position: 'INSIDE', color: '#000' },
             { text: 'Good', position: 'INSIDE', color: '#000' },
             { text: 'Very Good', position: 'INSIDE', color: '#000' },
           ]}

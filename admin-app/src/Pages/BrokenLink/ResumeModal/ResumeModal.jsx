@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import axios from "axios";
 import Modal from "../../../Components/Modal/Modal";
+import { warnIfBlocked } from "../../../Components/Hooks/OwningProcess/warnIfBlocked";
 /* global tailwatch_ajax */
 
-const ResumeModal = ({ setOperationLoading, isOpen, onClose, fetchLogs, handleCancel, setIsScanInProgress, setLogs, setIsCompleted, setProgress, setIsOperationInProgress, isComponentActive, setIsLogsVisible, setIsFetchingLogs, setErrorMessages, setIsPaused, setIsCanceled, handleInstantScan, setRenderKey, isLastLogIndex, setIsLastLogIndex }) => {
+const ResumeModal = ({ setOperationLoading, isOpen, onClose, fetchLogs, handleCancel, setIsScanInProgress, setLogs, setIsCompleted, setProgress, setIsOperationInProgress, isComponentActive, setIsLogsVisible, setIsFetchingLogs, setErrorMessages, setIsPaused, setIsCanceled, handleInstantScan, setRenderKey, isLastLogIndex, setIsLastLogIndex, setIsFailed }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResuming, setIsResuming] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
@@ -27,12 +28,14 @@ const ResumeModal = ({ setOperationLoading, isOpen, onClose, fetchLogs, handleCa
        
         setIsScanInProgress(true);
         setIsFetchingLogs(true);         
-        fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setErrorMessages, setIsPaused, setIsCanceled, setRenderKey, setOperationLoading, isLastLogIndex, setIsLastLogIndex);
+        fetchLogs(setLogs, setIsCompleted, true, isComponentActive, setProgress, setIsScanInProgress, setIsLogsVisible, setErrorMessages, setIsPaused, setIsCanceled, setRenderKey, setOperationLoading, isLastLogIndex, setIsLastLogIndex, setIsFailed);
 
       } else {
-        setErrorMessages((prevErrors)=>[...prevErrors, "Failed to resume the backup:" ]);            
+        if (!(await warnIfBlocked(response.data?.data))) {
+          setErrorMessages((prevErrors) => [...prevErrors, "Failed to resume the broken link check"]);
+        }
         setIsScanInProgress(false);
-        setIsLogsVisible(false);        
+        setIsLogsVisible(false);
       }
     } catch (error) {
       setErrorMessages((prevErrors)=>[...prevErrors, error ]);            

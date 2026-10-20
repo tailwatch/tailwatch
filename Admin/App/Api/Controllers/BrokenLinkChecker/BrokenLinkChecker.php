@@ -45,6 +45,7 @@ class BrokenLinkChecker extends BaseController {
 
 		$this->register_process_monitoring();
 		$hook_controller->add_action_hook( 'tailwatch_broken_link_checker', array( $this, 'tailwatch_broken_link_checker_with_monitoring' ) );
+		$hook_controller->add_action_hook( 'tailwatch_recovery_process_failed', array( $this->broken_link_status, 'tailwatch_on_recovery_failed' ) );
 	}
 
 	private function register_process_monitoring() {
@@ -62,11 +63,16 @@ class BrokenLinkChecker extends BaseController {
 				'locks_features'      => array( 'broken_link_checker_settings' ),
 				// Broken-link checker is a passive HTTP crawler that mostly
 				// reads content; it doesn't conflict with heavier scanning
-				// processes. The only exception is system-level settings
+				// processes. It waits for the jobs that put the site's content
+				// back (restore, migration, malware restore), whose posts it
+				// would be reading half replaced, and for system-level settings
 				// operations (settings_import / reset_all) which rewrite
-				// feature config site-wide — broken_link must wait for those
-				// since its own enable/config could change mid-scan.
+				// feature config site-wide, since its own enable/config could
+				// change mid-scan.
 				'cannot_start_while'  => array(
+					'restore',
+					'migration',
+					'malware_restore',
 					'settings_import',
 					'reset_all',
 				),
@@ -243,10 +249,8 @@ class BrokenLinkChecker extends BaseController {
 		$user_context  = 'system';
 		$action_failed = 'broken_link_check_start_failed';
 		try {
-			// Refuse to start if a conflicting process is currently running.
-			// Broken-link's own cannot_start_while is empty (lightweight),
-			// so this gate is a no-op today, but the call site is in place
-			// for future conflicts.
+			// Refuse to start while a conflicting process (settings import,
+			// reset-all) is running.
 			$blocked = ( new ProcessGuard() )->ensure_can_start_process( 'broken_link_checker' );
 			if ( null !== $blocked ) {
 				return $blocked;
@@ -315,7 +319,7 @@ class BrokenLinkChecker extends BaseController {
 					'feature'  => $this->feature,
 					'action'   => $action_failed,
 					'title'  => 'Broken Links',
-					'detail'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'   => $user_context,
 					'severity' => 'high',
 				)
@@ -439,7 +443,7 @@ class BrokenLinkChecker extends BaseController {
 					'feature'  => $this->feature,
 					'action'   => 'broken_link_check_start_failed',
 					'title'  => 'Broken Links Start Failed',
-					'detail'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'   => 'system',
 					'severity' => 'high',
 				)
@@ -476,6 +480,7 @@ class BrokenLinkChecker extends BaseController {
 		} catch ( \Throwable $e ) {
 			// Log error and mark process as failed
 			$this->processManager->mark_failed( $process_id, $e->getMessage() );
+			$this->broken_link_status->tailwatch_mark_run_failed( $process_id );
 
 			Log::error(
 				'Broken Links cron failed: ' . $e->getMessage(),
@@ -501,8 +506,6 @@ class BrokenLinkChecker extends BaseController {
 			}
 
 			$config = json_decode( $scan_data->value, true );
-
-			// Skip initial message creation since it's already created in tailwatch_insert_broken_link_data
 
 			$cancel_pause_data = $this->broken_link_status->broken_link_cancel_pause_data();
 			$scan_state        = $cancel_pause_data['scan_state'];
@@ -643,7 +646,6 @@ class BrokenLinkChecker extends BaseController {
 					$config['batch_offset']  = 0;
 					$config['urls']          = array();
 					$config['total_urls']    = 0;
-					// $config['scanned_urls'] = [];
 					wp_schedule_single_event( time() + 4, 'tailwatch_broken_link_checker' );
 					$config['status'] = 'running';
 					$this->update_broken_link_data( $config );
@@ -737,7 +739,7 @@ class BrokenLinkChecker extends BaseController {
 					'feature'  => $this->feature,
 					'action'   => 'broken_link_check_complete_failed',
 					'title'  => 'Broken Links Scan Failed',
-					'detail'   => $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString(),
+					'detail'   => $e->getMessage() . "\nStack Trace: " . Log::trace( $e ),
 					'origin'   => 'system',
 					'severity' => 'high',
 				)
@@ -773,25 +775,13 @@ class BrokenLinkChecker extends BaseController {
 		$DBModel = new DBModel();
 		switch ( $current_table ) {
 			case 'posts':
-				// Cache revision IDs to avoid expensive query on every call
-				static $revision_ids = null;
-				if ( $revision_ids === null ) {
-
-					$revision_ids = get_posts(
-						array(
-							'post_type'      => 'revision',
-							'fields'         => 'ids',
-							'posts_per_page' => -1,
-						)
-					);
-				}
-
+				// Revisions never match: `any` leaves out the types hidden from search, and a
+				// revision's status is always `inherit`.
 				$args = array(
 					'post_type'      => 'any',
 					'post_status'    => array( 'publish', 'private' ),
 					'posts_per_page' => self::CRAWL_LIMIT,
 					'offset'         => $offset,
-					'post__not_in'   => $revision_ids, // phpcs:ignore WordPressVIPMinimum.Performance.WPQueryParams.PostNotIn_post__not_in -- Revision IDs are bounded by parent post; small set.
 				);
 
 				$posts = new \WP_Query( $args );
@@ -829,7 +819,7 @@ class BrokenLinkChecker extends BaseController {
 
 						++$processed_posts;
 					} catch ( \Throwable $e ) {
-						// Log error but continue processing other posts
+						// Skip malformed post — best-effort URL extraction.
 					}
 				}
 				wp_reset_postdata();
@@ -1041,7 +1031,7 @@ class BrokenLinkChecker extends BaseController {
 	}
 
 	/**
-	 * Extract content from Elementor JSON data recursively.
+	 * Extract content from a page builder's JSON layout data recursively.
 	 */
 	private function extract_elementor_content( $data, $content = '' ) {
 		if ( is_array( $data ) ) {
@@ -1272,7 +1262,6 @@ class BrokenLinkChecker extends BaseController {
 			$domain_without_port = preg_replace( '/:\d+$/', '', $domain );
 
 			// Skip URLs with obviously invalid domains (less than 3 chars, no dots for external domains)
-			// Use explicit === false check for clarity
 			$has_dot = ( strpos( $domain_without_port, '.' ) !== false );
 			if ( strlen( $domain_without_port ) < 3 || ( $domain_without_port !== 'localhost' && ! $has_dot ) ) {
 				return false; // Return false for invalid URLs
@@ -1345,12 +1334,12 @@ class BrokenLinkChecker extends BaseController {
 
 		$url = $normalized_url;
 
-		// Check if we've already checked this URL in this session (cache)
+		// Check if this URL was already checked in this request (cache).
 		if ( isset( self::$url_check_cache[ $url ] ) ) {
 			return self::$url_check_cache[ $url ];
 		}
 
-		// Skip invalid URLs instead of returning error
+		// Only http(s) URLs can be checked.
 		if ( ! preg_match( '~^https?://~i', $url ) ) {
 			return array(
 				'status' => 0,
@@ -1397,9 +1386,9 @@ class BrokenLinkChecker extends BaseController {
 			if ( is_wp_error( $response ) ) {
 				$error_message = $response->get_error_message();
 
-				// Normalize common transport-layer errors into short labels
-				// that match the previous Guzzle-era strings so anything
-				// downstream (logs, dashboard cards) keeps the same text.
+				// Normalize common transport-layer errors into short, stable
+				// labels so anything downstream (logs, dashboard cards) shows
+				// consistent text.
 				$message_lc = strtolower( (string) $error_message );
 				if ( strpos( $message_lc, 'timeout' ) !== false || strpos( $message_lc, 'timed out' ) !== false ) {
 					$error_message = 'Connection timeout';
@@ -1427,7 +1416,7 @@ class BrokenLinkChecker extends BaseController {
 			);
 		}
 
-		// Cache the result for this session
+		// Cache the result for this request.
 		self::$url_check_cache[ $url ] = $result;
 
 		return $result;

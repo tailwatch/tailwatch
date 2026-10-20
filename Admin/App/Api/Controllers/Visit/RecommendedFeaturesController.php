@@ -123,7 +123,6 @@ class RecommendedFeaturesController {
 		$setup_configuration = null;
 
 		try {
-			// Verify user capability.
 			if ( ! current_user_can( 'manage_options' ) ) {
 				Log::warning(
 					'Recommended features implementation failed: Insufficient permissions',
@@ -193,6 +192,19 @@ class RecommendedFeaturesController {
 
 			$db_model = new DBModel();
 
+			// Idempotent re-run guard (headless provisioning retries a step on
+			// timeout): is_completed is set by this method only AFTER a successful
+			// insert + schedule, so once it is true a re-dispatch must not insert a
+			// duplicate start_features_implement row or reschedule the worker — the
+			// cron watchdog owns recovery from a failed schedule.
+			$visit_data = json_decode( get_option( TAILWATCH_VISIT_DATA ), true );
+			if ( is_array( $visit_data ) && ! empty( $visit_data['recommended_features']['is_completed'] ) ) {
+				return array(
+					'code'    => 200,
+					'message' => __( 'Features implementation already started.', 'tailwatch' ),
+				);
+			}
+
 			$data_is = array(
 				'cron_running'             => false,
 				'recommended_completed'    => false,
@@ -252,7 +264,6 @@ class RecommendedFeaturesController {
 				);
 			}
 
-			// Log successful start.
 			Log::info(
 				'Recommended features implementation started',
 				array(
@@ -382,7 +393,6 @@ class RecommendedFeaturesController {
 	 */
 	public function tailwatch_run_feature_implement_cron_if_failed() {
 		try {
-			// Verify user capability.
 			if ( ! current_user_can( 'manage_options' ) ) {
 				Log::warning(
 					'Feature implementation cron retry failed: Insufficient permissions',
@@ -405,7 +415,7 @@ class RecommendedFeaturesController {
 
 			$progress_data = $this->tailwatch_get_feature_implement_status();
 
-			if ( false === $progress_data['cron_running'] ) {
+			if ( false === ( $progress_data['cron_running'] ?? null ) ) {
 				if ( ! wp_next_scheduled( 'tailwatch_activate_recommended_features' ) ) {
 					$cron_scheduled = wp_schedule_single_event( time() + 5, 'tailwatch_activate_recommended_features' );
 

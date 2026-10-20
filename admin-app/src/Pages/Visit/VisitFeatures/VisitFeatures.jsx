@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { getVisitFeatures, updateVisitFeatures, handleSubmitButton, handleFeatureCompletion } from '../VisitServices/VisitServices';
 import { FaSpinner, FaCog, FaRocket, FaCheckCircle, FaUserCog } from "react-icons/fa";
-import { handleConnect } from '../../Settings/LicenseTab/LicenseTabServices/LicenseTabServices'
+import { handleConnect, getSecretKeys, getCookies } from '../../Settings/LicenseTab/LicenseTabServices/LicenseTabServices'
 import { useVerifyVisitStatus } from '../../../Components/Hooks/VerifyVisitStatus/VerifyVisitStatus';
 import { toast } from 'react-toastify';
 import VisitSteps from '../VisitSteps/VisitSteps';
@@ -88,10 +88,24 @@ const VisitFeatures = () => {
     const handleConnectClick = async () => {
         setConnecting(true);
         try {
+            // Provision the pairing credentials the dashboard needs before opening the
+            // sign-in popup (same sequence as the License tab): the CTA keys and a
+            // recovery cookie. Without them the popup has no credentials and no
+            // pairing can be established from the wizard.
+            const secretKeys = await getSecretKeys({ setConnecting });
+            const cookies = await getCookies({ setConnecting });
+            if (!secretKeys || !cookies) {
+                return;
+            }
             await handleConnect({
                 setLoading: setIsLoading, tailwatch_ajax,
+                ctaId: secretKeys.cta_id,
+                ctaSecret: secretKeys.cta_secret,
+                authHeaderKey: secretKeys.auth_header_key,
+                cookieName: cookies.name,
+                cookieValue: cookies.value,
                 successCallback: async () => {
-                    await getVisitFeatures(setFeatures, setIsLoading);
+                    await getVisitFeatures(setFeatures, setIsLoading, setFeatureData);
                 },
             });
         } finally {

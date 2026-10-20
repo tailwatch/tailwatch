@@ -28,8 +28,8 @@ const Header = ({ title, showNotificationSwitch = false, onStatusChange, searchQ
   const isAccountSuspended = license?.planStatus === 'suspended';
   const suspensionReason = license?.suspensionReason;
   const endDate = license?.endDate;
-  const isPaymentDue = !isAccountSuspended && !!endDate && new Date(endDate).getTime() < Date.now();
   const planName = license?.planName;
+  const isPaymentDue = !isAccountSuspended && planName !== 'Basic' && !!endDate && endDate !== '0' && new Date(endDate).getTime() < Date.now();
   const showUpgradeLink = planName !== 'Business' && planName !== 'Agency';
   const formattedEndDate = endDate
     ? new Date(endDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
@@ -70,7 +70,7 @@ const Header = ({ title, showNotificationSwitch = false, onStatusChange, searchQ
   const toggleProcessDropdown = async () => {
     const opening = !showProcessDropdown;
     setShowProcessDropdown(opening);
-    if (opening && !processData) {
+    if (opening) {
       setProcessLoading(true);
       const payload = await processMoniteringStatus();
       setProcessData(payload);
@@ -207,7 +207,7 @@ const Header = ({ title, showNotificationSwitch = false, onStatusChange, searchQ
                           <li key={p.id} className="bg-white rounded-md p-3 border border-gray-200">
                             <div className="flex justify-between">
                               <span className="text-gray-900 text-sm font-medium">{p.type_label}</span>
-                              <span className={`text-xs px-2 py-0.5 rounded ${p.state === 'in_progress' ? 'bg-yellow-100 text-yellow-700' : p.state === 'completed' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{p.state_label}</span>
+                              <span className={`text-xs px-2 py-0.5 rounded ${p.state === 'in_progress' ? 'bg-yellow-100 text-yellow-700' : p.state === 'completed' ? 'bg-green-100 text-green-700' : ['pending', 'pause'].includes(p.state) ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-700'}`}>{p.state_label}</span>
                             </div>
                             <div className="text-gray-700 text-xs mt-1">State: {p.state}</div>
                             {p.started_at && (
@@ -392,7 +392,7 @@ const Header = ({ title, showNotificationSwitch = false, onStatusChange, searchQ
                 Payment Due — Action Required
               </p>
               <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
-                Your billing cycle ended on {formattedEndDate} and a pending invoice is awaiting payment. Please settle it to keep your premium features active. If left unpaid, your account will be suspended and access will be limited to the Basic plan.
+                Your billing cycle ended on {formattedEndDate} and a pending invoice is awaiting payment. Please settle it to keep your Tailwatch Pro plan active. If left unpaid, your account will be suspended.
               </p>
             </div>
           </div>

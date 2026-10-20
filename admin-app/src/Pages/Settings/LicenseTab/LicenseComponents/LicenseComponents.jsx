@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import ActionButton from '../../../../Components/Buttons/ActionButton';
-import { CheckCircle, AlertTriangle, Clock, XCircle, Smartphone, Calendar, Mail, Key, X } from "lucide-react";
+import { CheckCircle, AlertTriangle, Clock, XCircle, Smartphone, Mail, Key, X } from "lucide-react";
 import { Star } from "lucide-react";
 import IconButton from "../../../../Components/Buttons/IconButton";
 import { Eye, EyeOff, Copy } from "lucide-react";
@@ -124,7 +124,7 @@ export const ConnectedLicenseView = ({ email, startData, endData, isExpiry, lice
                 <div>
                   <h2 className={`text-xl sm:text-2xl font-semibold ${isSuspended ? 'text-red-700' : 'text-[#007980]'}`}>{planName === 'Basic' ? 'Basic - Free Plan' : planName}</h2>
                   <p className={`text-sm sm:text-base ${isSuspended ? 'text-red-700' : 'text-[#007980]'}`}>
-                    {isSuspended ? 'Account Suspended — payment required to restore full access' : 'License active and connected'}
+                    {isSuspended ? 'Account suspended. Tailwatch Pro is paused until the account is reactivated; the free plugin keeps working.' : 'License active and connected'}
                   </p>
                 </div>
               </div>
@@ -229,7 +229,7 @@ export const ConnectedLicenseView = ({ email, startData, endData, isExpiry, lice
                   <p className={`text-xs sm:text-sm ${licenseInfo.isExpired ? 'text-red-700' : 'text-amber-700'
                     }`}>
                     {licenseInfo.isExpired
-                      ? 'Please renew your license to restore premium features.'
+                      ? 'Please renew your license to resume Tailwatch Pro.'
                       : 'Consider renewing your license to avoid service interruption.'}
                   </p>
                 </div>
@@ -329,16 +329,16 @@ export const NoLicenseView = ({ handleConnectClick, connecting }) => {
               <AlertTriangle className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" />
             </div>
             <div>
-              <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Connect your Tailwatch account (FREE)</h2>
-              <p className="text-sm sm:text-base text-black">Connect your free account to manage and recover your site remotely.</p>
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Connect your free Tailwatch account</h2>
+              <p className="text-sm sm:text-base text-black">Manage and recover your site remotely, and get alerts on your phone.</p>
             </div>
           </div>
 
-          <ActionButton defaultText="Connect to Tailwatch" onClick={handleConnectClick} isDisabled={connecting} className="rounded-md shadow hover:bg-[#007980] transition-colors duration-200 font-medium text-sm sm:text-base w-full md:w-auto" />
+          <ActionButton defaultText="Connect free account" onClick={handleConnectClick} isDisabled={connecting} className="rounded-md shadow hover:bg-[#007980] transition-colors duration-200 font-medium text-sm sm:text-base w-full md:w-auto" />
         </div>
 
         <p className="text-xs text-gray-500 mt-3 sm:mt-4">
-          <span className="font-semibold text-gray-600">Privacy Notice:</span> Connecting your site to your WP Tailwatch Cloud account sends your site URL and the site settings required for remote recovery and management. This allows you to connect to and manage your site remotely through the WP Tailwatch Cloud Dashboard (dashboard.wptailwatch.com) or mobile app. See our{' '}
+          <span className="font-semibold text-gray-600">Privacy Notice:</span> Connecting opens the WP Tailwatch Cloud Dashboard sign-in page (dashboard.wptailwatch.com). Before you sign in, its page address carries your site URL and the credentials created for this connection: a client ID, client secret and header key that let the dashboard and mobile app manage your site, and a WordPress recovery-mode cookie used for remote recovery. See our{' '}
           <a href="https://wptailwatch.com/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-700">Privacy Policy</a>{' '}for details.
         </p>
         <MobileAppSetupSteps variant="full" wrapperClassName="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-200" />
@@ -346,9 +346,9 @@ export const NoLicenseView = ({ handleConnectClick, connecting }) => {
 
       {/* License Benefits */}
    <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4 sm:p-6">
-  <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">Why Connect a License?</h3>
+  <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">Why connect your account?</h3>
 
-  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
     {/* Cross-Device Sync */}
     <div className="p-3 sm:p-4 bg-gray-50 rounded-md">
       <div className="flex items-center mb-2 sm:mb-3">
@@ -360,15 +360,15 @@ export const NoLicenseView = ({ handleConnectClick, connecting }) => {
       <p className="text-gray-600 text-xs sm:text-sm">Seamlessly sync your data across all your devices</p>
     </div>
 
-    {/* Premium Features */}
+    {/* Tailwatch App */}
     <div className="p-3 sm:p-4 bg-gray-50 rounded-md">
       <div className="flex items-center mb-2 sm:mb-3">
         <div className="bg-[#07C07E1A] p-1.5 sm:p-2 rounded-full mr-2 sm:mr-3">
           <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-[#007980]" />
         </div>
-        <h4 className="text-sm sm:text-base font-medium text-gray-800">Premium Features</h4>
+        <h4 className="text-sm sm:text-base font-medium text-gray-800">Tailwatch App</h4>
       </div>
-      <p className="text-gray-600 text-xs sm:text-sm">Access all premium features and functionality</p>
+      <p className="text-gray-600 text-xs sm:text-sm">Manage this site from the Tailwatch mobile app and dashboard</p>
     </div>
 
     {/* Push Notifications */}
@@ -379,18 +379,7 @@ export const NoLicenseView = ({ handleConnectClick, connecting }) => {
         </div>
         <h4 className="text-sm sm:text-base font-medium text-gray-800">Push Notifications</h4>
       </div>
-      <p className="text-gray-600 text-xs sm:text-sm">Get real-time notifications about your license and updates</p>
-    </div>
-
-    {/* Regular Updates */}
-    <div className="p-3 sm:p-4 bg-gray-50 rounded-md">
-      <div className="flex items-center mb-2 sm:mb-3">
-        <div className="bg-[#07C07E1A] p-1.5 sm:p-2 rounded-full mr-2 sm:mr-3">
-          <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-[#007980]" />
-        </div>
-        <h4 className="text-sm sm:text-base font-medium text-gray-800">Regular Updates</h4>
-      </div>
-      <p className="text-gray-600 text-xs sm:text-sm">Receive priority access to new features and updates</p>
+      <p className="text-gray-600 text-xs sm:text-sm">Get real-time security alerts on your phone</p>
     </div>
   </div>
 </div>

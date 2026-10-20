@@ -29,8 +29,13 @@ class DatabaseOptimizationModel {
 	 * @return string Date in 'Y-m-d H:i:s' format (UTC).
 	 */
 	private function get_revision_date( $number_of_days ): string {
+		$cutoff = '' === trim( (string) $number_of_days ) ? false : strtotime( '-' . $number_of_days );
+		// A period that cannot be read keeps everything: nothing is older than the start of time.
+		if ( false === $cutoff ) {
+			return '1970-01-01 00:00:00';
+		}
         // phpcs:ignore WordPress.DateTime.RestrictedFunctions.date_gmdate -- Building cutoff date from relative days in UTC.
-		return gmdate( 'Y-m-d H:i:s', strtotime( '-' . $number_of_days ) );
+		return gmdate( 'Y-m-d H:i:s', $cutoff );
 	}
 
 	/**
@@ -239,15 +244,15 @@ class DatabaseOptimizationModel {
 	public function get_expired_transients( $number_interval ): array {
 		global $wpdb;
 		try {
-			// LIKE patterns passed as %s values to preserve bare `%` wildcards
-			// through prepare().
+			// The prefixes go through esc_like(), so their underscores match only
+			// themselves; the trailing `%` is passed with the value.
 			if ( null !== $number_interval ) {
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Core options table; expired-transient sweep.
 				return $wpdb->get_col( $wpdb->prepare(
 					'SELECT option_name FROM %i WHERE (option_name LIKE %s OR option_name LIKE %s) AND option_value < UNIX_TIMESTAMP() LIMIT %d',
 					$wpdb->options,
-					'_transient_timeout_%',
-					'_site_transient_timeout_%',
+					$wpdb->esc_like( '_transient_timeout_' ) . '%',
+					$wpdb->esc_like( '_site_transient_timeout_' ) . '%',
 					$number_interval
 				) );
 			}
@@ -255,8 +260,8 @@ class DatabaseOptimizationModel {
 			return $wpdb->get_col( $wpdb->prepare(
 				'SELECT option_name FROM %i WHERE (option_name LIKE %s OR option_name LIKE %s) AND option_value < UNIX_TIMESTAMP()',
 				$wpdb->options,
-				'_transient_timeout_%',
-				'_site_transient_timeout_%'
+				$wpdb->esc_like( '_transient_timeout_' ) . '%',
+				$wpdb->esc_like( '_site_transient_timeout_' ) . '%'
 			) );
 		} catch ( Exception $e ) {
 			return array();

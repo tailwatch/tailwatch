@@ -124,7 +124,7 @@ const checkCronExecution = async (cron_running) => {
     cronTimeoutId = setTimeout(async () => {
       try {
         await executeCronIfFailed();
-        await CronHealer(); // Call the CroneHealer function
+        await CronHealer();
       } catch (error) {
         console.error("Error in scheduled cron execution", error);
       }
@@ -155,7 +155,7 @@ export const fetchLogs = async (
   setIsPaused,
   setIsCanceled,
   setOperationLoading,
-  isLastLogIndex, setIsLastLogIndex
+  isLastLogIndex, setIsLastLogIndex, setIsFailed
 ) => {
 
   try {
@@ -187,6 +187,21 @@ export const fetchLogs = async (
       } else {
         
       }
+    }
+
+    // Placed before the is_completed === false branch, which would otherwise re-poll a failed
+    // scan forever, and returns before the retry timer at the bottom, which the site refuses
+    // for a failed scan.
+    if (scan_state === "failed") {
+      setIsScanInProgress(false);
+      setIsPaused(false);
+      setOperationLoading(false);
+      setIsLogsVisible(true);
+      if (typeof setIsFailed === "function") {
+        setIsFailed(true);
+      }
+      setLogs((prevLogs) => [...prevLogs, "The file integrity scan stopped because of an error before it finished. The log above shows how far it got."]);
+      return;
     }
 
     if (is_completed) {
@@ -235,7 +250,7 @@ export const fetchLogs = async (
             setIsPaused,
             setIsCanceled,
             setOperationLoading,
-            last_log_index, setIsLastLogIndex
+            last_log_index, setIsLastLogIndex, setIsFailed
           );
         }, 4000);
       } else {
@@ -329,7 +344,6 @@ export const checkMalwareScanner = async (setIsScannerEnabled, setLoadingStrip, 
         });
       }
     } else {
-      // toast.success("Failed to get Malware Scanner status:", response.data.data.message);
     }
   } catch (error) {
   }

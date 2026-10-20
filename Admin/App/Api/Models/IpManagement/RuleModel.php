@@ -455,9 +455,7 @@ class RuleModel {
 			list($ip, $mask) = explode( '/', $ip_range );
 			return filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 ) && $mask >= 0 && $mask <= 32;
 		}
-		// IPv6 CIDR — kept consistent with WhitelistModel and is_ip_in_range(),
-		// which both support IPv6 ranges (previously blacklist rules silently
-		// rejected every IPv6 range).
+		// IPv6 CIDR, accepted here as WhitelistModel and is_ip_in_range() accept it.
 		if ( preg_match( '/^([0-9a-fA-F:]+)\/\d{1,3}$/', $ip_range ) ) {
 			list($ip, $mask) = explode( '/', $ip_range );
 			return filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6 ) && $mask >= 0 && $mask <= 128;
@@ -557,8 +555,8 @@ class RuleModel {
 	public function get_blocked_ip_ranges( $limit = null, $page = null, $geoip = null ) {
 		// only_active=false: the grid shows BOTH currently-active blocks (is_active=1,
 		// permanent/temporary) AND unblocked history (is_active=0), each with its
-		// status. Pagination stays correct because the read below no longer skips or
-		// mutates rows, so total matches what's rendered.
+		// status. Pagination stays correct because the read below keeps every row in the
+		// list, so total matches what's rendered.
 		$rules     = $this->get_active_rules( 'ip', $limit, $page, false );
 		$ip_ranges = array();
 
@@ -584,7 +582,7 @@ class RuleModel {
 			$is_active = $rule->is_active;
 			// Expired temporary block -> reset it to unblocked so the grid shows the
 			// correct status. The row is NOT skipped (it stays in the list with its
-			// corrected status); the old `continue` skip is what broke pagination.
+			// corrected status), because skipping it would break pagination.
 			// SAFETY INVARIANT (do not change without re-testing pagination): this
 			// write-on-read is safe ONLY because get_active_rules() above uses
 			// only_active=false (the row stays in the result set after unblocking) and

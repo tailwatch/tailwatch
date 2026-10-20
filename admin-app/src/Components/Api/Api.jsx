@@ -55,10 +55,6 @@ const InsertData = async (featureId, newActiveState) => {
       return;
     }
 
-    if (response1.data.data === 'This feature is locked and cannot be updated.') {
-      return response1.data.data;
-    }
-
     // Only persist the new is_active to localStorage and run the push-notification
     // follow-up when the backend confirms success. For `success: false` responses,
     // return the payload so the caller can show response.data.message and roll back.

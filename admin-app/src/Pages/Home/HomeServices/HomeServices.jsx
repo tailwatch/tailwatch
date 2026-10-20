@@ -197,10 +197,12 @@ export const activateFeatures = async (setIsLoading, payload) => {
     if (response.data.data.code === 200) {
       return response.data.data;
     } else {
-      toast.error('Failed to activate features');
+      toast.error(response.data.data?.message || "Couldn't turn the features on. Please try again.");
       return null;
     }
   } catch (error) {
+    toast.error("Couldn't turn the features on. Please try again.");
+    return null;
   } finally {
     setIsLoading(false);
   }
@@ -225,7 +227,7 @@ export const graphData = async (setLoadingGraph, setValue, setNotificationsData)
       const rawData = response.data.data.all_disabled_features;
 
       const filteredData = rawData
-        .filter((item) => item.message || item.disabled_features.length > 0)
+        .filter((item) => item.message || (item.disabled_features || []).length > 0)
         .map((item) => ({
           key: item.feature_key || "Unknown",
           label: item.feature_name || "Unknown",
@@ -238,7 +240,7 @@ export const graphData = async (setLoadingGraph, setValue, setNotificationsData)
       setNotificationsData(filteredData);
       return response.data.data;
     } else {
-      toast.error('Failed to retrieve User Data:', response.data.data.message);
+      toast.error(response.data.data?.message || "Couldn't load the security score.");
     }
   } catch (error) {
   } 

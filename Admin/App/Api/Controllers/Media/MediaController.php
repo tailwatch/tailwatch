@@ -7,8 +7,7 @@
  * manage_options), the cloud dashboard, and the mobile app (REST /dispatch, which
  * authenticates with the per-site key + JWT and runs as the paired admin via
  * wp_set_current_user()). Because wp.media() exists only inside wp-admin, remote
- * surfaces need a server-side endpoint; this mirrors how WordPress.com/Jetpack
- * expose remote media management.
+ * surfaces need a server-side endpoint.
  *
  * All uploads go through the WordPress-standard media_handle_upload() (which runs
  * wp_handle_upload's own MIME/size checks and builds the attachment + metadata).

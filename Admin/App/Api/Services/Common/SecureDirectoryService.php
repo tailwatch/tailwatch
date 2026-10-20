@@ -334,7 +334,7 @@ class SecureDirectoryService {
 	 * SSH2) is not actually available. Deny-file writes are defense-in-depth
 	 * — they harden plugin-owned upload/log directories against direct
 	 * browser access — and skipping them when WP_Filesystem is unavailable
-	 * (e.g., very early plugin activation, certain WP-CLI contexts, or
+	 * (e.g., very early plugin activation, certain command-line contexts, or
 	 * misconfigured FTP credentials) would silently weaken security. The
 	 * primary path uses WP_Filesystem; only when it returns false do we
 	 * fall through to native file_put_contents so the deny file still has

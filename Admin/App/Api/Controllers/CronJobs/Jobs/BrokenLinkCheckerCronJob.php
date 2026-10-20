@@ -26,7 +26,7 @@ use Tailwatch\Admin\App\Api\Logging\Log;
  * Class BrokenLinkCheckerCronJob
  *
  * Cron job for Broken Link Checker feature:
- * - Schedules recurring scans based on configured interval (1 Day, 3 Days, Weekly, 15 Days, Monthly).
+ * - Schedules recurring scans based on the configured interval.
  * - On execute, starts the broken link checker with scan_type 'automatically'.
  *
  */

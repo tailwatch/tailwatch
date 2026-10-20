@@ -67,7 +67,7 @@ class Constants {
 		self::define( 'TAILWATCH_FILE', TAILWATCH_PLUGIN_FILE );
 
 		// Plugin version number.
-		self::define( 'TAILWATCH_VERSION', '1.0.3' );
+		self::define( 'TAILWATCH_VERSION', '1.0.4' );
 
 		// WordPress plugins directory path.
 		self::define( 'TAILWATCH_PLUGIN_DIR', WP_PLUGIN_DIR );
@@ -119,7 +119,7 @@ class Constants {
 		// API base URL for external services.
 		self::define( 'TAILWATCH_API_BASE_URL', 'https://api.wptailwatch.com' );
 
-		// Central API relay endpoint. Push notifications and license verification
+		// Central API relay endpoint for push notifications and license verification.
 		self::define( 'TAILWATCH_RELAY', TAILWATCH_API_BASE_URL . '/tailwatch/relay' );
 
 		// Plugin feedback endpoint.
@@ -157,7 +157,7 @@ class Constants {
 
 		// Database schema version. Bump only when the table structure changes;
 		// activation runs dbDelta only when the stored version differs from this.
-		self::define( 'TAILWATCH_DB_VERSION', '1.0.0' );
+		self::define( 'TAILWATCH_DB_VERSION', '1.0.1' );
 	}
 
 	/**
@@ -174,9 +174,16 @@ class Constants {
 		self::define( 'TAILWATCH_CONTENT_DIR_BASE', WP_CONTENT_DIR . '/tailwatch' );
 		self::define( 'TAILWATCH_CONTENT_URL_BASE', content_url( '/tailwatch' ) );
 
-		// Backup storage filesystem path and public URL.
+		// Backup storage filesystem path. Deliberately filesystem-only: backup
+		// archives and SQL dumps hold user rows and password hashes, so no public
+		// URL to this tree is published anywhere. Anything that must hand a backup
+		// to a user goes through an authenticated streaming download, never a
+		// content_url() link.
 		self::define( 'TAILWATCH_BACKUP_DIR', TAILWATCH_CONTENT_DIR_BASE . '/tailwatch-backup' );
-		self::define( 'TAILWATCH_BACKUP_URL', TAILWATCH_CONTENT_URL_BASE . '/tailwatch-backup' );
+
+		// A running restore's working folders: the backup's files prepared for the switch,
+		// and the site's own copies set aside until it finishes.
+		self::define( 'TAILWATCH_RESTORE_DIR', TAILWATCH_CONTENT_DIR_BASE . '/tailwatch-restore' );
 
 		// Logs and generated data live in a slug-named folder inside the uploads
 		// directory, resolved through wp_get_upload_dir() so custom upload

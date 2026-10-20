@@ -13,6 +13,7 @@ import { Loader2 } from 'lucide-react';
 import LoadingBar from 'react-top-loading-bar';
 import { useHome } from "../../Components/Hooks/useHome/useHome.jsx";
 import UserManagemntWidget from "./UserManagemntWidget/UserManagemntWidget.jsx";
+import RestoredProSettingsNotice from "../../Components/SavedProSettings/RestoredProSettingsNotice.jsx";
 
 
 const Home = () => {
@@ -24,6 +25,7 @@ const Home = () => {
       <Header title="Dashboard" />
       <LoadingBar ref={ref} height={3} color="#ec5023" />
       <div className="p-4">
+        <RestoredProSettingsNotice />
         {loadingLogs ? (
           <HomeSkelton section="logs" />
         ) : (

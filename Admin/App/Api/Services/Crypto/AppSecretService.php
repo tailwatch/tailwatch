@@ -7,9 +7,7 @@
  * independent of WordPress's own salts (wp_salt), because the plugin ships a
  * security-key rotation feature: deriving these keys from wp_salt would let that
  * rotation invalidate every issued token and make stored ciphertext (SMTP
- * passwords, etc.) permanently undecryptable. A dedicated secret is the pattern
- * used by security plugins that rotate salts (e.g. Wordfence keeps its signing /
- * encryption keys in its own storage, independent of the salts).
+ * passwords, etc.) permanently undecryptable.
  *
  * Resolution order:
  *   1. An optional TAILWATCH_APP_SECRET_KEY constant (read-only; for operators who
